@@ -3,7 +3,7 @@
 Scripts SQL para ejecutar **manualmente** en el SQL Editor de Supabase.
 La aplicación **no crea** las tablas automáticamente.
 
-## Orden de ejecución
+## Orden de ejecución SQL
 
 | # | Archivo | Descripción |
 |---|---------|-------------|
@@ -16,24 +16,46 @@ La aplicación **no crea** las tablas automáticamente.
 | 7 | `schema/06_seed_ejemplo.sql` | Datos de ejemplo (opcional) |
 | 8 | `schema/07_auth_trigger.sql` | Trigger perfil al crear usuario Auth |
 
-## Edge Functions
+## Dónde ejecutar `supabase functions deploy`
 
-| Función | Uso |
-|---------|-----|
-| `import-excel` | Procesa CSV e inserta en temparios / telemetría / CPP |
-| `send-maintenance-alerts` | Cron diario: alertas 7 días antes del mtto |
+Los comandos **no** se ejecutan en el SQL Editor. Se ejecutan en la **terminal** (PowerShell / CMD / bash) desde la carpeta del proyecto, con la [CLI de Supabase](https://supabase.com/docs/guides/cli).
 
-```bash
+### 1. Instalar CLI (una sola vez)
+
+```powershell
+npm install -g supabase
+```
+
+O con Scoop: `scoop install supabase`
+
+### 2. Iniciar sesión y vincular el proyecto
+
+```powershell
+cd "c:\Users\Frank Duran\OneDrive - Partequipos S.A.S\Escritorio\PostventaInteligente\project"
+
+supabase login
+supabase link --project-ref TU_PROJECT_REF
+```
+
+`TU_PROJECT_REF` está en Supabase Dashboard → **Project Settings → General → Reference ID**  
+(también aparece en la URL: `https://supabase.com/dashboard/project/abcdefghijk`).
+
+### 3. Desplegar las Edge Functions
+
+```powershell
 supabase functions deploy import-excel
 supabase functions deploy send-maintenance-alerts
 ```
 
+### 4. Verificar
+
+Dashboard → **Edge Functions** → deben aparecer `import-excel` y `send-maintenance-alerts`.
+
 ### Cron de alertas
 
-En Dashboard → Edge Functions → Schedules:
+Dashboard → Edge Functions → `send-maintenance-alerts` → **Schedules**:
 
-- Función: `send-maintenance-alerts`
-- Cron: `0 13 * * *` (08:00 Colombia / UTC-5)
+- Cron: `0 13 * * *` (08:00 Colombia)
 - Secrets opcionales: `RESEND_API_KEY`, `ALERT_FROM_EMAIL`
 
 ## Auth
@@ -44,15 +66,25 @@ En Dashboard → Edge Functions → Schedules:
 
 ## Variables de entorno (frontend)
 
+Crear `.env.local` en la raíz del proyecto:
+
 ```
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
+NEXT_PUBLIC_SUPABASE_URL=https://TU_PROJECT_REF.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=tu-anon-key
 ```
 
-## Importación CSV
+## Importación Excel / CSV
 
-Exportar Excel → **CSV UTF-8**. La Edge Function `import-excel` valida columnas e inserta en:
+La Edge Function `import-excel` acepta:
 
-- `calculadora` → `temparios_mantenimiento`
-- `proyectados` → `telemetria_equipos`
-- `cpp` → `cpp_catalogo`
+- **`.xlsx`** (Excel moderno)
+- **`.xls`** (Excel clásico)
+- **`.csv`** (UTF-8)
+
+Lee la **primera hoja** del libro. Columnas deben coincidir con la estructura del módulo:
+
+| Módulo | Tabla destino |
+|--------|---------------|
+| `calculadora` | `temparios_mantenimiento` |
+| `proyectados` | `telemetria_equipos` |
+| `cpp` | `cpp_catalogo` |

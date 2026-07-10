@@ -1,13 +1,16 @@
 /**
  * Edge Function: import-excel
- * Procesa CSV/Excel (CSV preferido) e inserta en tablas según módulo.
+ * Procesa CSV y Excel (.xlsx / .xls) e inserta en tablas según módulo.
  *
- * Deploy: supabase functions deploy import-excel
+ * Deploy (desde la carpeta del proyecto):
+ *   supabase functions deploy import-excel
+ *
  * Invoke: POST /functions/v1/import-excel
  * Body: { modulo, fileName, contentBase64, contentType? }
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
+import * as XLSX from 'https://esm.sh/xlsx@0.18.5';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,13 +26,34 @@ interface ImportRequest {
   contentType?: string;
 }
 
-function decodeBase64(content: string): string {
+function decodeBase64ToBytes(content: string): Uint8Array {
   const binary = atob(content);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i);
   }
-  return new TextDecoder('utf-8').decode(bytes);
+  return bytes;
+}
+
+function cellToString(value: unknown): string {
+  if (value == null) return '';
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    // Fechas seriales de Excel (aprox. 30000–60000)
+    if (value > 20000 && value < 80000) {
+      const parsed = XLSX.SSF.parse_date_code(value);
+      if (parsed) {
+        const y = parsed.y;
+        const m = String(parsed.m).padStart(2, '0');
+        const d = String(parsed.d).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+    }
+    return String(value);
+  }
+  return String(value).trim();
 }
 
 function parseCsv(text: string): Record<string, string>[] {
@@ -53,6 +77,42 @@ function parseCsv(text: string): Record<string, string>[] {
   }
 
   return rows;
+}
+
+function parseExcel(bytes: Uint8Array): Record<string, string>[] {
+  const workbook = XLSX.read(bytes, { type: 'array', cellDates: true });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) return [];
+
+  const sheet = workbook.Sheets[sheetName];
+  const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+    defval: '',
+    raw: false,
+  });
+
+  return json.map((row) => {
+    const out: Record<string, string> = {};
+    Object.entries(row).forEach(([key, value]) => {
+      out[String(key).trim()] = cellToString(value);
+    });
+    return out;
+  });
+}
+
+function parseFile(fileName: string, contentBase64: string): Record<string, string>[] {
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+  const bytes = decodeBase64ToBytes(contentBase64);
+
+  if (ext === 'csv' || ext === 'txt') {
+    const text = new TextDecoder('utf-8').decode(bytes);
+    return parseCsv(text);
+  }
+
+  if (ext === 'xlsx' || ext === 'xls') {
+    return parseExcel(bytes);
+  }
+
+  throw new Error('Formato no soportado. Use .xlsx, .xls o .csv');
 }
 
 function splitCsvLine(line: string): string[] {
@@ -233,17 +293,34 @@ Deno.serve(async (req) => {
     }
 
     const ext = body.fileName.split('.').pop()?.toLowerCase() ?? '';
-    if (!['csv', 'txt'].includes(ext)) {
+    if (!['csv', 'txt', 'xlsx', 'xls'].includes(ext)) {
       return new Response(
         JSON.stringify({
-          error: 'Use CSV para importación real. Exporte Excel a CSV (UTF-8) e intente de nuevo.',
+          error: 'Formato no soportado. Use archivos .xlsx, .xls o .csv',
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const text = decodeBase64(body.contentBase64);
-    const rows = parseCsv(text);
+    let rows: Record<string, string>[];
+    try {
+      rows = parseFile(body.fileName, body.contentBase64);
+    } catch (parseErr) {
+      return new Response(
+        JSON.stringify({
+          error: parseErr instanceof Error ? parseErr.message : 'No se pudo leer el archivo',
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (rows.length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'El archivo no contiene filas de datos' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const createdBy = perfil?.email ?? userData.user.email ?? 'import';
 
     let recordsOk = 0;

@@ -28,7 +28,7 @@ export function CppAdminImportPanel() {
   return (
     <ExcelImportPanel
       title="Importar / Actualizar Catálogo CPP"
-      description="Coordinadores y administradores. CSV UTF-8 con la estructura del catálogo de partes."
+      description="Coordinadores y administradores. Excel (.xlsx/.xls) o CSV con el catálogo de partes."
       expectedColumns={CPP_COLUMNS}
       modulo="cpp"
       onImport={async (result) => {

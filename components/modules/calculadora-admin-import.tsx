@@ -33,7 +33,7 @@ export function CalculadoraAdminImport() {
     <div className="mt-6 border-t border-border pt-6">
       <ExcelImportPanel
         title="Importar Temparios de Mantenimiento"
-        description="Solo administradores. Cargue CSV UTF-8 con la estructura de temparios."
+        description="Solo administradores. Cargue Excel (.xlsx/.xls) o CSV con la estructura de temparios."
         expectedColumns={TEMPARIO_COLUMNS}
         modulo="calculadora"
         onImport={async (result) => {

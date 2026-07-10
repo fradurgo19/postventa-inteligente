@@ -26,8 +26,8 @@ interface ExcelImportPanelProps {
 }
 
 /**
- * Panel de importación CSV/Excel.
- * Con Supabase: invoca Edge Function import-excel (CSV).
+ * Panel de importación Excel/CSV.
+ * Con Supabase: invoca Edge Function import-excel (.xlsx, .xls, .csv).
  * Sin Supabase: simulación local (demo).
  */
 export function ExcelImportPanel({
@@ -58,13 +58,6 @@ export function ExcelImportPanel({
 
       try {
         if (isSupabaseConfigured()) {
-          const ext = f.name.slice(f.name.lastIndexOf('.')).toLowerCase();
-          if (ext !== '.csv') {
-            throw new Error(
-              'Para importación real use CSV (UTF-8). En Excel: Guardar como → CSV UTF-8.'
-            );
-          }
-
           const response = await invokeImportExcel(modulo, f);
           setPreview([
             `Archivo: ${f.name}`,
@@ -167,9 +160,9 @@ export function ExcelImportPanel({
           ) : (
             <Upload className="h-8 w-8 mx-auto text-muted-foreground" />
           )}
-          <p className="mt-2 text-sm font-medium">Arrastre su archivo CSV aquí</p>
+          <p className="mt-2 text-sm font-medium">Arrastre su archivo Excel o CSV aquí</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Producción: CSV UTF-8 · Demo: también .xlsx/.xls
+            Formatos: .xlsx · .xls · .csv
           </p>
           <label className="mt-4 inline-block">
             <input

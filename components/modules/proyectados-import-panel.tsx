@@ -31,7 +31,7 @@ export function ProyectadosImportPanel() {
   return (
     <ExcelImportPanel
       title="Importar Telemetría Mensual"
-      description="Coordinadores y administradores. CSV UTF-8 con la estructura de telemetría por fabricante."
+      description="Coordinadores y administradores. Excel (.xlsx/.xls) o CSV con telemetría por fabricante."
       expectedColumns={TELEMETRIA_COLUMNS}
       modulo="proyectados"
       onImport={async (result) => {
