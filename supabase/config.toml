@@ -1,0 +1,12 @@
+{
+  "name": "postventa-inteligente",
+  "version": "1",
+  "functions": {
+    "import-excel": {
+      "verify_jwt": true
+    },
+    "send-maintenance-alerts": {
+      "verify_jwt": false
+    }
+  }
+}

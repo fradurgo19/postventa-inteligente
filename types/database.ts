@@ -1,0 +1,187 @@
+/** Frecuencias de mantenimiento preventivo (horas) */
+export type MaintenanceFrequencyHours = 250 | 1000 | 2000 | 4000 | 5000;
+
+export type TemparioTipoItem = 'Repuesto' | 'Consumible' | 'Actividad' | 'Servicio';
+
+export interface TemparioMantenimiento {
+  id: string;
+  legacy_id?: number | null;
+  marca: string;
+  linea?: string | null;
+  modelo: string;
+  tipo_item: TemparioTipoItem;
+  item: string;
+  unidad_medida: string;
+  cantidad: number;
+  frecuencia_horas: MaintenanceFrequencyHours;
+  aceite_homologado?: string | null;
+  referencia_genuina?: string | null;
+  ref_sap_dispel?: string | null;
+  ref_sap_original?: string | null;
+  referencia_stal?: string | null;
+  referencia_fleetguard?: string | null;
+  referencia_donaldson?: string | null;
+  tiempo_horas: number;
+  procedimiento?: string | null;
+  avisos_claves?: string | null;
+  precio_unitario: number;
+  tarifa_mano_obra_h: number;
+  activo: boolean;
+}
+
+export interface TarifaDesplazamiento {
+  costo_por_km: number;
+  costo_por_hora_viaje: number;
+  factor_ida_vuelta: number;
+  iva_porcentaje: number;
+}
+
+export interface PreventiveQuoteInput {
+  marca: string;
+  modelo: string;
+  horometro: number;
+  kmTrayecto: number;
+  horasTrayecto: number;
+}
+
+export interface PreventiveActivityLine {
+  id: string;
+  activity: string;
+  description: string;
+  laborHours: number;
+  parts: number;
+  consumables: number;
+  subtotal: number;
+}
+
+export interface PreventiveConsumableLine {
+  item: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  total: number;
+}
+
+export interface PreventivePartLine {
+  sapCode: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+}
+
+export interface PreventiveQuoteResult {
+  brand: string;
+  model: string;
+  serialNumber: string;
+  year: number;
+  hours: number;
+  kilometers: number;
+  status: 'active' | 'maintenance';
+  frecuenciasAplicadas: MaintenanceFrequencyHours[];
+  activities: PreventiveActivityLine[];
+  consumables: PreventiveConsumableLine[];
+  parts: PreventivePartLine[];
+  costs: {
+    labor: number;
+    consumables: number;
+    parts: number;
+    travel: number;
+    subtotal: number;
+    vat: number;
+    total: number;
+  };
+}
+
+export interface TelemetriaEquipo {
+  id: string;
+  titulo?: string | null;
+  nit?: string | null;
+  telefono?: string | null;
+  serie: string;
+  modelo: string;
+  horometro: number;
+  promedio_h?: number | null;
+  ciudad?: string | null;
+  latitud?: number | null;
+  longitud?: number | null;
+  fecha_primer_mtto?: string | null;
+  fecha_segundo_mtto?: string | null;
+  fecha_tercer_mtto?: string | null;
+  sede?: string | null;
+  asesor_email?: string | null;
+  marca: string;
+  tipo_mtto?: number | null;
+  estado?: string | null;
+  tipo_maquina?: string | null;
+}
+
+export interface CppCatalogItem {
+  id: string;
+  legacy_no?: number | null;
+  ref_sap: string;
+  marca: string;
+  nombre: string;
+  cantidad: number;
+  frecuencia?: string | null;
+  medida?: string | null;
+  comentario?: string | null;
+  modelo: string;
+  componente: string;
+  subtipo_componente: string;
+  imagen_url?: string | null;
+  recomendacion?: string | null;
+  adjuntos?: Array<{ title: string; url: string }>;
+  equivalencia1?: string | null;
+  equivalencia2?: string | null;
+  equivalencia3?: string | null;
+  referencia_catalogo_original?: string | null;
+  precio_lista: number;
+  stock_disponible: number;
+  bodega?: string | null;
+  precio_sap?: number | null;
+  stock_sap?: number | null;
+  bodega_sap?: string | null;
+}
+
+export interface CppFilters {
+  marca?: string;
+  modelo?: string;
+  componente?: string;
+  subtipo?: string;
+  frecuencia?: string;
+  search?: string;
+}
+
+export interface ImportacionRecord {
+  id: string;
+  modulo: 'calculadora' | 'proyectados' | 'cpp';
+  nombre_archivo: string;
+  registros_total: number;
+  registros_ok: number;
+  registros_error: number;
+  duplicados: number;
+  estado: 'procesando' | 'completado' | 'fallido' | 'parcial';
+  created_at: string;
+}
+
+export interface SapItemAvailability {
+  refSap: string;
+  price: number;
+  stock: number;
+  warehouse: string;
+  currency: string;
+  available: boolean;
+}
+
+export interface ProjectedMaintenanceKpis {
+  totalMaquinas: number;
+  totalClientes: number;
+  oportunidadesMes: number;
+  oportunidadesPorSede: Array<{ sede: string; total: number }>;
+  oportunidadesPorMarca: Array<{ marca: string; total: number }>;
+  oportunidadesPorCliente: Array<{ cliente: string; total: number }>;
+  oportunidadesPorMes: Array<{ mes: string; total: number; enviadas: number; pendientes: number }>;
+  insumosProyectadosTotal: number;
+  insumosPorTipo: Array<{ tipo: string; total: number; cantidad: number }>;
+}
