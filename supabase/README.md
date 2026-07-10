@@ -34,11 +34,11 @@ O con Scoop: `scoop install supabase`
 cd "c:\Users\Frank Duran\OneDrive - Partequipos S.A.S\Escritorio\PostventaInteligente\project"
 
 supabase login
-supabase link --project-ref TU_PROJECT_REF
+supabase link --project-ref obhgdgnozeaneljprudd
 ```
 
-`TU_PROJECT_REF` está en Supabase Dashboard → **Project Settings → General → Reference ID**  
-(también aparece en la URL: `https://supabase.com/dashboard/project/abcdefghijk`).
+> **Importante:** no uses el texto literal `TU_PROJECT_REF`. Usa tu Reference ID real  
+> (ej. `obhgdgnozeaneljprudd`). Está en Dashboard → Project Settings → General.
 
 ### 3. Desplegar las Edge Functions
 

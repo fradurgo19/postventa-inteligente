@@ -1,12 +1,22 @@
-{
-  "name": "postventa-inteligente",
-  "version": "1",
-  "functions": {
-    "import-excel": {
-      "verify_jwt": true
-    },
-    "send-maintenance-alerts": {
-      "verify_jwt": false
-    }
-  }
-}
+# Configuración Supabase CLI — PARTEQUIPOS Posventa Inteligente
+# Documentación: https://supabase.com/docs/guides/cli/config
+
+project_id = "obhgdgnozeaneljprudd"
+
+[api]
+enabled = true
+
+[db]
+port = 54322
+
+[studio]
+enabled = true
+
+[auth]
+enabled = true
+
+[functions.import-excel]
+verify_jwt = true
+
+[functions.send-maintenance-alerts]
+verify_jwt = false
