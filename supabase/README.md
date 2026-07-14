@@ -64,14 +64,32 @@ Dashboard → Edge Functions → `send-maintenance-alerts` → **Schedules**:
 2. Ejecutar `07_auth_trigger.sql`
 3. Crear usuario en Auth y actualizar `perfiles.rol` a `administrador` o `coordinador`
 
-## Variables de entorno (frontend)
+## Variables de entorno (frontend / Vercel)
 
-Crear `.env.local` en la raíz del proyecto:
+Local (`.env.local`) y en Vercel → Project → Settings → Environment Variables:
 
 ```
-NEXT_PUBLIC_SUPABASE_URL=https://TU_PROJECT_REF.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=tu-anon-key
+NEXT_PUBLIC_APP_URL=https://tu-app.vercel.app
+NEXT_PUBLIC_SUPABASE_URL=https://obhgdgnozeaneljprudd.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=tu-anon-public-key
 ```
+
+## Despliegue en Vercel
+
+```powershell
+cd "c:\Users\Frank Duran\OneDrive - Partequipos S.A.S\Escritorio\PostventaInteligente\project"
+npx vercel login
+npx vercel link
+npx vercel env pull   # opcional
+npx vercel --prod
+```
+
+O en [vercel.com/new](https://vercel.com/new): Import Git Repository → `fradurgo19/postventa-inteligente` → add env vars → Deploy.
+
+Tras el deploy, en Supabase → Authentication → URL Configuration:
+
+- Site URL: `https://tu-app.vercel.app`
+- Redirect URLs: `https://tu-app.vercel.app/**`
 
 ## Importación Excel / CSV
 
