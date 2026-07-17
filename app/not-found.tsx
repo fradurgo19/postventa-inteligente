@@ -41,10 +41,10 @@ export default function NotFound() {
           className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-lg"
           style={{ background: "linear-gradient(135deg, #cf1b22, #a51519)" }}
         >
-          PE
+          PM
         </div>
         <div>
-          <p className="text-white font-semibold text-sm leading-none">PARTEQUIPOS SAS</p>
+          <p className="text-white font-semibold text-sm leading-none">PARTEQUIPOS MAQUINARIA</p>
           <p className="text-gray-400 text-xs leading-none mt-0.5">Posventa Inteligente</p>
         </div>
       </div>

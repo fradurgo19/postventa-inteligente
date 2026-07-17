@@ -355,10 +355,10 @@ export default function LoginPage() {
         {/* Top-left brand mark */}
         <div className="relative z-10 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-white text-lg bg-[#cf1b22]">
-            PE
+            PM
           </div>
           <div>
-            <p className="text-white font-bold text-base leading-none">PARTEQUIPOS SAS</p>
+            <p className="text-white font-bold text-base leading-none">PARTEQUIPOS MAQUINARIA</p>
             <p className="text-slate-400 text-xs leading-tight">Posventa Inteligente</p>
           </div>
         </div>
@@ -424,10 +424,10 @@ export default function LoginPage() {
           style={{ background: "linear-gradient(135deg, #1a1f2e, #0f1219)" }}
         >
           <div className="w-9 h-9 rounded-lg flex items-center justify-center font-black text-white text-sm bg-[#cf1b22]">
-            PE
+            PM
           </div>
           <div>
-            <p className="text-white font-bold text-sm leading-none">PARTEQUIPOS SAS</p>
+            <p className="text-white font-bold text-sm leading-none">PARTEQUIPOS MAQUINARIA</p>
             <p className="text-slate-400 text-xs leading-tight">Posventa Inteligente</p>
           </div>
         </div>
@@ -447,11 +447,11 @@ export default function LoginPage() {
                   className="w-12 h-12 rounded-xl flex items-center justify-center font-black text-white text-xl shadow-lg"
                   style={{ background: "#cf1b22" }}
                 >
-                  PE
+                  PM
                 </div>
                 <div>
                   <h2 className="text-2xl font-extrabold text-gray-900 leading-none">
-                    PARTEQUIPOS SAS
+                    PARTEQUIPOS MAQUINARIA
                   </h2>
                   <p className="text-[#cf1b22] text-xs font-semibold tracking-wide uppercase mt-0.5">
                     Posventa Inteligente
@@ -627,7 +627,7 @@ export default function LoginPage() {
         {/* Footer */}
         <div className="px-6 py-4 text-center">
           <p className="text-xs text-gray-400">
-            © 2024 PARTEQUIPOS SAS. Plataforma Empresarial de Posventa
+            © 2026 PARTEQUIPOS MAQUINARIA. Plataforma Empresarial de Posventa
           </p>
         </div>
       </div>

@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge';
 
 interface TopBarProps {
   onMenuToggle?: () => void;
+  sidebarOpen?: boolean;
   className?: string;
 }
 
@@ -26,12 +27,11 @@ function useNotificationCount() {
   return 3;
 }
 
-export function TopBar({ onMenuToggle, className }: TopBarProps) {
+export function TopBar({ onMenuToggle, sidebarOpen = true, className }: TopBarProps) {
   const notificationCount = useNotificationCount();
   const [searchFocused, setSearchFocused] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Keyboard shortcut: Cmd/Ctrl+K to focus search
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -52,30 +52,29 @@ export function TopBar({ onMenuToggle, className }: TopBarProps) {
         className
       )}
     >
-      {/* ── Left: Hamburger + Logo ────────────────────────────── */}
       <div className="flex items-center gap-3 flex-shrink-0">
         <Button
           variant="ghost"
           size="icon"
           onClick={onMenuToggle}
           className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors duration-150"
-          aria-label="Alternar menú"
+          aria-label={sidebarOpen ? 'Ocultar menú lateral' : 'Mostrar menú lateral'}
+          aria-expanded={sidebarOpen}
         >
           <Menu className="h-5 w-5" />
         </Button>
 
-        {/* Logo */}
         <div className="flex items-center gap-2.5">
           <div
             className="h-8 w-8 rounded-lg flex items-center justify-center text-white font-bold text-sm select-none shadow-brand flex-shrink-0"
             style={{ background: 'linear-gradient(135deg, #cf1b22 0%, #a51519 100%)' }}
             aria-hidden="true"
           >
-            PE
+            PM
           </div>
           <div className="hidden sm:flex flex-col leading-none">
             <span className="font-bold text-foreground text-sm tracking-tight">
-              PARTEQUIPOS SAS
+              PARTEQUIPOS MAQUINARIA
             </span>
             <span className="text-[10px] text-muted-foreground font-medium tracking-wide uppercase">
               Posventa Inteligente

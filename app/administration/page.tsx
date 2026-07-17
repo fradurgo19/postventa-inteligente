@@ -712,7 +712,7 @@ export default function AdministrationPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5 sm:col-span-2">
                     <Label className="text-sm">Nombre de la Empresa</Label>
-                    <Input defaultValue="PARTEQUIPOS SAS" />
+                    <Input defaultValue="PARTEQUIPOS MAQUINARIA" />
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-sm">NIT</Label>

@@ -24,29 +24,24 @@ export function AppShell({ children, breadcrumbs, className }: AppShellProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Fixed top bar */}
-      <TopBar onMenuToggle={handleSidebarToggle} />
+      <TopBar onMenuToggle={handleSidebarToggle} sidebarOpen={sidebarOpen} />
 
-      {/* Fixed sidebar */}
       <Sidebar isOpen={sidebarOpen} onToggle={handleSidebarToggle} />
 
-      {/* Main content area */}
       <main
         className={cn(
           'flex flex-col min-h-screen pt-16',
           'transition-all duration-300 ease-in-out',
-          sidebarOpen ? 'pl-60' : 'pl-16',
+          sidebarOpen ? 'pl-60' : 'pl-0',
           className
         )}
       >
-        {/* Breadcrumbs strip */}
         {breadcrumbs && breadcrumbs.length > 0 && (
           <div className="flex-shrink-0 px-6 py-2.5 bg-muted/40 border-b border-border">
             <Breadcrumbs items={breadcrumbs} />
           </div>
         )}
 
-        {/* Page content */}
         <div className="flex-1 overflow-y-auto p-6 animate-fade-in">
           {children}
         </div>

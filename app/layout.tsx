@@ -12,17 +12,17 @@ export const metadata: Metadata = {
         ? `https://${process.env.VERCEL_URL}`
         : 'http://localhost:3000')
   ),
-  title: 'PARTEQUIPOS SAS - Plataforma de Posventa Inteligente',
+  title: 'PARTEQUIPOS MAQUINARIA - Plataforma de Posventa Inteligente',
   description: 'Plataforma empresarial de gestión de posventa para equipos',
   openGraph: {
-    title: 'PARTEQUIPOS SAS - Posventa Inteligente',
+    title: 'PARTEQUIPOS MAQUINARIA - Posventa Inteligente',
     description: 'Plataforma empresarial de gestión de posventa para equipos',
     locale: 'es_CO',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'PARTEQUIPOS SAS - Posventa Inteligente',
+    title: 'PARTEQUIPOS MAQUINARIA - Posventa Inteligente',
     description: 'Plataforma empresarial de gestión de posventa para equipos',
   },
 };
