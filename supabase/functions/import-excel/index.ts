@@ -163,8 +163,15 @@ function mapTempario(row: Record<string, string>, createdBy: string) {
     : 'Repuesto';
   const freq = toNumber(getField(row, 'Frecuencia (horas)', 'frecuencia_horas', 'Frecuencia'), 250);
   const frecuencia = [250, 1000, 2000, 4000, 5000].includes(freq) ? freq : 250;
+  const legacyRaw = getField(row, 'ID', 'Id', 'legacy_id', 'id_legacy');
+  const legacyId = legacyRaw ? Math.trunc(toNumber(legacyRaw, 0)) || null : null;
+  const creadoPor =
+    getField(row, 'Creado por', 'created_by', 'Creado Por') || createdBy;
+  const modificadoPor =
+    getField(row, 'Modificado por', 'updated_by', 'Modificado Por') || createdBy;
 
   return {
+    legacy_id: legacyId,
     marca: getField(row, 'Marca', 'marca'),
     linea: getField(row, 'Linea', 'linea') || '',
     modelo: getField(row, 'Modelo', 'modelo'),
@@ -176,15 +183,15 @@ function mapTempario(row: Record<string, string>, createdBy: string) {
     aceite_homologado: getField(row, 'Aceite Homologado', 'aceite_homologado') || null,
     referencia_genuina: getField(row, 'Referencia Genuina', 'referencia_genuina') || null,
     ref_sap_dispel: getField(row, 'REF SAP DISPEL', 'ref_sap_dispel') || null,
-    ref_sap_original: getField(row, 'REF SAP ORIGINAL', 'ref_sap_original') || null,
+    ref_sap_original: getField(row, 'REF SAP ORIGINAL', 'REF SAP ORIGINAl', 'ref_sap_original') || null,
     referencia_stal: getField(row, 'Referencia Stal', 'referencia_stal') || null,
     referencia_fleetguard: getField(row, 'Referencia Fleetguard', 'referencia_fleetguard') || null,
     referencia_donaldson: getField(row, 'Referencia Donalson', 'Referencia Donaldson', 'referencia_donaldson') || null,
     tiempo_horas: toNumber(getField(row, 'Tiempo (horas)', 'tiempo_horas'), 0),
     procedimiento: getField(row, 'Procedimiento', 'procedimiento') || null,
     avisos_claves: getField(row, 'Avisos Claves', 'avisos_claves') || null,
-    created_by: createdBy,
-    updated_by: createdBy,
+    created_by: creadoPor,
+    updated_by: modificadoPor,
     activo: true,
   };
 }
@@ -325,8 +332,10 @@ Deno.serve(async (req) => {
 
     let recordsOk = 0;
     let recordsError = 0;
+    let duplicates = 0;
     const errors: Array<{ row: number; message: string }> = [];
-    const batch: Record<string, unknown>[] = [];
+    const batchInsert: Record<string, unknown>[] = [];
+    const batchUpdate: Array<{ legacy_id: number; row: Record<string, unknown> }> = [];
 
     rows.forEach((row, index) => {
       try {
@@ -335,19 +344,24 @@ Deno.serve(async (req) => {
           if (!mapped.marca || !mapped.modelo || !mapped.item) {
             throw new Error('Marca, Modelo e Item son obligatorios');
           }
-          batch.push(mapped);
+          if (mapped.legacy_id) {
+            batchUpdate.push({ legacy_id: mapped.legacy_id, row: mapped });
+          } else {
+            const { legacy_id: _omit, ...insertRow } = mapped;
+            batchInsert.push(insertRow);
+          }
         } else if (body.modulo === 'proyectados') {
           const mapped = mapTelemetria(row, createdBy);
           if (!mapped.serie || !mapped.modelo || !mapped.marca) {
             throw new Error('Serie, Modelo y Marca son obligatorios');
           }
-          batch.push(mapped);
+          batchInsert.push(mapped);
         } else {
           const mapped = mapCpp(row, createdBy);
           if (!mapped.ref_sap || !mapped.marca || !mapped.nombre || !mapped.modelo) {
             throw new Error('RefSAP, Marca, Nombre y Modelo son obligatorios');
           }
-          batch.push(mapped);
+          batchInsert.push(mapped);
         }
       } catch (err) {
         recordsError += 1;
@@ -365,15 +379,58 @@ Deno.serve(async (req) => {
           ? 'telemetria_equipos'
           : 'cpp_catalogo';
 
-    if (batch.length > 0) {
-      const { error: insertError } = await admin.from(table).insert(batch);
+    if (body.modulo === 'calculadora' && batchUpdate.length > 0) {
+      for (const item of batchUpdate) {
+        const { data: existing, error: findErr } = await admin
+          .from(table)
+          .select('id')
+          .eq('legacy_id', item.legacy_id)
+          .maybeSingle();
+
+        if (findErr) {
+          recordsError += 1;
+          errors.push({ row: 0, message: findErr.message });
+          continue;
+        }
+
+        if (existing?.id) {
+          const { legacy_id: _lid, created_by: _cb, ...updatePayload } = item.row;
+          const { error: updErr } = await admin
+            .from(table)
+            .update({
+              ...updatePayload,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existing.id);
+
+          if (updErr) {
+            recordsError += 1;
+            errors.push({ row: 0, message: updErr.message });
+          } else {
+            recordsOk += 1;
+            duplicates += 1;
+          }
+        } else {
+          const { error: insErr } = await admin.from(table).insert(item.row);
+          if (insErr) {
+            recordsError += 1;
+            errors.push({ row: 0, message: insErr.message });
+          } else {
+            recordsOk += 1;
+          }
+        }
+      }
+    }
+
+    if (batchInsert.length > 0) {
+      const { error: insertError } = await admin.from(table).insert(batchInsert);
       if (insertError) {
         return new Response(JSON.stringify({ error: insertError.message, errors }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      recordsOk = batch.length;
+      recordsOk += batchInsert.length;
     }
 
     const { data: importRow } = await admin
@@ -385,7 +442,7 @@ Deno.serve(async (req) => {
         registros_total: rows.length,
         registros_ok: recordsOk,
         registros_error: recordsError,
-        duplicados: 0,
+        duplicados: duplicates,
         estado: recordsError > 0 ? (recordsOk > 0 ? 'parcial' : 'fallido') : 'completado',
         errores_json: errors.slice(0, 50),
         user_id: userData.user.id,
@@ -399,7 +456,7 @@ Deno.serve(async (req) => {
         importId: importRow?.id,
         recordsOk,
         recordsError,
-        duplicates: 0,
+        duplicates,
         total: rows.length,
         errors: errors.slice(0, 20),
       }),

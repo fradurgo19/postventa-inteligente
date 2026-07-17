@@ -15,6 +15,7 @@ La aplicación **no crea** las tablas automáticamente.
 | 6 | `schema/05_rls_policies.sql` | Políticas RLS (requiere Auth habilitado) |
 | 7 | `schema/06_seed_ejemplo.sql` | Datos de ejemplo (opcional) |
 | 8 | `schema/07_auth_trigger.sql` | Trigger perfil al crear usuario Auth |
+| 9 | `schema/08_temparios_admin.sql` | Índice legacy_id + SELECT admin (temparios) |
 
 ## Dónde ejecutar `supabase functions deploy`
 

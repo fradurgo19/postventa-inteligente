@@ -27,7 +27,18 @@ export interface TemparioMantenimiento {
   precio_unitario: number;
   tarifa_mano_obra_h: number;
   activo: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
 }
+
+export type TemparioWritable = Omit<
+  TemparioMantenimiento,
+  'id' | 'created_at' | 'updated_at'
+>;
+
+export type TemparioUpdatePatch = Partial<TemparioWritable>;
 
 export interface TarifaDesplazamiento {
   costo_por_km: number;

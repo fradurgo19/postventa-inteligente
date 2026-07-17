@@ -1,11 +1,19 @@
 import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/client';
-import type { TemparioMantenimiento, PreventiveQuoteInput, PreventiveQuoteResult } from '@/types/database';
+import type {
+  TemparioMantenimiento,
+  TemparioUpdatePatch,
+  PreventiveQuoteInput,
+  PreventiveQuoteResult,
+} from '@/types/database';
 import { buildPreventiveQuote } from '@/lib/calculadora/build-quote';
 import {
   MOCK_TEMPARIOS,
   getMockMarcas,
   getMockModelos,
 } from '@/lib/mock-temparios';
+
+/** Copia mutable para modo demo (sin Supabase) */
+let mockStore: TemparioMantenimiento[] = MOCK_TEMPARIOS.map((t) => ({ ...t }));
 
 function mapTemparioRow(row: Record<string, unknown>): TemparioMantenimiento {
   return {
@@ -32,7 +40,25 @@ function mapTemparioRow(row: Record<string, unknown>): TemparioMantenimiento {
     precio_unitario: Number(row.precio_unitario ?? 0),
     tarifa_mano_obra_h: Number(row.tarifa_mano_obra_h ?? 95000),
     activo: Boolean(row.activo ?? true),
+    created_at: (row.created_at as string) ?? null,
+    updated_at: (row.updated_at as string) ?? null,
+    created_by: (row.created_by as string) ?? null,
+    updated_by: (row.updated_by as string) ?? null,
   };
+}
+
+export interface TempariosAdminQuery {
+  marca?: string;
+  modelo?: string;
+  search?: string;
+  includeInactive?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface TempariosAdminResult {
+  rows: TemparioMantenimiento[];
+  total: number;
 }
 
 export async function fetchMarcas(): Promise<string[]> {
@@ -50,7 +76,9 @@ export async function fetchMarcas(): Promise<string[]> {
     return getMockMarcas();
   }
 
-  return Array.from(new Set(data.map((r) => r.marca as string))).sort();
+  return Array.from(new Set(data.map((r) => r.marca as string))).sort((a, b) =>
+    a.localeCompare(b, 'es')
+  );
 }
 
 export async function fetchModelos(marca: string): Promise<string[]> {
@@ -71,13 +99,18 @@ export async function fetchModelos(marca: string): Promise<string[]> {
     return getMockModelos(marca);
   }
 
-  return Array.from(new Set(data.map((r) => r.modelo as string))).sort();
+  return Array.from(new Set(data.map((r) => r.modelo as string))).sort((a, b) =>
+    a.localeCompare(b, 'es')
+  );
 }
 
 export async function fetchTemparios(marca: string, modelo: string): Promise<TemparioMantenimiento[]> {
   if (!isSupabaseConfigured()) {
-    return MOCK_TEMPARIOS.filter(
-      (t) => t.marca.toLowerCase() === marca.toLowerCase() && t.modelo.toLowerCase() === modelo.toLowerCase()
+    return mockStore.filter(
+      (t) =>
+        t.activo &&
+        t.marca.toLowerCase() === marca.toLowerCase() &&
+        t.modelo.toLowerCase() === modelo.toLowerCase()
     );
   }
 
@@ -91,11 +124,127 @@ export async function fetchTemparios(marca: string, modelo: string): Promise<Tem
 
   if (error || !data?.length) {
     return MOCK_TEMPARIOS.filter(
-      (t) => t.marca.toLowerCase() === marca.toLowerCase() && t.modelo.toLowerCase() === modelo.toLowerCase()
+      (t) =>
+        t.marca.toLowerCase() === marca.toLowerCase() &&
+        t.modelo.toLowerCase() === modelo.toLowerCase()
     );
   }
 
   return data.map(mapTemparioRow);
+}
+
+function filterMockAdmin(query: TempariosAdminQuery): TemparioMantenimiento[] {
+  const search = (query.search ?? '').trim().toLowerCase();
+  return mockStore.filter((t) => {
+    if (!query.includeInactive && !t.activo) return false;
+    if (query.marca && query.marca !== 'all' && t.marca.toLowerCase() !== query.marca.toLowerCase()) {
+      return false;
+    }
+    if (
+      query.modelo &&
+      query.modelo !== 'all' &&
+      t.modelo.toLowerCase() !== query.modelo.toLowerCase()
+    ) {
+      return false;
+    }
+    if (!search) return true;
+    return (
+      t.item.toLowerCase().includes(search) ||
+      t.marca.toLowerCase().includes(search) ||
+      t.modelo.toLowerCase().includes(search) ||
+      (t.referencia_genuina ?? '').toLowerCase().includes(search) ||
+      (t.ref_sap_original ?? '').toLowerCase().includes(search) ||
+      String(t.legacy_id ?? '').includes(search)
+    );
+  });
+}
+
+export async function fetchTempariosAdmin(
+  query: TempariosAdminQuery = {}
+): Promise<TempariosAdminResult> {
+  const page = Math.max(1, query.page ?? 1);
+  const pageSize = Math.min(100, Math.max(10, query.pageSize ?? 20));
+
+  if (!isSupabaseConfigured()) {
+    const filtered = filterMockAdmin(query);
+    const start = (page - 1) * pageSize;
+    return {
+      rows: filtered.slice(start, start + pageSize),
+      total: filtered.length,
+    };
+  }
+
+  const supabase = getSupabaseClient();
+  let q = supabase
+    .from('temparios_mantenimiento')
+    .select('*', { count: 'exact' })
+    .order('updated_at', { ascending: false });
+
+  if (!query.includeInactive) {
+    q = q.eq('activo', true);
+  }
+  if (query.marca && query.marca !== 'all') {
+    q = q.ilike('marca', query.marca);
+  }
+  if (query.modelo && query.modelo !== 'all') {
+    q = q.ilike('modelo', query.modelo);
+  }
+  if (query.search?.trim()) {
+    const s = query.search.trim();
+    q = q.or(
+      `item.ilike.%${s}%,referencia_genuina.ilike.%${s}%,ref_sap_original.ilike.%${s}%,ref_sap_dispel.ilike.%${s}%`
+    );
+  }
+
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  const { data, error, count } = await q.range(from, to);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return {
+    rows: (data ?? []).map(mapTemparioRow),
+    total: count ?? 0,
+  };
+}
+
+export async function updateTempario(
+  id: string,
+  patch: TemparioUpdatePatch,
+  updatedBy = 'admin'
+): Promise<TemparioMantenimiento> {
+  const payload = {
+    ...patch,
+    updated_by: updatedBy,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (!isSupabaseConfigured()) {
+    const idx = mockStore.findIndex((t) => t.id === id);
+    if (idx < 0) throw new Error('Registro no encontrado');
+    mockStore[idx] = { ...mockStore[idx], ...payload };
+    return mockStore[idx];
+  }
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('temparios_mantenimiento')
+    .update(payload)
+    .eq('id', id)
+    .select('*')
+    .single();
+
+  if (error) throw new Error(error.message);
+  return mapTemparioRow(data);
+}
+
+export async function deactivateTempario(
+  id: string,
+  updatedBy = 'admin'
+): Promise<void> {
+  await updateTempario(id, { activo: false }, updatedBy);
 }
 
 export async function calculatePreventiveMaintenance(

@@ -1,11 +1,19 @@
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchMarcas,
   fetchModelos,
   calculatePreventiveMaintenance,
   registerTemparioImport,
+  fetchTempariosAdmin,
+  updateTempario,
+  deactivateTempario,
+  type TempariosAdminQuery,
 } from '@/services/calculadora.service';
-import type { PreventiveQuoteInput, PreventiveQuoteResult } from '@/types/database';
+import type {
+  PreventiveQuoteInput,
+  PreventiveQuoteResult,
+  TemparioUpdatePatch,
+} from '@/types/database';
 
 export function useCalculadoraMarcas() {
   return useQuery({
@@ -31,9 +39,50 @@ export function useCalculatePreventive() {
 }
 
 export function useTemparioImport() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ fileName, ok, error }: { fileName: string; ok: number; error: number }) =>
       registerTemparioImport(fileName, ok, error),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['calculadora'] });
+    },
+  });
+}
+
+export function useTempariosAdmin(query: TempariosAdminQuery) {
+  return useQuery({
+    queryKey: ['calculadora', 'temparios-admin', query],
+    queryFn: () => fetchTempariosAdmin(query),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useUpdateTempario() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      patch,
+      updatedBy,
+    }: {
+      id: string;
+      patch: TemparioUpdatePatch;
+      updatedBy?: string;
+    }) => updateTempario(id, patch, updatedBy),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['calculadora'] });
+    },
+  });
+}
+
+export function useDeactivateTempario() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, updatedBy }: { id: string; updatedBy?: string }) =>
+      deactivateTempario(id, updatedBy),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['calculadora'] });
+    },
   });
 }
 
