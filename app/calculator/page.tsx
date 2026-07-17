@@ -269,9 +269,21 @@ export default function CalculatorPage() {
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Horómetro (h)
-            </Label>
+            <div className="flex items-center gap-1.5 min-h-4 flex-wrap">
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Horómetro (h)
+              </Label>
+              {frecuenciasPreview.map((f) => (
+                <Badge
+                  key={f}
+                  variant="outline"
+                  title={FRECUENCIA_LABELS[f]}
+                  className="h-4 px-1.5 text-[9px] font-medium leading-none border-[#cf1b22]/30 text-[#cf1b22]"
+                >
+                  {FRECUENCIA_LABELS[f].replace('Mantenimiento ', '')}
+                </Badge>
+              ))}
+            </div>
             <Controller
               name="hourMeter"
               control={control}
@@ -293,19 +305,6 @@ export default function CalculatorPage() {
                 </Select>
               )}
             />
-            {frecuenciasPreview.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {frecuenciasPreview.map((f) => (
-                  <Badge
-                    key={f}
-                    variant="outline"
-                    className="text-[10px] border-[#cf1b22]/30 text-[#cf1b22]"
-                  >
-                    {FRECUENCIA_LABELS[f]}
-                  </Badge>
-                ))}
-              </div>
-            )}
           </div>
 
           <div className="space-y-1.5">
