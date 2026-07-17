@@ -5,6 +5,10 @@ import { Providers } from '@/components/providers';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
+/** Logo PARTEQUIPOS en círculo (Cloudinary: crop + r_max + PNG transparente) */
+const APP_ICON_CIRCLE =
+  'https://res.cloudinary.com/dbufrzoda/image/upload/c_fill,g_center,w_512,h_512,r_max,f_png/v1762897590/Logo2_eedoer.jpg';
+
 export const metadata: Metadata = {
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_APP_URL ??
@@ -14,16 +18,26 @@ export const metadata: Metadata = {
   ),
   title: 'PARTEQUIPOS MAQUINARIA - Plataforma de Posventa Inteligente',
   description: 'Plataforma empresarial de gestión de posventa para equipos',
+  icons: {
+    icon: [
+      { url: APP_ICON_CIRCLE, type: 'image/png', sizes: '32x32' },
+      { url: APP_ICON_CIRCLE, type: 'image/png', sizes: '192x192' },
+    ],
+    shortcut: APP_ICON_CIRCLE,
+    apple: [{ url: APP_ICON_CIRCLE, sizes: '180x180', type: 'image/png' }],
+  },
   openGraph: {
     title: 'PARTEQUIPOS MAQUINARIA - Posventa Inteligente',
     description: 'Plataforma empresarial de gestión de posventa para equipos',
     locale: 'es_CO',
     type: 'website',
+    images: [{ url: APP_ICON_CIRCLE, width: 512, height: 512, alt: 'PARTEQUIPOS MAQUINARIA' }],
   },
   twitter: {
-    card: 'summary_large_image',
+    card: 'summary',
     title: 'PARTEQUIPOS MAQUINARIA - Posventa Inteligente',
     description: 'Plataforma empresarial de gestión de posventa para equipos',
+    images: [APP_ICON_CIRCLE],
   },
 };
 
