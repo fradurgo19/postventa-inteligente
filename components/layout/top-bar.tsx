@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Bell, Search, ChevronDown, LogOut, User, Settings, Menu } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Bell, Search, ChevronDown, LogOut, User, Settings, Menu, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,23 +15,48 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
+import { useUserStore } from '@/store';
+import { toast } from 'sonner';
 
 interface TopBarProps {
-  onMenuToggle?: () => void;
-  sidebarOpen?: boolean;
-  className?: string;
+  readonly onMenuToggle?: () => void;
+  readonly sidebarOpen?: boolean;
+  readonly className?: string;
 }
 
-// Placeholder — replace with your real useNotificationStore
 function useNotificationCount() {
   return 3;
 }
 
+function roleLabel(role: string): string {
+  const map: Record<string, string> = {
+    Administrator: 'Administrador',
+    Coordinator: 'Coordinador',
+    'Sales Advisor': 'Asesor comercial',
+    Technician: 'Técnico',
+    Viewer: 'Visualizador',
+  };
+  return map[role] ?? role;
+}
+
 export function TopBar({ onMenuToggle, sidebarOpen = true, className }: TopBarProps) {
+  const router = useRouter();
   const notificationCount = useNotificationCount();
+  const { currentUser, role, logout } = useUserStore();
   const [searchFocused, setSearchFocused] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  const initials =
+    currentUser.avatar ||
+    currentUser.name
+      .split(' ')
+      .filter(Boolean)
+      .map((p) => p[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase() ||
+    'U';
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -42,6 +68,21 @@ export function TopBar({ onMenuToggle, sidebarOpen = true, className }: TopBarPr
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await logout();
+      toast.success('Sesión cerrada');
+    } catch {
+      toast.error('No se pudo cerrar la sesión correctamente');
+    } finally {
+      router.replace('/login');
+      router.refresh();
+      setIsLoggingOut(false);
+    }
+  };
 
   return (
     <header
@@ -83,7 +124,6 @@ export function TopBar({ onMenuToggle, sidebarOpen = true, className }: TopBarPr
         </div>
       </div>
 
-      {/* ── Center: Global Search ─────────────────────────────── */}
       <div className="flex-1 max-w-xl mx-auto hidden md:block">
         <div
           className={cn(
@@ -106,14 +146,13 @@ export function TopBar({ onMenuToggle, sidebarOpen = true, className }: TopBarPr
             onBlur={() => setSearchFocused(false)}
           />
           <kbd className="absolute right-3 hidden lg:flex items-center gap-0.5 text-[10px] text-muted-foreground font-mono bg-background border border-border rounded px-1 py-0.5 pointer-events-none">
-            <span>⌘</span><span>K</span>
+            <span>⌘</span>
+            <span>K</span>
           </kbd>
         </div>
       </div>
 
-      {/* ── Right: Notifications + User ───────────────────────── */}
       <div className="flex items-center gap-1 flex-shrink-0 ml-auto">
-        {/* Notifications */}
         <Button
           variant="ghost"
           size="icon"
@@ -131,26 +170,28 @@ export function TopBar({ onMenuToggle, sidebarOpen = true, className }: TopBarPr
           )}
         </Button>
 
-        {/* User dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               className="h-9 pl-2 pr-2 gap-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors duration-150 rounded-lg"
               aria-label="Menú de usuario"
+              disabled={isLoggingOut}
             >
               <Avatar className="h-7 w-7">
-                <AvatarImage src="" alt="Avatar de usuario" />
+                <AvatarImage src="" alt={`Avatar de ${currentUser.name}`} />
                 <AvatarFallback
                   className="text-xs font-semibold text-white"
                   style={{ background: 'linear-gradient(135deg, #cf1b22 0%, #a51519 100%)' }}
                 >
-                  AU
+                  {initials}
                 </AvatarFallback>
               </Avatar>
               <div className="hidden md:flex flex-col items-start leading-none">
-                <span className="text-xs font-semibold text-foreground">Usuario Admin</span>
-                <span className="text-[10px] text-muted-foreground">Administrador</span>
+                <span className="text-xs font-semibold text-foreground max-w-[120px] truncate">
+                  {currentUser.name}
+                </span>
+                <span className="text-[10px] text-muted-foreground">{roleLabel(role)}</span>
               </div>
               <ChevronDown className="h-3.5 w-3.5 hidden md:block transition-transform duration-150 group-data-[state=open]:rotate-180" />
             </Button>
@@ -159,23 +200,40 @@ export function TopBar({ onMenuToggle, sidebarOpen = true, className }: TopBarPr
           <DropdownMenuContent align="end" className="w-52">
             <DropdownMenuLabel className="font-normal">
               <div className="flex flex-col gap-0.5">
-                <p className="font-semibold text-sm text-foreground">Usuario Admin</p>
-                <p className="text-xs text-muted-foreground">admin@partequipos.com</p>
+                <p className="font-semibold text-sm text-foreground">{currentUser.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{currentUser.email}</p>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="gap-2 cursor-pointer">
+            <DropdownMenuItem
+              className="gap-2 cursor-pointer"
+              onSelect={() => router.push('/administration')}
+            >
               <User className="h-4 w-4 text-muted-foreground" />
               <span>Perfil</span>
             </DropdownMenuItem>
-            <DropdownMenuItem className="gap-2 cursor-pointer">
+            <DropdownMenuItem
+              className="gap-2 cursor-pointer"
+              onSelect={() => router.push('/administration')}
+            >
               <Settings className="h-4 w-4 text-muted-foreground" />
               <span>Configuración</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="gap-2 cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10">
-              <LogOut className="h-4 w-4" />
-              <span>Cerrar sesión</span>
+            <DropdownMenuItem
+              className="gap-2 cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10"
+              disabled={isLoggingOut}
+              onSelect={(event) => {
+                event.preventDefault();
+                void handleLogout();
+              }}
+            >
+              {isLoggingOut ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <LogOut className="h-4 w-4" />
+              )}
+              <span>{isLoggingOut ? 'Cerrando…' : 'Cerrar sesión'}</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

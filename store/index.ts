@@ -53,8 +53,8 @@ interface UserState {
 
   /** Replace the current user (e.g. after a role switch in demo mode). */
   setUser: (user: User) => void;
-  /** Clear the session and reset to the default mock user. */
-  logout: () => void;
+  /** Clear the session (Supabase + store) and mark user logged out. */
+  logout: () => Promise<void>;
 }
 
 export const useUserStore = create<UserState>()(
@@ -71,13 +71,16 @@ export const useUserStore = create<UserState>()(
           isAuthenticated: true,
         }),
 
-      logout: () => {
-        void supabaseSignOut();
-        set({
-          currentUser: DEFAULT_USER,
-          role: DEFAULT_USER.role,
-          isAuthenticated: false,
-        });
+      logout: async () => {
+        try {
+          await supabaseSignOut();
+        } finally {
+          set({
+            currentUser: DEFAULT_USER,
+            role: DEFAULT_USER.role,
+            isAuthenticated: false,
+          });
+        }
       },
     }),
     {
