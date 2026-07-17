@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ProyectadosImportPanel } from '@/components/modules/proyectados-import-panel';
 import {
@@ -65,6 +65,17 @@ import { AppShell } from "@/components/layout/app-shell";
 import { useProjectedKpis } from "@/hooks/use-projected-maintenance";
 import { formatCOP } from "@/lib/mock-data";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  ReportFiltersBar,
+  DEFAULT_REPORT_FILTERS,
+} from "@/components/modules/report-filters-bar";
+import {
+  sortLocale,
+  matchesStringFilter,
+  matchesDateFilters,
+  parseFlexibleDate,
+  type ReportFiltersState,
+} from "@/lib/report-filters";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -82,6 +93,7 @@ interface MaintenanceRow {
   equipment: string;
   brand: string;
   model: string;
+  client: string;
   hours: number;
   lastMaintenance: string;
   nextDue: string;
@@ -147,16 +159,16 @@ const MAINTENANCE_EVENTS: MaintenanceEvent[] = [
 ];
 
 const OPPORTUNITY_ROWS: MaintenanceRow[] = [
-  { id: 1,  equipment: "CAT 320 GC",      brand: "Caterpillar", model: "320 GC",    hours: 2480, lastMaintenance: "15/05/2025", nextDue: "15/07/2025", status: "Scheduled",   advisor: "Carlos Ruiz"    },
-  { id: 2,  equipment: "Volvo EC220E",     brand: "Volvo CE",    model: "EC220E",    hours: 3150, lastMaintenance: "01/04/2025", nextDue: "01/06/2025", status: "Overdue",     advisor: "Mónica Torres"  },
-  { id: 3,  equipment: "Komatsu PC200-8",  brand: "Komatsu",     model: "PC200-8",   hours: 1870, lastMaintenance: "20/06/2025", nextDue: "20/08/2025", status: "Scheduled",   advisor: "Felipe Gómez"   },
-  { id: 4,  equipment: "CAT 336 Next",     brand: "Caterpillar", model: "336 Next",  hours: 4200, lastMaintenance: "10/03/2025", nextDue: "10/05/2025", status: "Overdue",     advisor: "Sandra Mejía"   },
-  { id: 5,  equipment: "JCB 3CX Compact",  brand: "JCB",         model: "3CX",       hours: 980,  lastMaintenance: "28/06/2025", nextDue: "28/09/2025", status: "In Progress", advisor: "Andrés Vargas"   },
-  { id: 6,  equipment: "Hitachi ZX200-6",  brand: "Hitachi",     model: "ZX200-6",   hours: 2760, lastMaintenance: "05/05/2025", nextDue: "05/08/2025", status: "Scheduled",   advisor: "Laura Castro"    },
-  { id: 7,  equipment: "Doosan DX225LC",   brand: "Doosan",      model: "DX225LC",   hours: 5100, lastMaintenance: "15/02/2025", nextDue: "15/04/2025", status: "Overdue",     advisor: "Carlos Ruiz"    },
-  { id: 8,  equipment: "Volvo L120H",      brand: "Volvo CE",    model: "L120H",     hours: 3400, lastMaintenance: "18/06/2025", nextDue: "18/09/2025", status: "Completed",   advisor: "Felipe Gómez"   },
-  { id: 9,  equipment: "CAT 966M XE",      brand: "Caterpillar", model: "966M XE",   hours: 1600, lastMaintenance: "22/06/2025", nextDue: "22/09/2025", status: "Completed",   advisor: "Sandra Mejía"   },
-  { id: 10, equipment: "Liebherr R926 Li", brand: "Liebherr",    model: "R926 Li",   hours: 2200, lastMaintenance: "30/05/2025", nextDue: "30/07/2025", status: "In Progress", advisor: "Andrés Vargas"   },
+  { id: 1,  equipment: "CAT 320 GC",      brand: "Caterpillar", model: "320 GC",    client: "Cemex Colombia",    hours: 2480, lastMaintenance: "15/05/2025", nextDue: "15/07/2025", status: "Scheduled",   advisor: "Carlos Ruiz"    },
+  { id: 2,  equipment: "Volvo EC220E",     brand: "Volvo CE",    model: "EC220E",    client: "Holcim Colombia",   hours: 3150, lastMaintenance: "01/04/2025", nextDue: "01/06/2025", status: "Overdue",     advisor: "Mónica Torres"  },
+  { id: 3,  equipment: "Komatsu PC200-8",  brand: "Komatsu",     model: "PC200-8",   client: "Argos S.A.",        hours: 1870, lastMaintenance: "20/06/2025", nextDue: "20/08/2025", status: "Scheduled",   advisor: "Felipe Gómez"   },
+  { id: 4,  equipment: "CAT 336 Next",     brand: "Caterpillar", model: "336 Next",  client: "Mineros S.A.",      hours: 4200, lastMaintenance: "10/03/2025", nextDue: "10/05/2025", status: "Overdue",     advisor: "Sandra Mejía"   },
+  { id: 5,  equipment: "JCB 3CX Compact",  brand: "JCB",         model: "3CX",       client: "Drummond Ltd.",     hours: 980,  lastMaintenance: "28/06/2025", nextDue: "28/09/2025", status: "In Progress", advisor: "Andrés Vargas"   },
+  { id: 6,  equipment: "Hitachi ZX200-6",  brand: "Hitachi",     model: "ZX200-6",   client: "Holcim Colombia",   hours: 2760, lastMaintenance: "05/05/2025", nextDue: "05/08/2025", status: "Scheduled",   advisor: "Laura Castro"    },
+  { id: 7,  equipment: "Doosan DX225LC",   brand: "Doosan",      model: "DX225LC",   client: "Cemex Colombia",    hours: 5100, lastMaintenance: "15/02/2025", nextDue: "15/04/2025", status: "Overdue",     advisor: "Carlos Ruiz"    },
+  { id: 8,  equipment: "Volvo L120H",      brand: "Volvo CE",    model: "L120H",     client: "Argos S.A.",        hours: 3400, lastMaintenance: "18/06/2025", nextDue: "18/09/2025", status: "Completed",   advisor: "Felipe Gómez"   },
+  { id: 9,  equipment: "CAT 966M XE",      brand: "Caterpillar", model: "966M XE",   client: "Mineros S.A.",      hours: 1600, lastMaintenance: "22/06/2025", nextDue: "22/09/2025", status: "Completed",   advisor: "Sandra Mejía"   },
+  { id: 10, equipment: "Liebherr R926 Li", brand: "Liebherr",    model: "R926 Li",   client: "Drummond Ltd.",     hours: 2200, lastMaintenance: "30/05/2025", nextDue: "30/07/2025", status: "In Progress", advisor: "Andrés Vargas"   },
 ];
 
 const IMPORT_HISTORY: ImportRecord[] = [
@@ -578,22 +590,31 @@ function StatusBadge({ status }: { status: MaintenanceStatus }) {
 }
 
 /** Opportunities Table */
-function OpportunitiesTable() {
+function OpportunitiesTable({
+  reportFilters,
+}: Readonly<{ reportFilters: ReportFiltersState }>) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
   const rowsPerPage = 10;
-  const totalRows = 24;
 
   const filtered = OPPORTUNITY_ROWS.filter((r) => {
     const matchSearch =
       r.equipment.toLowerCase().includes(search.toLowerCase()) ||
       r.brand.toLowerCase().includes(search.toLowerCase()) ||
-      r.advisor.toLowerCase().includes(search.toLowerCase());
+      r.advisor.toLowerCase().includes(search.toLowerCase()) ||
+      r.client.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === "all" || r.status === statusFilter;
-    return matchSearch && matchStatus;
+    const matchReport =
+      matchesStringFilter(r.brand, reportFilters.marca) &&
+      matchesStringFilter(r.model, reportFilters.modelo) &&
+      matchesStringFilter(r.client, reportFilters.cliente) &&
+      matchesDateFilters(r.nextDue, reportFilters);
+    return matchSearch && matchStatus && matchReport;
   });
 
+  const totalRows = filtered.length;
+  const pageRows = filtered.slice((page - 1) * rowsPerPage, page * rowsPerPage);
   return (
     <Card className="border-border shadow-sm">
       <CardHeader className="pb-3">
@@ -649,14 +670,14 @@ function OpportunitiesTable() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.length === 0 ? (
+              {pageRows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-8 text-muted-foreground text-sm">
                     No se encontraron resultados
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((row, i) => (
+                pageRows.map((row, i) => (
                   <motion.tr
                     key={row.id}
                     initial={{ opacity: 0, x: -8 }}
@@ -682,8 +703,9 @@ function OpportunitiesTable() {
         {/* Pagination */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-border">
           <span className="text-xs text-muted-foreground">
-            Mostrando {(page - 1) * rowsPerPage + 1}–
-            {Math.min(page * rowsPerPage, totalRows)} de {totalRows} resultados
+            {totalRows === 0
+              ? "Sin resultados"
+              : `Mostrando ${(page - 1) * rowsPerPage + 1}–${Math.min(page * rowsPerPage, totalRows)} de ${totalRows} resultados`}
           </span>
           <div className="flex items-center gap-1">
             <Button
@@ -695,7 +717,9 @@ function OpportunitiesTable() {
             >
               <ChevronLeft className="h-3.5 w-3.5" />
             </Button>
-            {[1, 2, 3].map((p) => (
+            {Array.from({ length: Math.max(1, Math.ceil(totalRows / rowsPerPage)) }, (_, i) => i + 1)
+              .slice(0, 5)
+              .map((p) => (
               <Button
                 key={p}
                 variant={page === p ? "default" : "outline"}
@@ -710,7 +734,7 @@ function OpportunitiesTable() {
               variant="outline"
               size="sm"
               className="h-7 px-2 text-xs"
-              disabled={page === 3}
+              disabled={page >= Math.max(1, Math.ceil(totalRows / rowsPerPage))}
               onClick={() => setPage((p) => p + 1)}
             >
               <ChevronRight className="h-3.5 w-3.5" />
@@ -1015,6 +1039,29 @@ function BrandsChart() {
 
 /** ── TAB 1: Dashboard ─────────────────────────────────────────────────────── */
 function DashboardTab() {
+  const [reportFilters, setReportFilters] = useState<ReportFiltersState>(DEFAULT_REPORT_FILTERS);
+
+  const filterOptions = useMemo(() => {
+    const marcas = sortLocale(Array.from(new Set(OPPORTUNITY_ROWS.map((r) => r.brand))));
+    const source =
+      reportFilters.marca === "all"
+        ? OPPORTUNITY_ROWS
+        : OPPORTUNITY_ROWS.filter((r) => matchesStringFilter(r.brand, reportFilters.marca));
+    const modelos = sortLocale(Array.from(new Set(source.map((r) => r.model))));
+    const clientes = sortLocale(Array.from(new Set(OPPORTUNITY_ROWS.map((r) => r.client))));
+    const periodos = sortLocale(
+      Array.from(
+        new Set(
+          OPPORTUNITY_ROWS.map((r) => {
+            const d = parseFlexibleDate(r.nextDue);
+            return d ? d.getFullYear().toString() : null;
+          }).filter(Boolean) as string[]
+        )
+      )
+    );
+    return { marcas, modelos, periodos, clientes };
+  }, [reportFilters.marca]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -1022,13 +1069,18 @@ function DashboardTab() {
       transition={{ duration: 0.35 }}
       className="space-y-6"
     >
+      <ReportFiltersBar
+        value={reportFilters}
+        onChange={(next) => setReportFilters(next)}
+        options={filterOptions}
+      />
       <KPIRow />
       <KpiChartsSection />
 
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
         <div className="xl:col-span-3 space-y-6">
           <MaintenanceCalendar />
-          <OpportunitiesTable />
+          <OpportunitiesTable reportFilters={reportFilters} />
         </div>
         <div className="xl:col-span-2 space-y-6">
           <ColombiaMap />

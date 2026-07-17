@@ -36,6 +36,17 @@ import {
 import { KPICard } from "@/components/ui/kpi-card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import {
+  ReportFiltersBar,
+  DEFAULT_REPORT_FILTERS,
+} from "@/components/modules/report-filters-bar";
+import {
+  sortLocale,
+  matchesStringFilter,
+  matchesDateFilters,
+  parseFlexibleDate,
+  type ReportFiltersState,
+} from "@/lib/report-filters";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -325,16 +336,88 @@ function ColombiaMap() {
 export default function ExecutiveDashboardPage() {
   const [sortKey, setSortKey] = useState<SortKey>("revenue");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [reportFilters, setReportFilters] = useState<ReportFiltersState>(DEFAULT_REPORT_FILTERS);
+
+  const filterOptions = useMemo(() => {
+    const marcas = sortLocale(Array.from(new Set(equipmentTable.map((e) => e.brand))));
+    const source =
+      reportFilters.marca === "all"
+        ? equipmentTable
+        : equipmentTable.filter((e) => matchesStringFilter(e.brand, reportFilters.marca));
+    const modelos = sortLocale(Array.from(new Set(source.map((e) => e.model))));
+    const clientes = sortLocale(Array.from(new Set(equipmentTable.map((e) => e.customer))));
+    const periodos = sortLocale(
+      Array.from(
+        new Set(
+          equipmentTable
+            .map((e) => {
+              const d = parseFlexibleDate(e.nextDue);
+              return d ? d.getFullYear().toString() : null;
+            })
+            .filter(Boolean) as string[]
+        )
+      )
+    );
+    return { marcas, modelos, periodos, clientes };
+  }, [reportFilters.marca]);
+
+  const filteredEquipment = useMemo(() => {
+    return equipmentTable.filter(
+      (e) =>
+        matchesStringFilter(e.brand, reportFilters.marca) &&
+        matchesStringFilter(e.model, reportFilters.modelo) &&
+        matchesStringFilter(e.customer, reportFilters.cliente) &&
+        matchesDateFilters(e.nextDue, reportFilters)
+    );
+  }, [reportFilters]);
 
   const sortedEquipment = useMemo(() => {
-    return [...equipmentTable].sort((a, b) => {
-      const va = a[sortKey] as any;
-      const vb = b[sortKey] as any;
+    return [...filteredEquipment].sort((a, b) => {
+      const va = a[sortKey];
+      const vb = b[sortKey];
       if (va < vb) return sortDir === "asc" ? -1 : 1;
       if (va > vb) return sortDir === "asc" ? 1 : -1;
       return 0;
     });
-  }, [sortKey, sortDir]);
+  }, [sortKey, sortDir, filteredEquipment]);
+
+  const filteredUpcoming = useMemo(() => {
+    if (
+      reportFilters.marca === "all" &&
+      reportFilters.modelo === "all" &&
+      reportFilters.cliente === "all" &&
+      reportFilters.mes === "all" &&
+      reportFilters.periodo === "all"
+    ) {
+      return upcomingMaintenances;
+    }
+    return upcomingMaintenances.filter((u) => {
+      const text = u.equipment.toLowerCase();
+      const brandOk =
+        reportFilters.marca === "all" ||
+        text.includes(reportFilters.marca.toLowerCase().split(" ")[0]);
+      const clientOk =
+        reportFilters.cliente === "all" ||
+        text.includes(reportFilters.cliente.toLowerCase().split(" ")[0]);
+      return brandOk && clientOk;
+    });
+  }, [reportFilters]);
+
+  const filteredTopBrands = useMemo(() => {
+    if (reportFilters.marca === "all") return topBrands;
+    return topBrands.filter((b) => matchesStringFilter(b.brand, reportFilters.marca));
+  }, [reportFilters.marca]);
+
+  const filteredTopCustomers = useMemo(() => {
+    if (reportFilters.cliente === "all") return topCustomers;
+    return topCustomers.filter((c) => matchesStringFilter(c.name, reportFilters.cliente));
+  }, [reportFilters.cliente]);
+
+  const filteredMonthlyRevenue = useMemo(() => {
+    if (reportFilters.mes === "all") return monthlyRevenue;
+    const monthShort = reportFilters.mes.slice(0, 3);
+    return monthlyRevenue.filter((m) => m.month.toLowerCase() === monthShort.toLowerCase());
+  }, [reportFilters.mes]);
 
   function handleSort(key: SortKey) {
     if (key === sortKey) {
@@ -345,7 +428,7 @@ export default function ExecutiveDashboardPage() {
     }
   }
 
-  function SortIcon({ col }: { col: SortKey }) {
+  function SortIcon({ col }: Readonly<{ col: SortKey }>) {
     if (col !== sortKey) return <ChevronUp className="h-3 w-3 text-muted-foreground/40" />;
     return sortDir === "asc"
       ? <ChevronUp className="h-3 w-3 text-[#cf1b22]" />
@@ -403,6 +486,12 @@ export default function ExecutiveDashboardPage() {
         </span>
       </div>
 
+      <ReportFiltersBar
+        value={reportFilters}
+        onChange={setReportFilters}
+        options={filterOptions}
+      />
+
       {/* ── Row 1: KPI Cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {[
@@ -417,12 +506,12 @@ export default function ExecutiveDashboardPage() {
           },
           {
             title: "Equipos en Mantenimiento",
-            value: "23",
+            value: String(filteredEquipment.filter((e) => e.status === "maintenance").length),
             change: undefined,
             changeType: "neutral" as const,
             icon: Wrench,
             variant: "warning" as const,
-            description: "+2 desde ayer",
+            description: "Según filtros aplicados",
           },
           {
             title: "Mantenimientos Completados",
@@ -490,7 +579,7 @@ export default function ExecutiveDashboardPage() {
             <TrendingUp className="h-4 w-4 text-emerald-500" />
           </div>
           <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={monthlyRevenue} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+            <LineChart data={filteredMonthlyRevenue} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}M`} />
@@ -563,7 +652,7 @@ export default function ExecutiveDashboardPage() {
             Top 5 Clientes
           </h2>
           <div className="space-y-2">
-            {topCustomers.map((c) => (
+            {filteredTopCustomers.map((c) => (
               <div key={c.rank} className="flex items-center gap-2 py-1 border-b border-border/50 last:border-0">
                 <span className={cn(
                   "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0",
@@ -597,7 +686,7 @@ export default function ExecutiveDashboardPage() {
             Top 5 Marcas
           </h2>
           <div className="space-y-2">
-            {topBrands.map((b, i) => (
+            {filteredTopBrands.map((b, i) => (
               <div key={b.brand} className="flex items-center gap-2 py-1 border-b border-border/50 last:border-0">
                 <span className="w-5 h-5 rounded bg-blue-50 flex items-center justify-center text-[10px] font-bold text-blue-700 flex-shrink-0">
                   {i + 1}
@@ -685,7 +774,7 @@ export default function ExecutiveDashboardPage() {
             <MiniCalendar />
             <div className="mt-4 space-y-1.5">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Próximos 7 días</p>
-              {upcomingMaintenances.map((m, i) => (
+              {filteredUpcoming.map((m, i) => (
                 <div key={i} className="flex items-center gap-2 text-xs">
                   <span className="text-[10px] font-medium text-muted-foreground w-14 flex-shrink-0">{m.date}</span>
                   <span className="flex-1 truncate text-foreground">{m.equipment}</span>
@@ -765,9 +854,9 @@ export default function ExecutiveDashboardPage() {
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div>
             <h2 className="text-sm font-semibold text-foreground">Rendimiento de Equipos</h2>
-            <p className="text-xs text-muted-foreground">Top 10 equipos · Haz clic en columnas para ordenar</p>
+            <p className="text-xs text-muted-foreground">Top equipos · Haz clic en columnas para ordenar</p>
           </div>
-          <span className="text-xs text-muted-foreground">{equipmentTable.length} equipos</span>
+          <span className="text-xs text-muted-foreground">{sortedEquipment.length} equipos</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">

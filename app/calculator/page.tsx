@@ -18,7 +18,6 @@ import {
   MapPin,
   Hash,
   List,
-  Filter,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -67,11 +66,6 @@ const HOROMETRO_OPTIONS = Array.from(
   (_, i) => 250 + i * 250
 );
 
-const MESES = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
-];
-
 const INACTIVE_ESTADOS = new Set(['inactivo', 'inactiva', 'baja', 'cancelado', 'cancelada']);
 
 interface FilterFormValues {
@@ -80,35 +74,6 @@ interface FilterFormValues {
   hourMeter: number;
   kilometers: number;
   travelTime: number;
-}
-
-interface ReportFilters {
-  marca: string;
-  modelo: string;
-  periodo: string;
-  cliente: string;
-  mes: string;
-}
-
-function sortLocale(values: string[]): string[] {
-  return [...values].sort((a, b) => a.localeCompare(b, 'es'));
-}
-
-function matchesReportFilters(m: TelemetriaEquipo, filters: ReportFilters): boolean {
-  const estado = (m.estado ?? '').toLowerCase().trim();
-  if (estado && INACTIVE_ESTADOS.has(estado)) return false;
-  if (filters.marca !== 'all' && m.marca.toLowerCase() !== filters.marca.toLowerCase()) return false;
-  if (filters.modelo !== 'all' && m.modelo.toLowerCase() !== filters.modelo.toLowerCase()) return false;
-  if (filters.cliente !== 'all' && (m.titulo ?? '') !== filters.cliente) return false;
-  return matchesDateFilters(m, filters);
-}
-
-function matchesDateFilters(m: TelemetriaEquipo, filters: ReportFilters): boolean {
-  if (!m.fecha_primer_mtto) return true;
-  const date = new Date(m.fecha_primer_mtto);
-  if (filters.mes !== 'all' && MESES[date.getMonth()] !== filters.mes) return false;
-  if (filters.periodo !== 'all' && date.getFullYear().toString() !== filters.periodo) return false;
-  return true;
 }
 
 const filterSchema = z.object({
@@ -133,6 +98,11 @@ function nearestHorometro(hours: number): number {
   return Math.round(clamped / 250) * 250;
 }
 
+function isActiveTelemetria(m: TelemetriaEquipo): boolean {
+  const estado = (m.estado ?? '').toLowerCase().trim();
+  return !(estado && INACTIVE_ESTADOS.has(estado));
+}
+
 export default function CalculatorPage() {
   const { role } = useUserStore();
   const isAdmin = role === 'Administrator';
@@ -145,13 +115,6 @@ export default function CalculatorPage() {
   const [isCalculating, setIsCalculating] = useState(false);
   const [selectedMachine, setSelectedMachine] = useState<TelemetriaEquipo | null>(null);
   const [machineSheetOpen, setMachineSheetOpen] = useState(false);
-  const [reportFilters, setReportFilters] = useState<ReportFilters>({
-    marca: 'all',
-    modelo: 'all',
-    periodo: 'all',
-    cliente: 'all',
-    mes: 'all',
-  });
 
   const {
     register,
@@ -177,42 +140,8 @@ export default function CalculatorPage() {
   const { data: modelos = [] } = useCalculadoraModelos(selectedBrand);
   const frecuenciasPreview = hourMeter > 0 ? getFrecuenciasPorHorometro(hourMeter) : [];
 
-  const filteredTelemetria = useMemo(
-    () => telemetria.filter((m) => matchesReportFilters(m, reportFilters)),
-    [telemetria, reportFilters]
-  );
-
-  const telemetriaMarcas = useMemo(
-    () => sortLocale(Array.from(new Set(telemetria.map((t) => t.marca)))),
-    [telemetria]
-  );
-  const telemetriaModelos = useMemo(() => {
-    const source =
-      reportFilters.marca === 'all'
-        ? telemetria
-        : telemetria.filter((t) => t.marca.toLowerCase() === reportFilters.marca.toLowerCase());
-    return sortLocale(Array.from(new Set(source.map((t) => t.modelo))));
-  }, [telemetria, reportFilters.marca]);
-  const telemetriaClientes = useMemo(
-    () =>
-      sortLocale(
-        Array.from(new Set(telemetria.map((t) => t.titulo).filter(Boolean) as string[]))
-      ),
-    [telemetria]
-  );
-  const telemetriaPeriodos = useMemo(
-    () =>
-      sortLocale(
-        Array.from(
-          new Set(
-            telemetria
-              .map((t) =>
-                t.fecha_primer_mtto ? new Date(t.fecha_primer_mtto).getFullYear().toString() : null
-              )
-              .filter(Boolean) as string[]
-          )
-        )
-      ),
+  const activeTelemetria = useMemo(
+    () => telemetria.filter(isActiveTelemetria),
     [telemetria]
   );
 
@@ -237,13 +166,6 @@ export default function CalculatorPage() {
     reset();
     setResult(null);
     setSelectedMachine(null);
-    setReportFilters({
-      marca: 'all',
-      modelo: 'all',
-      periodo: 'all',
-      cliente: 'all',
-      mes: 'all',
-    });
   };
 
   const handleSelectMachine = (machine: TelemetriaEquipo) => {
@@ -253,12 +175,6 @@ export default function CalculatorPage() {
     setValue('hourMeter', nearestHorometro(Number(machine.horometro) || 250), {
       shouldValidate: true,
     });
-    setReportFilters((prev) => ({
-      ...prev,
-      marca: machine.marca,
-      modelo: machine.modelo,
-      cliente: machine.titulo ?? prev.cliente,
-    }));
     setMachineSheetOpen(false);
   };
 
@@ -446,106 +362,6 @@ export default function CalculatorPage() {
         </div>
       </form>
 
-      {/* ── REPORT FILTERS ── */}
-      <div className="px-5">
-        <Card className="border-border">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Filter className="w-4 h-4 text-[#cf1b22]" />
-              <span className="text-sm font-semibold">Filtros del informe</span>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              <Select
-                value={reportFilters.marca}
-                onValueChange={(v) =>
-                  setReportFilters((p) => ({ ...p, marca: v, modelo: 'all' }))
-                }
-              >
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue placeholder="Marca" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas las marcas</SelectItem>
-                  {telemetriaMarcas.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select
-                value={reportFilters.modelo}
-                onValueChange={(v) => setReportFilters((p) => ({ ...p, modelo: v }))}
-              >
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue placeholder="Modelo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los modelos</SelectItem>
-                  {telemetriaModelos.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select
-                value={reportFilters.periodo}
-                onValueChange={(v) => setReportFilters((p) => ({ ...p, periodo: v }))}
-              >
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue placeholder="Periodo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los periodos</SelectItem>
-                  {telemetriaPeriodos.map((y) => (
-                    <SelectItem key={y} value={y}>
-                      {y}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select
-                value={reportFilters.cliente}
-                onValueChange={(v) => setReportFilters((p) => ({ ...p, cliente: v }))}
-              >
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue placeholder="Cliente" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los clientes</SelectItem>
-                  {telemetriaClientes.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select
-                value={reportFilters.mes}
-                onValueChange={(v) => setReportFilters((p) => ({ ...p, mes: v }))}
-              >
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue placeholder="Mes" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los meses</SelectItem>
-                  {MESES.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* ── MAIN + SUMMARY ── */}
       <div className="flex flex-1 gap-0 min-h-0 px-0 pb-0">
         <main className="flex-1 overflow-y-auto px-5 pb-5 space-y-4">
@@ -583,7 +399,7 @@ export default function CalculatorPage() {
                       <List className="w-4 h-4 mr-1.5" />
                       Ver máquinas telemetría
                       <Badge variant="secondary" className="ml-2 text-xs">
-                        {filteredTelemetria.length}
+                        {activeTelemetria.length}
                       </Badge>
                     </Button>
                   </div>
@@ -910,17 +726,17 @@ export default function CalculatorPage() {
           <SheetHeader>
             <SheetTitle>Máquinas de telemetría</SheetTitle>
             <SheetDescription>
-              Listado filtrado ({filteredTelemetria.length}). Seleccione una para cargar marca,
+              Listado de telemetría activa ({activeTelemetria.length}). Seleccione una para cargar marca,
               modelo y horómetro.
             </SheetDescription>
           </SheetHeader>
           <div className="mt-4 space-y-2">
-            {filteredTelemetria.length === 0 ? (
+            {activeTelemetria.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">
                 No hay máquinas con los filtros actuales.
               </p>
             ) : (
-              filteredTelemetria.map((m) => (
+              activeTelemetria.map((m) => (
                 <button
                   key={m.id}
                   type="button"
