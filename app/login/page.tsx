@@ -279,7 +279,6 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
-    setValue,
     formState: { errors },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -305,11 +304,6 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const fillDemoCredentials = () => {
-    setValue("email", "admin@partequipos.com");
-    setValue("password", "password123");
   };
 
   const EASE_OUT = "easeOut" as const;
@@ -596,31 +590,6 @@ export default function LoginPage() {
                 </button>
               </motion.div>
             </form>
-
-            {/* Demo credentials */}
-            <motion.div
-              variants={itemVariants}
-              className="mt-6 p-4 rounded-xl bg-slate-50 border border-slate-200"
-            >
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                Credenciales de demostración
-              </p>
-              <div className="space-y-1 text-xs font-mono text-slate-600">
-                <div className="flex justify-between items-center">
-                  <span>📧 admin@partequipos.com</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span>🔑 password123</span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={fillDemoCredentials}
-                className="mt-3 w-full py-1.5 px-3 rounded-lg text-xs font-semibold text-[#cf1b22] border border-[#cf1b22]/30 hover:bg-[#cf1b22]/5 transition-colors"
-              >
-                Llenar credenciales de demo
-              </button>
-            </motion.div>
           </motion.div>
         </div>
 
