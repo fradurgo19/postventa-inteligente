@@ -7,7 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { isSupabaseConfigured } from '@/lib/supabase/client';
 import { invokeImportExcel, type ImportModulo } from '@/services/import.service';
-import { importTempariosFromFile } from '@/services/tempario-import.service';
+import {
+  importTempariosFromFile,
+  type TemparioImportProgress,
+} from '@/services/tempario-import.service';
 import { useUserStore } from '@/store';
 
 export interface ExcelImportResult {
@@ -15,6 +18,7 @@ export interface ExcelImportResult {
   recordsOk: number;
   recordsError: number;
   duplicates: number;
+  total: number;
   preview: string[];
   errors?: Array<{ row: number; message: string }>;
 }
@@ -28,11 +32,6 @@ interface ExcelImportPanelProps {
   readonly className?: string;
 }
 
-/**
- * Panel de importación Excel/CSV.
- * Calculadora: parseo + upsert directo a temparios (cliente).
- * Otros módulos: Edge Function import-excel.
- */
 export function ExcelImportPanel({
   title,
   description,
@@ -48,6 +47,7 @@ export function ExcelImportPanel({
   const [preview, setPreview] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Array<{ row: number; message: string }>>([]);
+  const [progress, setProgress] = useState<TemparioImportProgress | null>(null);
 
   const validExtensions = ['.xlsx', '.xls', '.csv'];
 
@@ -60,18 +60,22 @@ export function ExcelImportPanel({
     async (f: File) => {
       setError(null);
       setRowErrors([]);
+      setPreview([]);
+      setProgress(null);
       setProcessing(true);
 
       try {
         let recordsOk = 0;
         let recordsError = 0;
         let duplicates = 0;
+        let total = 0;
         let errors: Array<{ row: number; message: string }> = [];
 
         if (modulo === 'calculadora') {
           const response = await importTempariosFromFile(
             f,
-            currentUser?.email ?? currentUser?.name ?? 'admin'
+            currentUser?.email ?? currentUser?.name ?? 'admin',
+            (p) => setProgress({ ...p })
           );
           if (response.error && response.recordsOk === 0) {
             throw new Error(response.error);
@@ -79,40 +83,47 @@ export function ExcelImportPanel({
           recordsOk = response.recordsOk;
           recordsError = response.recordsError;
           duplicates = response.duplicates;
+          total = response.total ?? recordsOk + recordsError;
           errors = response.errors ?? [];
         } else if (isSupabaseConfigured()) {
           const response = await invokeImportExcel(modulo, f);
           recordsOk = response.recordsOk;
           recordsError = response.recordsError;
           duplicates = response.duplicates;
+          total = response.total ?? recordsOk + recordsError;
           errors = response.errors ?? [];
         } else {
           await new Promise((r) => setTimeout(r, 800));
           recordsOk = 25;
-          recordsError = 0;
-          duplicates = 0;
+          total = 25;
         }
 
         const previewLines = [
           `Archivo: ${f.name}`,
-          `Módulo: ${modulo}`,
-          `Registros OK: ${recordsOk}`,
-          `Actualizados (ID existente): ${duplicates}`,
-          `Errores: ${recordsError}`,
+          `Filas leídas del Excel: ${total}`,
+          `Registros cargados OK: ${recordsOk}`,
+          `Actualizados (mismo ID): ${duplicates}`,
+          `Errores / omitidos: ${recordsError}`,
+          recordsOk + recordsError < total
+            ? `Diferencia vs archivo: ${total - recordsOk - recordsError}`
+            : 'Cobertura: 100% de filas procesadas',
         ];
         setPreview(previewLines);
-        setRowErrors(errors.slice(0, 8));
+        setRowErrors(errors.slice(0, 12));
+        setProgress(null);
 
         await onImport({
           fileName: f.name,
           recordsOk,
           recordsError,
           duplicates,
+          total,
           preview: expectedColumns,
           errors,
         });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error al importar');
+        setProgress(null);
       } finally {
         setProcessing(false);
       }
@@ -148,6 +159,11 @@ export function ExcelImportPanel({
     e.target.value = '';
   };
 
+  const progressPct =
+    progress && progress.total > 0
+      ? Math.min(100, Math.round((progress.processed / progress.total) * 100))
+      : 0;
+
   return (
     <Card className={cn('border-[#50504f]/20', className)}>
       <CardHeader className="pb-3">
@@ -177,11 +193,28 @@ export function ExcelImportPanel({
             <Upload className="h-8 w-8 mx-auto text-muted-foreground" />
           )}
           <p className="mt-2 text-sm font-medium">
-            {processing ? 'Importando temparios…' : 'Arrastre su archivo Excel o CSV aquí'}
+            {processing
+              ? progress?.phase === 'parse'
+                ? 'Leyendo Excel…'
+                : `Cargando en base de datos… ${progress?.processed ?? 0}/${progress?.total ?? '—'}`
+              : 'Arrastre su archivo Excel o CSV aquí'}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            Formatos: .xlsx · .xls · .csv — se insertan y actualizan registros en la BD
+            Formatos: .xlsx · .xls · .csv — archivos grandes se cargan por lotes
           </p>
+          {processing && progress && progress.total > 0 && (
+            <div className="mt-4 mx-auto max-w-sm text-left">
+              <div className="h-2 rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full bg-[#cf1b22] transition-all duration-300"
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1.5 text-center">
+                {progressPct}% · OK {progress.ok} · Act. {progress.updated} · Err. {progress.errors}
+              </p>
+            </div>
+          )}
           <label className="mt-4 inline-block">
             <input
               type="file"
@@ -204,25 +237,27 @@ export function ExcelImportPanel({
         )}
 
         {file && preview.length > 0 && !processing && (
-          <div className="bg-muted/40 rounded-lg p-4 space-y-2">
-            <div className="flex items-center gap-2 text-sm font-medium text-emerald-700">
+          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 space-y-2">
+            <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800">
               <CheckCircle2 className="h-4 w-4" />
-              Procesamiento completado — {file.name}
+              Carga finalizada — {file.name}
             </div>
             {preview.map((line) => (
-              <p key={line} className="text-xs text-muted-foreground font-mono">
+              <p key={line} className="text-xs text-emerald-900/80 font-mono">
                 {line}
               </p>
             ))}
             {rowErrors.length > 0 && (
-              <div className="pt-2 border-t border-border/60 space-y-1">
-                <p className="text-xs font-medium text-amber-700">Detalle de errores (máx. 8):</p>
+              <div className="pt-2 border-t border-emerald-200/80 space-y-1">
+                <p className="text-xs font-medium text-amber-800">
+                  Detalle de errores (muestra):
+                </p>
                 {rowErrors.map((err) => (
                   <p
                     key={`${err.row}-${err.message}`}
                     className="text-[11px] text-muted-foreground font-mono"
                   >
-                    Fila {err.row || '—'}: {err.message}
+                    Fila/ID {err.row || '—'}: {err.message}
                   </p>
                 ))}
               </div>

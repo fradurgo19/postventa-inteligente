@@ -18,6 +18,7 @@ La aplicación **no crea** las tablas automáticamente.
 | 9 | `schema/08_temparios_admin.sql` | Índice legacy_id + SELECT admin (temparios) |
 | 10 | `schema/09_seed_admin_user.sql` | Usuario admin@partequipos.com / password123 |
 | 11 | `schema/10_temparios_excel_columns.sql` | Columna tipo_catalogo (TipoItem del Excel) |
+| 12 | `schema/11_temparios_upsert_legacy.sql` | UNIQUE legacy_id para upsert masivo |
 
 ## Dónde ejecutar `supabase functions deploy`
 

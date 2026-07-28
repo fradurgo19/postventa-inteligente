@@ -293,21 +293,34 @@ export function CalculadoraAdminImport() {
                   error: result.recordsError,
                 });
               }
+
+              const totalMsg = result.total
+                ? ` de ${result.total} filas del Excel`
+                : '';
+
               if (result.recordsOk > 0) {
-                toast.success(
-                  `Importación completada: ${result.recordsOk} OK` +
-                    (result.duplicates ? `, ${result.duplicates} actualizados` : '') +
-                    (result.recordsError ? `, ${result.recordsError} errores` : '')
-                );
+                toast.success('Carga de temparios finalizada', {
+                  description:
+                    `${result.recordsOk} registros cargados OK${totalMsg}` +
+                    (result.duplicates ? ` · ${result.duplicates} actualizados` : '') +
+                    (result.recordsError ? ` · ${result.recordsError} con error` : ''),
+                  duration: 12_000,
+                });
               } else {
-                toast.error(
-                  result.errors?.[0]?.message ??
-                    `No se importaron registros (${result.recordsError} errores)`
-                );
+                toast.error('No se importaron registros', {
+                  description:
+                    result.errors?.[0]?.message ??
+                    `${result.recordsError} errores${totalMsg}`,
+                  duration: 12_000,
+                });
               }
-              setTab('registros');
-              setPage(1);
-              void refetch();
+
+              // Mantener un momento el resumen en "Carga masiva", luego ir a registros
+              setTimeout(() => {
+                setTab('registros');
+                setPage(1);
+                void refetch();
+              }, 1500);
             }}
           />
         </TabsContent>
