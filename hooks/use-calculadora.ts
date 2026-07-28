@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchMarcas,
   fetchModelos,
+  fetchTiposItem,
   calculatePreventiveMaintenance,
   registerTemparioImport,
   fetchTempariosAdmin,
@@ -19,7 +20,7 @@ export function useCalculadoraMarcas() {
   return useQuery({
     queryKey: ['calculadora', 'marcas'],
     queryFn: fetchMarcas,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 60 * 1000,
   });
 }
 
@@ -27,8 +28,16 @@ export function useCalculadoraModelos(marca: string) {
   return useQuery({
     queryKey: ['calculadora', 'modelos', marca],
     queryFn: () => fetchModelos(marca),
-    enabled: Boolean(marca),
-    staleTime: 5 * 60 * 1000,
+    enabled: Boolean(marca) && marca !== 'all',
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useCalculadoraTipos() {
+  return useQuery({
+    queryKey: ['calculadora', 'tipos'],
+    queryFn: fetchTiposItem,
+    staleTime: 60 * 1000,
   });
 }
 

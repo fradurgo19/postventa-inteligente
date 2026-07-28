@@ -21,6 +21,7 @@ import {
   useDeactivateTempario,
   useCalculadoraMarcas,
   useCalculadoraModelos,
+  useCalculadoraTipos,
 } from '@/hooks/use-calculadora';
 import { useUserStore } from '@/store';
 import { Button } from '@/components/ui/button';
@@ -149,6 +150,7 @@ export function CalculadoraAdminImport() {
   const [tab, setTab] = useState('registros');
   const [marca, setMarca] = useState('all');
   const [modelo, setModelo] = useState('all');
+  const [tipo, setTipo] = useState('all');
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [page, setPage] = useState(1);
@@ -162,17 +164,20 @@ export function CalculadoraAdminImport() {
   const marcas: string[] = marcasData ?? [];
   const { data: modelosData } = useCalculadoraModelos(marca === 'all' ? '' : marca);
   const modelos: string[] = modelosData ?? [];
+  const { data: tiposData } = useCalculadoraTipos();
+  const tipos: string[] = tiposData ?? [];
 
   const adminQuery = useMemo(
     () => ({
       marca,
       modelo,
+      tipo,
       search,
       page,
       pageSize: PAGE_SIZE,
       includeInactive: false,
     }),
-    [marca, modelo, search, page]
+    [marca, modelo, tipo, search, page]
   );
 
   const { data, isLoading, isFetching, refetch } = useTempariosAdmin(adminQuery);
@@ -399,6 +404,25 @@ export function CalculadoraAdminImport() {
                       {modelos.map((m) => (
                         <SelectItem key={m} value={m}>
                           {m}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={tipo}
+                    onValueChange={(v) => {
+                      setTipo(v);
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-36 text-sm">
+                      <SelectValue placeholder="Tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos los tipos</SelectItem>
+                      {tipos.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
                         </SelectItem>
                       ))}
                     </SelectContent>

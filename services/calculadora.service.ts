@@ -51,6 +51,7 @@ function mapTemparioRow(row: Record<string, unknown>): TemparioMantenimiento {
 export interface TempariosAdminQuery {
   marca?: string;
   modelo?: string;
+  tipo?: string;
   search?: string;
   includeInactive?: boolean;
   page?: number;
@@ -62,28 +63,52 @@ export interface TempariosAdminResult {
   total: number;
 }
 
+function sortEs(values: string[]): string[] {
+  return [...values].sort((a, b) => a.localeCompare(b, 'es'));
+}
+
 export async function fetchMarcas(): Promise<string[]> {
   if (!isSupabaseConfigured()) {
     return getMockMarcas();
   }
 
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from('temparios_mantenimiento')
-    .select('marca')
-    .eq('activo', true);
+  const { data, error } = await supabase.from('v_temparios_marcas').select('marca');
 
-  if (error || !data?.length) {
-    return getMockMarcas();
+  if (!error && data?.length) {
+    return sortEs(
+      Array.from(new Set(data.map((r) => String(r.marca).trim()).filter(Boolean)))
+    );
   }
 
-  return Array.from(new Set(data.map((r) => r.marca as string))).sort((a, b) =>
-    a.localeCompare(b, 'es')
-  );
+  // Fallback si la vista aún no existe: distinct vía tabla (paginado)
+  const marcas = new Set<string>();
+  const pageSize = 1000;
+  let from = 0;
+  for (;;) {
+    const { data: page, error: pageErr } = await supabase
+      .from('temparios_mantenimiento')
+      .select('marca')
+      .eq('activo', true)
+      .range(from, from + pageSize - 1);
+
+    if (pageErr) {
+      return getMockMarcas();
+    }
+    if (!page?.length) break;
+    page.forEach((r) => {
+      const m = String(r.marca ?? '').trim();
+      if (m) marcas.add(m);
+    });
+    if (page.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return sortEs(Array.from(marcas));
 }
 
 export async function fetchModelos(marca: string): Promise<string[]> {
-  if (!marca) return [];
+  if (!marca || marca === 'all') return [];
 
   if (!isSupabaseConfigured()) {
     return getMockModelos(marca);
@@ -91,18 +116,79 @@ export async function fetchModelos(marca: string): Promise<string[]> {
 
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
-    .from('temparios_mantenimiento')
+    .from('v_temparios_modelos')
     .select('modelo')
-    .eq('activo', true)
-    .ilike('marca', marca);
+    .eq('marca', marca);
 
-  if (error || !data?.length) {
-    return getMockModelos(marca);
+  if (!error && data) {
+    return sortEs(
+      Array.from(new Set(data.map((r) => String(r.modelo).trim()).filter(Boolean)))
+    );
   }
 
-  return Array.from(new Set(data.map((r) => r.modelo as string))).sort((a, b) =>
-    a.localeCompare(b, 'es')
-  );
+  const modelos = new Set<string>();
+  const pageSize = 1000;
+  let from = 0;
+  for (;;) {
+    const { data: page, error: pageErr } = await supabase
+      .from('temparios_mantenimiento')
+      .select('modelo')
+      .eq('activo', true)
+      .eq('marca', marca)
+      .range(from, from + pageSize - 1);
+
+    if (pageErr) {
+      return getMockModelos(marca);
+    }
+    if (!page?.length) break;
+    page.forEach((r) => {
+      const m = String(r.modelo ?? '').trim();
+      if (m) modelos.add(m);
+    });
+    if (page.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return sortEs(Array.from(modelos));
+}
+
+export async function fetchTiposItem(): Promise<string[]> {
+  if (!isSupabaseConfigured()) {
+    return sortEs(
+      Array.from(new Set(mockStore.filter((t) => t.activo).map((t) => t.tipo_item)))
+    );
+  }
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.from('v_temparios_tipos').select('tipo_item');
+
+  if (!error && data?.length) {
+    return sortEs(
+      Array.from(new Set(data.map((r) => String(r.tipo_item).trim()).filter(Boolean)))
+    );
+  }
+
+  const tipos = new Set<string>();
+  const pageSize = 1000;
+  let from = 0;
+  for (;;) {
+    const { data: page, error: pageErr } = await supabase
+      .from('temparios_mantenimiento')
+      .select('tipo_item')
+      .eq('activo', true)
+      .range(from, from + pageSize - 1);
+
+    if (pageErr) break;
+    if (!page?.length) break;
+    page.forEach((r) => {
+      const t = String(r.tipo_item ?? '').trim();
+      if (t) tipos.add(t);
+    });
+    if (page.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return sortEs(Array.from(tipos));
 }
 
 export async function fetchTemparios(marca: string, modelo: string): Promise<TemparioMantenimiento[]> {
@@ -148,6 +234,13 @@ function filterMockAdmin(query: TempariosAdminQuery): TemparioMantenimiento[] {
     ) {
       return false;
     }
+    if (
+      query.tipo &&
+      query.tipo !== 'all' &&
+      t.tipo_item.toLowerCase() !== query.tipo.toLowerCase()
+    ) {
+      return false;
+    }
     if (!search) return true;
     return (
       t.item.toLowerCase().includes(search) ||
@@ -185,10 +278,13 @@ export async function fetchTempariosAdmin(
     q = q.eq('activo', true);
   }
   if (query.marca && query.marca !== 'all') {
-    q = q.ilike('marca', query.marca);
+    q = q.eq('marca', query.marca);
   }
   if (query.modelo && query.modelo !== 'all') {
-    q = q.ilike('modelo', query.modelo);
+    q = q.eq('modelo', query.modelo);
+  }
+  if (query.tipo && query.tipo !== 'all') {
+    q = q.eq('tipo_item', query.tipo);
   }
   if (query.search?.trim()) {
     const s = query.search.trim();
