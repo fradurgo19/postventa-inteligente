@@ -157,10 +157,21 @@ function toNumber(value: string, fallback = 0): number {
 }
 
 function mapTempario(row: Record<string, string>, createdBy: string) {
-  // Clasificación real = Modelo2 (Actividad | Repuesto | Fluido | Observacion)
+  // SOLO Modelo2 = tipo. TipoItem es catálogo (Filtro/Aceite), no el tipo.
   const tipoRaw =
-    getField(row, 'Modelo2', 'modelo2', 'Tipo de item', 'tipo_item', 'Tipo de ítem') ||
-    'Repuesto';
+    getField(row, 'Modelo2', 'modelo2', 'Modelo 2', 'MODELO2') ||
+    (() => {
+      for (const [k, v] of Object.entries(row)) {
+        const nk = k.trim().toLowerCase().replace(/[\s_-]+/g, '');
+        if (nk === 'modelo2' && String(v).trim()) return String(v).trim();
+      }
+      return '';
+    })();
+
+  if (!tipoRaw) {
+    throw new Error('Falta columna Modelo2 (Actividad/Repuesto/Fluido/Observacion)');
+  }
+
   const itemName = getField(row, 'Item', 'item', 'Nombre');
   const tipoNorm = tipoRaw.trim().toLowerCase();
   let tipo = 'Repuesto';

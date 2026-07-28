@@ -456,7 +456,7 @@ export function CalculadoraAdminImport() {
                       <TableHead className="text-xs">Marca</TableHead>
                       <TableHead className="text-xs">Línea</TableHead>
                       <TableHead className="text-xs">Modelo</TableHead>
-                      <TableHead className="text-xs">Tipo</TableHead>
+                      <TableHead className="text-xs">Modelo2</TableHead>
                       <TableHead className="text-xs">Catálogo</TableHead>
                       <TableHead className="text-xs">Ítem</TableHead>
                       <TableHead className="text-xs text-right">Cant.</TableHead>
@@ -604,8 +604,8 @@ export function CalculadoraAdminImport() {
               <Field label="Modelo *">
                 <Input value={form.modelo} onChange={(e) => setField('modelo', e.target.value)} />
               </Field>
-              <Field label="Tipo de ítem">
-                <Select
+              <Field label="Modelo2 (tipo)">
+                  <Select
                   value={form.tipo_item}
                   onValueChange={(v) => setField('tipo_item', v as TemparioTipoItem)}
                 >

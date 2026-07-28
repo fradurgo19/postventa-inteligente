@@ -633,8 +633,10 @@ export default function CalculatorPage() {
                                     <TableCell className="font-medium text-sm min-w-[12rem]">
                                       <span className="block">{c.item}</span>
                                       <span className="text-[11px] text-muted-foreground">
-                                        {c.tipoItem}
-                                        {c.tipoCatalogo ? ` · ${c.tipoCatalogo}` : ''}
+                                        Modelo2: {c.tipoItem ?? '—'}
+                                        {c.tipoCatalogo
+                                          ? ` · Catálogo: ${c.tipoCatalogo}`
+                                          : ''}
                                       </span>
                                     </TableCell>
                                     <TableCell className="text-right tabular-nums">

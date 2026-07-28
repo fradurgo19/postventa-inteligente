@@ -81,6 +81,11 @@ function normalizeHeader(header: string): string {
     .replace(/\s+/g, ' ');
 }
 
+/** Header sin espacios: "Modelo 2" → "modelo2" */
+function compactHeader(header: string): string {
+  return normalizeHeader(header).replace(/[\s_-]+/g, '');
+}
+
 function cellToString(value: unknown): string {
   if (value == null) return '';
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
@@ -100,6 +105,26 @@ function getField(row: Record<string, string>, ...keys: string[]): string {
     if (found && found[1] !== '') return found[1].trim();
   }
   return '';
+}
+
+/**
+ * Única fuente de clasificación del Excel: columna Modelo2.
+ * No usar TipoItem ni "Tipo de item" (están mal / son catálogo).
+ */
+export function getModelo2Tipo(row: Record<string, string>): string {
+  const exact = getField(row, 'Modelo2', 'modelo2', 'Modelo 2', 'MODELO2');
+  if (exact) return exact;
+
+  for (const [key, value] of Object.entries(row)) {
+    if (compactHeader(key) === 'modelo2' && String(value).trim()) {
+      return String(value).trim();
+    }
+  }
+  return '';
+}
+
+export function rowHasModelo2Column(row: Record<string, string>): boolean {
+  return Object.keys(row).some((k) => compactHeader(k) === 'modelo2');
 }
 
 /** Cantidades/horas: acepta 1,5 / 1.5 / 1.234,56 / 250 */
@@ -224,18 +249,20 @@ function resolveUnidadCantidad(row: Record<string, string>): {
 /**
  * Mapea una fila del Excel TEMPARIOS al registro de BD.
  *
- * Clasificación correcta = columna Modelo2 (Actividad | Repuesto | Fluido | Observacion).
- * Ejemplo:
- * Case | Minicargador | SR175B | Actividad | Cambiar filtro aceite motor | … | Tiempo 0.28
+ * Clasificación = SOLO columna Modelo2 (Actividad | Repuesto | Fluido | Observacion).
+ * TipoItem = catálogo (Filtro/Aceite), NO es el tipo.
  */
 export function mapTemparioSheetRow(
   row: Record<string, string>,
   createdBy: string
 ): TemparioImportRow {
-  // Modelo2 es la fuente de verdad; "Tipo de item" solo legacy
-  const tipoRaw =
-    getField(row, 'Modelo2', 'modelo2', 'Tipo de item', 'tipo_item', 'Tipo de ítem') ||
-    'Repuesto';
+  const tipoRaw = getModelo2Tipo(row);
+  if (!tipoRaw) {
+    throw new Error(
+      'Falta Modelo2 (debe ser Actividad, Repuesto, Fluido u Observacion). No se usa TipoItem como tipo.'
+    );
+  }
+
   const tipoCatalogo = textOrNull(getField(row, 'TipoItem', 'tipo_item_catalogo', 'Tipo Item'));
   const itemName = getField(row, 'Item', 'item', 'Nombre');
   const { unidad, cantidad } = resolveUnidadCantidad(row);
@@ -381,6 +408,23 @@ export async function parseTemparioFile(
     return {
       rows: [],
       errors: [{ row: 0, message: 'Formato no soportado. Use .xlsx, .xls o .csv' }],
+    };
+  }
+
+  if (sheetRows.length === 0) {
+    return { rows: [], errors: [{ row: 0, message: 'El archivo no contiene filas de datos' }] };
+  }
+
+  if (!rowHasModelo2Column(sheetRows[0])) {
+    return {
+      rows: [],
+      errors: [
+        {
+          row: 0,
+          message:
+            'El Excel debe incluir la columna Modelo2 (Actividad / Repuesto / Fluido / Observacion). TipoItem es solo catálogo (Filtro/Aceite), no el tipo.',
+        },
+      ],
     };
   }
 
