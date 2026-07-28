@@ -249,8 +249,8 @@ function resolveUnidadCantidad(row: Record<string, string>): {
 /**
  * Mapea una fila del Excel TEMPARIOS al registro de BD.
  *
- * Clasificación = SOLO columna Modelo2 (Actividad | Repuesto | Fluido | Observacion).
- * TipoItem = catálogo (Filtro/Aceite), NO es el tipo.
+ * Excel Modelo2  → BD tipo_item      (Actividad | Repuesto | Fluido | Observacion)
+ * Excel TipoItem → BD tipo_catalogo  (Filtro | Aceite | …) — solo detalle
  */
 export function mapTemparioSheetRow(
   row: Record<string, string>,
@@ -259,10 +259,11 @@ export function mapTemparioSheetRow(
   const tipoRaw = getModelo2Tipo(row);
   if (!tipoRaw) {
     throw new Error(
-      'Falta Modelo2 (debe ser Actividad, Repuesto, Fluido u Observacion). No se usa TipoItem como tipo.'
+      'Falta Modelo2. Debe indicar Actividad, Repuesto, Fluido u Observacion (no usar TipoItem como tipo).'
     );
   }
 
+  // Catálogo detalle del Excel (Filtro/Aceite); NUNCA sustituye a Modelo2
   const tipoCatalogo = textOrNull(getField(row, 'TipoItem', 'tipo_item_catalogo', 'Tipo Item'));
   const itemName = getField(row, 'Item', 'item', 'Nombre');
   const { unidad, cantidad } = resolveUnidadCantidad(row);

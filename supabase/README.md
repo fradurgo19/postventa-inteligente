@@ -24,6 +24,7 @@ La aplicación **no crea** las tablas automáticamente.
 | — | `schema/14_temparios_diagnose_tipos.sql` | Diagnóstico opcional: conteo tipos/frecuencias |
 | 15 | `schema/15_fix_frequency_matrix_2000.sql` | Matriz horómetro: 2000 h en 2000/4000/6000/8000 |
 | 16 | `schema/16_modelo2_tipo_observacion.sql` | CHECK tipo_item incluye Observacion (Modelo2) |
+| 17 | `schema/17_truncate_temparios_reimport.sql` | Vaciar temparios y reimportar Excel con Modelo2 |
 
 ## Dónde ejecutar `supabase functions deploy`
 

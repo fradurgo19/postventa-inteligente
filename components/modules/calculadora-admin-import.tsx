@@ -294,7 +294,7 @@ export function CalculadoraAdminImport() {
         <TabsContent value="importar" className="mt-4">
           <ExcelImportPanel
             title="Importar Temparios de Mantenimiento"
-            description="Excel real: la clasificación va en Modelo2 (Actividad / Repuesto / Fluido / Observacion). Cantidad = unidad; Cantidad (Galones) = cantidad; Tiempo = horas MO. Si existe ID, se actualiza (upsert)."
+            description="Importante: vacíe la tabla con schema/17_truncate_temparios_reimport.sql y luego cargue el Excel. Modelo2 → tipo_item (Actividad/Repuesto/Fluido/Observacion). TipoItem → tipo_catalogo (Filtro/Aceite). Cantidad = unidad; Cantidad (Galones) = cantidad; Tiempo = horas MO."
             expectedColumns={TEMPARIO_COLUMNS}
             modulo="calculadora"
             onImport={async (result) => {
