@@ -86,10 +86,17 @@ export interface PreventiveConsumableLine {
   unitPrice: number;
   total: number;
   tipoItem?: TemparioTipoItem | string;
+  tipoCatalogo?: string | null;
   referencia?: string | null;
   frecuenciaHoras?: MaintenanceFrequencyHours;
   marca?: string;
   modelo?: string;
+  referenciaGenuina?: string;
+  refSapDispel?: string;
+  refSapOriginal?: string;
+  referenciaStal?: string;
+  referenciaDonaldson?: string;
+  referenciaFleetguard?: string;
 }
 
 export interface PreventivePartLine {

@@ -22,6 +22,7 @@ La aplicación **no crea** las tablas automáticamente.
 | 13 | `schema/12_temparios_filter_views.sql` | Vistas DISTINCT marca/modelo/tipo para filtros |
 | 14 | `schema/13_temparios_fluido_labor_rate.sql` | CHECK Fluido + default tarifa 110000 COP/h |
 | — | `schema/14_temparios_diagnose_tipos.sql` | Diagnóstico opcional: conteo tipos/frecuencias |
+| 15 | `schema/15_fix_frequency_matrix_2000.sql` | Matriz horómetro: 2000 h en 2000/4000/6000/8000 |
 
 ## Dónde ejecutar `supabase functions deploy`
 

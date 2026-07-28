@@ -32,28 +32,19 @@ export function isActivityTipo(tipo: string): boolean {
   return t === 'actividad' || t === 'servicio';
 }
 
-/** Fluido / Consumible, o Repuesto mal importado que es fluido por catálogo/unidad. */
+/**
+ * Consumibles de mantenimiento (Power Apps / negocio):
+ * Fluido | Consumible | Repuesto → aceites, filtros y demás insumos
+ * (no Actividad).
+ */
 export function isConsumableRow(t: TemparioMantenimiento): boolean {
   const tipo = normalizeTipoItem(String(t.tipo_item ?? ''));
-  if (tipo === 'Fluido' || tipo === 'Consumible') return true;
-  if (tipo !== 'Repuesto') return false;
-  return looksLikeFluidoMisclassified(t);
+  return tipo === 'Fluido' || tipo === 'Consumible' || tipo === 'Repuesto';
 }
 
+/** Pestaña Repuestos: solo tipo Repuesto. */
 export function isPartRow(t: TemparioMantenimiento): boolean {
-  const tipo = normalizeTipoItem(String(t.tipo_item ?? ''));
-  if (tipo !== 'Repuesto') return false;
-  return !looksLikeFluidoMisclassified(t);
-}
-
-/** Recuperación si Fluido se importó como Repuesto antes del fix. */
-function looksLikeFluidoMisclassified(t: TemparioMantenimiento): boolean {
-  const cat = (t.tipo_catalogo ?? '').toLowerCase();
-  const unit = (t.unidad_medida ?? '').toLowerCase();
-  if ((t.aceite_homologado ?? '').trim()) return true;
-  if (/aceite|fluido|coolant|refriger|grasa|lubricante/.test(cat)) return true;
-  if (/litro|litros|gal[oó]n|gallon|quart|\bml\b|cm3|cm³/.test(unit)) return true;
-  return false;
+  return normalizeTipoItem(String(t.tipo_item ?? '')) === 'Repuesto';
 }
 
 export function matchesMarcaModelo(
@@ -101,6 +92,11 @@ function sortByTipoThenItem(a: TemparioMantenimiento, b: TemparioMantenimiento):
   return a.item.localeCompare(b.item, 'es');
 }
 
+function textOrDash(value: string | null | undefined): string {
+  const v = (value ?? '').trim();
+  return v || '—';
+}
+
 function randomSerial(marca: string): string {
   const prefix = marca.slice(0, 3).toUpperCase();
   return `${prefix}${Math.floor(100000 + Math.random() * 900000)}`;
@@ -115,8 +111,8 @@ function randomSerial(marca: string): string {
  * Mano de obra:
  *   Sum(Tiempo horas) * 110000
  *
- * Consumibles: Fluido | Consumible (sin precio SAP)
- * Repuestos: Repuesto (sin precio SAP)
+ * Consumibles: Fluido | Consumible | Repuesto (aceite/filtro) sin precio SAP
+ * Repuestos: tipo Repuesto (sin precio SAP)
  */
 export function buildPreventiveQuote(
   input: PreventiveQuoteInput,
@@ -156,21 +152,24 @@ export function buildPreventiveQuote(
   });
 
   const consumableRows = filtered.filter(isConsumableRow).slice().sort(sortByTipoThenItem);
-  const consumables = consumableRows.map((t) => {
-    const codigo = resolveCodigoSamm(t);
-    return {
-      item: t.item,
-      quantity: t.cantidad,
-      unit: t.unidad_medida,
-      unitPrice: 0,
-      total: 0,
-      tipoItem: normalizeTipoItem(String(t.tipo_item)),
-      referencia: codigo === '—' ? null : codigo,
-      frecuenciaHoras: Number(t.frecuencia_horas) as MaintenanceFrequencyHours,
-      marca: t.marca,
-      modelo: t.modelo,
-    };
-  });
+  const consumables = consumableRows.map((t) => ({
+    item: t.item,
+    quantity: t.cantidad,
+    unit: t.unidad_medida,
+    unitPrice: 0,
+    total: 0,
+    tipoItem: normalizeTipoItem(String(t.tipo_item)),
+    tipoCatalogo: t.tipo_catalogo ?? null,
+    frecuenciaHoras: Number(t.frecuencia_horas) as MaintenanceFrequencyHours,
+    marca: t.marca,
+    modelo: t.modelo,
+    referenciaGenuina: textOrDash(t.referencia_genuina),
+    refSapDispel: textOrDash(t.ref_sap_dispel),
+    refSapOriginal: textOrDash(t.ref_sap_original),
+    referenciaStal: textOrDash(t.referencia_stal),
+    referenciaDonaldson: textOrDash(t.referencia_donaldson),
+    referenciaFleetguard: textOrDash(t.referencia_fleetguard),
+  }));
 
   const partRows = filtered.filter(isPartRow).slice().sort(sortByTipoThenItem);
   const parts = partRows.map((t) => ({

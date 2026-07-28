@@ -57,15 +57,19 @@ import {
   useCalculatePreventive,
 } from '@/hooks/use-calculadora';
 import { useTelemetriaEquipos } from '@/hooks/use-projected-maintenance';
-import { getFrecuenciasPorHorometro, FRECUENCIA_LABELS } from '@/lib/maintenance-frequency';
+import {
+  getFrecuenciasPorHorometro,
+  FRECUENCIA_LABELS,
+  getHorometroOptions,
+  HOROMETRO_MAX,
+  HOROMETRO_MIN,
+  normalizeHorometro,
+} from '@/lib/maintenance-frequency';
 import { useUserStore } from '@/store';
 import { CalculadoraAdminImport } from '@/components/modules/calculadora-admin-import';
 import type { TelemetriaEquipo, PreventiveQuoteResult } from '@/types/database';
 
-const HOROMETRO_OPTIONS = Array.from(
-  { length: Math.floor((6000 - 250) / 250) + 1 },
-  (_, i) => 250 + i * 250
-);
+const HOROMETRO_OPTIONS = getHorometroOptions();
 
 const INACTIVE_ESTADOS = new Set(['inactivo', 'inactiva', 'baja', 'cancelado', 'cancelada']);
 
@@ -80,7 +84,7 @@ interface FilterFormValues {
 const filterSchema = z.object({
   brand: z.string().min(1, 'Selecciona una marca'),
   model: z.string().min(1, 'Selecciona un modelo'),
-  hourMeter: z.coerce.number().min(250).max(6000),
+  hourMeter: z.coerce.number().min(HOROMETRO_MIN).max(HOROMETRO_MAX),
   kilometers: z.coerce.number().min(0).max(500000),
   travelTime: z.coerce.number().min(0).max(24),
 });
@@ -95,8 +99,12 @@ function formatCOP(value: number): string {
 }
 
 function nearestHorometro(hours: number): number {
-  const clamped = Math.min(6000, Math.max(250, hours));
-  return Math.round(clamped / 250) * 250;
+  return normalizeHorometro(hours);
+}
+
+function refCell(value?: string): string {
+  const v = (value ?? '').trim();
+  return !v || v === '—' ? '—' : v;
 }
 
 function isActiveTelemetria(m: TelemetriaEquipo): boolean {
@@ -588,8 +596,8 @@ export default function CalculatorPage() {
                           {result.consumables.length === 0 ? (
                             <div className="py-6 text-center space-y-1">
                               <p className="text-sm text-muted-foreground">
-                                No hay consumibles (Fluido / Consumible) para esta marca, modelo y
-                                frecuencias ({result.frecuenciasAplicadas.join(', ')} h).
+                                No hay consumibles (Fluido / Repuesto / filtro-aceite) para
+                                frecuencias {result.frecuenciasAplicadas.join(', ')} h.
                               </p>
                               {result.matchMeta && (
                                 <p className="text-xs text-muted-foreground">
@@ -604,14 +612,16 @@ export default function CalculatorPage() {
                             <Table>
                               <TableHeader>
                                 <TableRow className="bg-muted/30 hover:bg-muted/30">
-                                  <TableHead className="text-right">Frecuencia</TableHead>
-                                  <TableHead>Marca</TableHead>
-                                  <TableHead>Modelo</TableHead>
-                                  <TableHead>Tipo</TableHead>
-                                  <TableHead>Ítem</TableHead>
-                                  <TableHead>Código SAMM</TableHead>
+                                  <TableHead className="text-right">Freq. (h)</TableHead>
+                                  <TableHead>Consumible</TableHead>
                                   <TableHead className="text-right">Cant.</TableHead>
                                   <TableHead>Unidad</TableHead>
+                                  <TableHead>Ref. genuina</TableHead>
+                                  <TableHead>REF SAP DISPEL</TableHead>
+                                  <TableHead>REF SAP original</TableHead>
+                                  <TableHead>Ref. Stal</TableHead>
+                                  <TableHead>Ref. Donaldson</TableHead>
+                                  <TableHead>Ref. Fleetguard</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
@@ -620,30 +630,45 @@ export default function CalculatorPage() {
                                     <TableCell className="text-right tabular-nums text-sm">
                                       {c.frecuenciaHoras ?? '—'}
                                     </TableCell>
-                                    <TableCell className="text-sm whitespace-nowrap">
-                                      {c.marca ?? result.brand}
-                                    </TableCell>
-                                    <TableCell className="text-sm whitespace-nowrap">
-                                      {c.modelo ?? result.model}
-                                    </TableCell>
-                                    <TableCell className="text-xs text-muted-foreground">
-                                      {c.tipoItem ?? 'Fluido'}
-                                    </TableCell>
-                                    <TableCell className="font-medium text-sm">{c.item}</TableCell>
-                                    <TableCell className="text-xs font-mono">
-                                      {c.referencia || '—'}
+                                    <TableCell className="font-medium text-sm min-w-[12rem]">
+                                      <span className="block">{c.item}</span>
+                                      <span className="text-[11px] text-muted-foreground">
+                                        {c.tipoItem}
+                                        {c.tipoCatalogo ? ` · ${c.tipoCatalogo}` : ''}
+                                      </span>
                                     </TableCell>
                                     <TableCell className="text-right tabular-nums">
                                       {c.quantity}
                                     </TableCell>
-                                    <TableCell className="text-muted-foreground">{c.unit}</TableCell>
+                                    <TableCell className="text-muted-foreground text-sm">
+                                      {c.unit}
+                                    </TableCell>
+                                    <TableCell className="text-xs font-mono whitespace-nowrap">
+                                      {refCell(c.referenciaGenuina)}
+                                    </TableCell>
+                                    <TableCell className="text-xs font-mono whitespace-nowrap">
+                                      {refCell(c.refSapDispel)}
+                                    </TableCell>
+                                    <TableCell className="text-xs font-mono whitespace-nowrap">
+                                      {refCell(c.refSapOriginal)}
+                                    </TableCell>
+                                    <TableCell className="text-xs font-mono whitespace-nowrap">
+                                      {refCell(c.referenciaStal)}
+                                    </TableCell>
+                                    <TableCell className="text-xs font-mono whitespace-nowrap">
+                                      {refCell(c.referenciaDonaldson)}
+                                    </TableCell>
+                                    <TableCell className="text-xs font-mono whitespace-nowrap">
+                                      {refCell(c.referenciaFleetguard)}
+                                    </TableCell>
                                   </TableRow>
                                 ))}
                               </TableBody>
                             </Table>
                           )}
                           <p className="text-xs text-muted-foreground mt-3">
-                            Listado temparios (Fluido / Consumible). Sin precios (SAP no conectado).
+                            Insumos (aceite, filtro, etc.) según marca, modelo y frecuencias del
+                            horómetro. Sin precios (SAP no conectado).
                           </p>
                         </div>
                       </TabsContent>

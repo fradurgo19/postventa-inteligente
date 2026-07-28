@@ -114,7 +114,7 @@ SELECT
   h AS horometro,
   TRUE AS frecuencia_250,
   (h >= 1000 AND h % 1000 = 0) AS frecuencia_1000,
-  (h >= 2000 AND h % 2000 = 0 AND (h / 2000) % 2 = 1) AS frecuencia_2000,
+  (h >= 2000 AND h % 2000 = 0) AS frecuencia_2000,
   (h >= 4000 AND h % 4000 = 0) AS frecuencia_4000,
   (h >= 5000 AND h % 5000 = 0) AS frecuencia_5000
 FROM generate_series(250, 9000, 250) AS h
