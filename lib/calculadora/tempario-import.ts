@@ -1,17 +1,25 @@
 import type { TemparioTipoItem, MaintenanceFrequencyHours } from '@/types/database';
+import {
+  normalizeTipoItem,
+  resolveEffectiveTipoItem,
+} from '@/lib/calculadora/tempario-classify';
 
 const VALID_FREQ: MaintenanceFrequencyHours[] = [250, 1000, 2000, 4000, 5000];
 
-/** Encabezados exactos del Excel TEMPARIOS MANTENIMIENTOS (orden de negocio). */
+/**
+ * Encabezados del Excel real TEMPARIOS (Power Apps / SharePoint).
+ * Clasificación = columna Modelo2 (NO "Tipo de item").
+ * Cantidad = unidad; Cantidad (Galones) = cantidad numérica.
+ */
 export const TEMPARIO_EXCEL_HEADERS = [
   'Marca',
   'Linea',
   'Modelo',
-  'Tipo de item',
+  'Modelo2',
   'Item',
-  'Unidad de medida',
   'Cantidad',
-  'Frecuencia (horas)',
+  'Cantidad (Galones)',
+  'Frecuencia',
   'Aceite Homologado',
   'Referencia Genuina',
   'REF SAP DISPEL',
@@ -19,9 +27,9 @@ export const TEMPARIO_EXCEL_HEADERS = [
   'Referencia Stal',
   'Referencia Fleetguard',
   'Referencia Donalson',
-  'Tiempo (horas)',
+  'Tiempo',
   'Procedimiento',
-  'Avisos Claves',
+  'Observaciones',
   'ID',
   'TipoItem',
   'Modificado',
@@ -29,6 +37,8 @@ export const TEMPARIO_EXCEL_HEADERS = [
   'Creado por',
   'Modificado por',
 ] as const;
+
+export { normalizeTipoItem } from '@/lib/calculadora/tempario-classify';
 
 export interface TemparioImportRow {
   legacy_id: number | null;
@@ -146,21 +156,6 @@ export function parseExcelDateTime(value: string): string | null {
   return null;
 }
 
-/**
- * Columna "Tipo de item" (Power Apps / Excel):
- * Repuesto | Fluido | Consumible | Actividad | Servicio
- */
-export function normalizeTipoItem(raw: string): TemparioTipoItem {
-  const v = raw.trim().toLowerCase();
-  if (!v) return 'Repuesto';
-  if (v === 'repuesto' || v.startsWith('repues')) return 'Repuesto';
-  if (v === 'fluido' || v.startsWith('fluid')) return 'Fluido';
-  if (v === 'consumible' || v.startsWith('consum')) return 'Consumible';
-  if (v === 'actividad' || v.startsWith('activ')) return 'Actividad';
-  if (v === 'servicio' || v.startsWith('serv')) return 'Servicio';
-  return 'Repuesto';
-}
-
 function normalizeFrecuencia(raw: number): MaintenanceFrequencyHours {
   if (VALID_FREQ.includes(raw as MaintenanceFrequencyHours)) {
     return raw as MaintenanceFrequencyHours;
@@ -179,23 +174,74 @@ function normalizeFrecuencia(raw: number): MaintenanceFrequencyHours {
 
 function textOrNull(value: string): string | null {
   const v = value.trim();
-  return v ? v : null;
+  if (!v || /^n\/?a$/i.test(v)) return null;
+  return v;
+}
+
+function rowHasAnyHeader(row: Record<string, string>, ...keys: string[]): boolean {
+  const norms = new Set(Object.keys(row).map((k) => normalizeHeader(k)));
+  return keys.some((k) => norms.has(normalizeHeader(k)));
 }
 
 /**
- * Mapea una fila del Excel TEMPARIOS MANTENIMIENTOS al registro de BD.
+ * Excel real:
+ *  - Cantidad = unidad (Unidad / Galon / N/A)
+ *  - Cantidad (Galones) = cantidad numérica
+ * Legacy:
+ *  - Unidad de medida + Cantidad numérica
+ */
+function resolveUnidadCantidad(row: Record<string, string>): {
+  unidad: string;
+  cantidad: number;
+} {
+  const hasGalones = rowHasAnyHeader(row, 'Cantidad (Galones)', 'Cantidad Galones');
+  const cantCol = getField(row, 'Cantidad', 'cantidad');
+  const galCol = getField(row, 'Cantidad (Galones)', 'Cantidad Galones', 'cantidad_galones');
+  const unidadLegacy = getField(row, 'Unidad de medida', 'unidad_medida');
+
+  if (hasGalones) {
+    const unidad =
+      cantCol && !/^n\/?a$/i.test(cantCol)
+        ? cantCol
+        : unidadLegacy || 'Unidad';
+    return {
+      unidad: /^n\/?a$/i.test(unidad) ? 'N/A' : unidad,
+      cantidad: toNumber(galCol, 0),
+    };
+  }
+
+  const asNum = toNumber(cantCol, Number.NaN);
+  if (Number.isFinite(asNum) && cantCol !== '' && !/[a-záéíóúñ]/i.test(cantCol)) {
+    return { unidad: unidadLegacy || 'Unidad', cantidad: asNum };
+  }
+
+  return {
+    unidad: unidadLegacy || cantCol || 'Unidad',
+    cantidad: toNumber(galCol, toNumber(cantCol, 0)),
+  };
+}
+
+/**
+ * Mapea una fila del Excel TEMPARIOS al registro de BD.
+ *
+ * Clasificación correcta = columna Modelo2 (Actividad | Repuesto | Fluido | Observacion).
  * Ejemplo:
- * Case | Minicargador | SR175B | Repuesto | Filtro aceite motor | … | ID 11451 | TipoItem Filtro
+ * Case | Minicargador | SR175B | Actividad | Cambiar filtro aceite motor | … | Tiempo 0.28
  */
 export function mapTemparioSheetRow(
   row: Record<string, string>,
   createdBy: string
 ): TemparioImportRow {
-  const tipoDeItem = getField(row, 'Tipo de item', 'tipo_item', 'Tipo de ítem');
+  // Modelo2 es la fuente de verdad; "Tipo de item" solo legacy
+  const tipoRaw =
+    getField(row, 'Modelo2', 'modelo2', 'Tipo de item', 'tipo_item', 'Tipo de ítem') ||
+    'Repuesto';
   const tipoCatalogo = textOrNull(getField(row, 'TipoItem', 'tipo_item_catalogo', 'Tipo Item'));
+  const itemName = getField(row, 'Item', 'item', 'Nombre');
+  const { unidad, cantidad } = resolveUnidadCantidad(row);
 
   const freqRaw = toNumber(
-    getField(row, 'Frecuencia (horas)', 'frecuencia_horas', 'Frecuencia'),
+    getField(row, 'Frecuencia', 'Frecuencia (horas)', 'frecuencia_horas'),
     250
   );
   const legacyRaw = getField(row, 'ID', 'Id', 'legacy_id', 'id_legacy');
@@ -213,18 +259,18 @@ export function mapTemparioSheetRow(
   );
 
   const procedimientoRaw = getField(row, 'Procedimiento', 'procedimiento');
-  const avisosRaw = getField(row, 'Avisos Claves', 'avisos_claves');
+  const avisosRaw = getField(row, 'Observaciones', 'Avisos Claves', 'avisos_claves');
 
   return {
     legacy_id: legacyId,
     marca: getField(row, 'Marca', 'marca'),
     linea: getField(row, 'Linea', 'Línea', 'linea') || '',
     modelo: getField(row, 'Modelo', 'modelo'),
-    tipo_item: normalizeTipoItem(tipoDeItem || 'Repuesto'),
+    tipo_item: resolveEffectiveTipoItem(tipoRaw),
     tipo_catalogo: tipoCatalogo,
-    item: getField(row, 'Item', 'item', 'Nombre'),
-    unidad_medida: getField(row, 'Unidad de medida', 'unidad_medida') || 'Unidad',
-    cantidad: toNumber(getField(row, 'Cantidad', 'cantidad'), 1),
+    item: itemName,
+    unidad_medida: unidad || 'Unidad',
+    cantidad,
     frecuencia_horas: normalizeFrecuencia(freqRaw),
     aceite_homologado: textOrNull(getField(row, 'Aceite Homologado', 'aceite_homologado')),
     referencia_genuina: textOrNull(getField(row, 'Referencia Genuina', 'referencia_genuina')),
@@ -239,7 +285,7 @@ export function mapTemparioSheetRow(
     referencia_donaldson: textOrNull(
       getField(row, 'Referencia Donalson', 'Referencia Donaldson', 'referencia_donaldson')
     ),
-    tiempo_horas: toNumber(getField(row, 'Tiempo (horas)', 'tiempo_horas'), 0),
+    tiempo_horas: toNumber(getField(row, 'Tiempo', 'Tiempo (horas)', 'tiempo_horas'), 0),
     procedimiento: textOrNull(procedimientoRaw),
     avisos_claves: textOrNull(avisosRaw),
     created_at: creado,

@@ -61,11 +61,11 @@ const TEMPARIO_COLUMNS = [
   'Marca',
   'Linea',
   'Modelo',
-  'Tipo de item',
+  'Modelo2',
   'Item',
-  'Unidad de medida',
   'Cantidad',
-  'Frecuencia (horas)',
+  'Cantidad (Galones)',
+  'Frecuencia',
   'Aceite Homologado',
   'Referencia Genuina',
   'REF SAP DISPEL',
@@ -73,9 +73,9 @@ const TEMPARIO_COLUMNS = [
   'Referencia Stal',
   'Referencia Fleetguard',
   'Referencia Donalson',
-  'Tiempo (horas)',
+  'Tiempo',
   'Procedimiento',
-  'Avisos Claves',
+  'Observaciones',
   'ID',
   'TipoItem',
   'Modificado',
@@ -87,8 +87,9 @@ const TEMPARIO_COLUMNS = [
 const TIPOS_ITEM: TemparioTipoItem[] = [
   'Repuesto',
   'Fluido',
-  'Consumible',
   'Actividad',
+  'Observacion',
+  'Consumible',
   'Servicio',
 ];
 const FRECUENCIAS: MaintenanceFrequencyHours[] = [250, 1000, 2000, 4000, 5000];
@@ -293,7 +294,7 @@ export function CalculadoraAdminImport() {
         <TabsContent value="importar" className="mt-4">
           <ExcelImportPanel
             title="Importar Temparios de Mantenimiento"
-            description="Cargue Excel (.xlsx/.xls) o CSV. Los registros se validan e insertan en temparios_mantenimiento. Si existe la columna ID, se actualiza el registro; si no, se crea uno nuevo. Requiere sesión de administrador."
+            description="Excel real: la clasificación va en Modelo2 (Actividad / Repuesto / Fluido / Observacion). Cantidad = unidad; Cantidad (Galones) = cantidad; Tiempo = horas MO. Si existe ID, se actualiza (upsert)."
             expectedColumns={TEMPARIO_COLUMNS}
             modulo="calculadora"
             onImport={async (result) => {

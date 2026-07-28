@@ -6,7 +6,7 @@ import type {
   PreventiveQuoteResult,
 } from '@/types/database';
 import { buildPreventiveQuote, normalizeEquipKey } from '@/lib/calculadora/build-quote';
-import { normalizeTipoItem } from '@/lib/calculadora/tempario-import';
+import { resolveEffectiveTipoItem } from '@/lib/calculadora/tempario-classify';
 import {
   MOCK_TEMPARIOS,
   getMockMarcas,
@@ -17,14 +17,15 @@ import {
 let mockStore: TemparioMantenimiento[] = MOCK_TEMPARIOS.map((t) => ({ ...t }));
 
 function mapTemparioRow(row: Record<string, unknown>): TemparioMantenimiento {
+  const item = String(row.item ?? '');
   return {
     id: String(row.id),
     legacy_id: row.legacy_id as number | null,
     marca: String(row.marca ?? '').trim(),
     linea: row.linea as string | null,
     modelo: String(row.modelo ?? '').trim(),
-    tipo_item: normalizeTipoItem(String(row.tipo_item ?? 'Repuesto')),
-    item: String(row.item ?? ''),
+    tipo_item: resolveEffectiveTipoItem(String(row.tipo_item ?? 'Repuesto')),
+    item,
     unidad_medida: String(row.unidad_medida ?? 'Unidad'),
     cantidad: Number(row.cantidad ?? 1),
     frecuencia_horas: Number(row.frecuencia_horas) as TemparioMantenimiento['frecuencia_horas'],

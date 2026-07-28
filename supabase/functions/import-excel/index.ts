@@ -157,20 +157,43 @@ function toNumber(value: string, fallback = 0): number {
 }
 
 function mapTempario(row: Record<string, string>, createdBy: string) {
-  const tipoDeItem = getField(row, 'Tipo de item', 'tipo_item', 'Tipo de ítem');
-  const tipoCatalogo = getField(row, 'TipoItem', 'tipo_catalogo') || null;
-  const tipoNorm = tipoDeItem.trim().toLowerCase();
+  // Clasificación real = Modelo2 (Actividad | Repuesto | Fluido | Observacion)
+  const tipoRaw =
+    getField(row, 'Modelo2', 'modelo2', 'Tipo de item', 'tipo_item', 'Tipo de ítem') ||
+    'Repuesto';
+  const itemName = getField(row, 'Item', 'item', 'Nombre');
+  const tipoNorm = tipoRaw.trim().toLowerCase();
   let tipo = 'Repuesto';
   if (tipoNorm.startsWith('fluido') || tipoNorm === 'fluid') tipo = 'Fluido';
   else if (tipoNorm.startsWith('consum')) tipo = 'Consumible';
   else if (tipoNorm.startsWith('activ')) tipo = 'Actividad';
   else if (tipoNorm.startsWith('serv')) tipo = 'Servicio';
+  else if (tipoNorm.startsWith('observ')) tipo = 'Observacion';
   else if (tipoNorm.startsWith('repues')) tipo = 'Repuesto';
-  else if (['Repuesto', 'Consumible', 'Fluido', 'Actividad', 'Servicio'].includes(tipoDeItem)) {
-    tipo = tipoDeItem;
+  else if (
+    ['Repuesto', 'Consumible', 'Fluido', 'Actividad', 'Servicio', 'Observacion'].includes(tipoRaw)
+  ) {
+    tipo = tipoRaw;
   }
 
-  const freq = toNumber(getField(row, 'Frecuencia (horas)', 'frecuencia_horas', 'Frecuencia'), 250);
+  const tipoCatalogo = getField(row, 'TipoItem', 'tipo_catalogo') || null;
+  const hasGalones = Object.keys(row).some((k) =>
+    k.trim().toLowerCase().replace(/\s+/g, ' ').includes('cantidad (galones)')
+  );
+  const cantCol = getField(row, 'Cantidad', 'cantidad');
+  const galCol = getField(row, 'Cantidad (Galones)', 'Cantidad Galones');
+  const unidadLegacy = getField(row, 'Unidad de medida', 'unidad_medida');
+  let unidad = 'Unidad';
+  let cantidad = 1;
+  if (hasGalones) {
+    unidad = cantCol && !/^n\/?a$/i.test(cantCol) ? cantCol : unidadLegacy || 'Unidad';
+    cantidad = toNumber(galCol, 0);
+  } else {
+    unidad = unidadLegacy || 'Unidad';
+    cantidad = toNumber(cantCol, 1);
+  }
+
+  const freq = toNumber(getField(row, 'Frecuencia', 'Frecuencia (horas)', 'frecuencia_horas'), 250);
   const frecuencia = [250, 1000, 2000, 4000, 5000].includes(freq) ? freq : 250;
   const legacyRaw = getField(row, 'ID', 'Id', 'legacy_id', 'id_legacy');
   const legacyId = legacyRaw ? Math.trunc(toNumber(legacyRaw, 0)) || null : null;
@@ -194,20 +217,23 @@ function mapTempario(row: Record<string, string>, createdBy: string) {
     modelo: getField(row, 'Modelo', 'modelo'),
     tipo_item: tipo,
     tipo_catalogo: tipoCatalogo || null,
-    item: getField(row, 'Item', 'item', 'Nombre'),
-    unidad_medida: getField(row, 'Unidad de medida', 'unidad_medida') || 'Unidad',
-    cantidad: toNumber(getField(row, 'Cantidad', 'cantidad'), 1),
+    item: itemName,
+    unidad_medida: unidad,
+    cantidad,
     frecuencia_horas: frecuencia,
     aceite_homologado: getField(row, 'Aceite Homologado', 'aceite_homologado') || null,
     referencia_genuina: getField(row, 'Referencia Genuina', 'referencia_genuina') || null,
     ref_sap_dispel: getField(row, 'REF SAP DISPEL', 'ref_sap_dispel') || null,
-    ref_sap_original: getField(row, 'REF SAP ORIGINAl', 'REF SAP ORIGINAL', 'ref_sap_original') || null,
+    ref_sap_original:
+      getField(row, 'REF SAP ORIGINAl', 'REF SAP ORIGINAL', 'ref_sap_original') || null,
     referencia_stal: getField(row, 'Referencia Stal', 'referencia_stal') || null,
     referencia_fleetguard: getField(row, 'Referencia Fleetguard', 'referencia_fleetguard') || null,
-    referencia_donaldson: getField(row, 'Referencia Donalson', 'Referencia Donaldson', 'referencia_donaldson') || null,
-    tiempo_horas: toNumber(getField(row, 'Tiempo (horas)', 'tiempo_horas'), 0),
+    referencia_donaldson:
+      getField(row, 'Referencia Donalson', 'Referencia Donaldson', 'referencia_donaldson') || null,
+    tiempo_horas: toNumber(getField(row, 'Tiempo', 'Tiempo (horas)', 'tiempo_horas'), 0),
     procedimiento: getField(row, 'Procedimiento', 'procedimiento') || null,
-    avisos_claves: getField(row, 'Avisos Claves', 'avisos_claves') || null,
+    avisos_claves:
+      getField(row, 'Observaciones', 'Avisos Claves', 'avisos_claves') || null,
     created_at: parseDate(creadoRaw),
     updated_at: parseDate(modificadoRaw) ?? parseDate(creadoRaw),
     created_by: creadoPor,

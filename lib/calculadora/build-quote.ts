@@ -6,7 +6,12 @@ import type {
 } from '@/types/database';
 import { getFrecuenciasPorHorometro } from '@/lib/maintenance-frequency';
 import { calcularCostoDesplazamiento, calcularIva, DEFAULT_TARIFA } from '@/lib/travel-cost';
-import { normalizeTipoItem } from '@/lib/calculadora/tempario-import';
+import {
+  isActivityRow,
+  isConsumableOrPartRow,
+  isPartOnlyRow,
+  resolveEffectiveTipoItem,
+} from '@/lib/calculadora/tempario-classify';
 
 /**
  * Tarifa fija de mano de obra (COP/h) — Power Apps:
@@ -19,32 +24,17 @@ export function normalizeEquipKey(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, '');
 }
 
-function normalizeTipoKey(tipo: string): string {
-  return tipo.trim().toLowerCase();
-}
-
-/**
- * Power Apps: 'Tipo de item'.Value = "Actividad"
- * (Servicio se acepta por compatibilidad con seeds previos.)
- */
 export function isActivityTipo(tipo: string): boolean {
-  const t = normalizeTipoKey(tipo);
+  const t = tipo.trim().toLowerCase();
   return t === 'actividad' || t === 'servicio';
 }
 
-/**
- * Consumibles de mantenimiento (Power Apps / negocio):
- * Fluido | Consumible | Repuesto → aceites, filtros y demás insumos
- * (no Actividad).
- */
-export function isConsumableRow(t: TemparioMantenimiento): boolean {
-  const tipo = normalizeTipoItem(String(t.tipo_item ?? ''));
-  return tipo === 'Fluido' || tipo === 'Consumible' || tipo === 'Repuesto';
+export function isConsumableRow(t: { tipo_item: string; item: string }): boolean {
+  return isConsumableOrPartRow(t);
 }
 
-/** Pestaña Repuestos: solo tipo Repuesto. */
-export function isPartRow(t: TemparioMantenimiento): boolean {
-  return normalizeTipoItem(String(t.tipo_item ?? '')) === 'Repuesto';
+export function isPartRow(t: { tipo_item: string; item: string }): boolean {
+  return isPartOnlyRow(t);
 }
 
 export function matchesMarcaModelo(
@@ -103,16 +93,12 @@ function randomSerial(marca: string): string {
 }
 
 /**
- * Cotización preventiva — misma lógica que Power Apps sobre TempariosLocal.
+ * Cotización preventiva — Power Apps / Excel Modelo2.
  *
- * Actividades:
- *   Filter(Marca, Modelo, Frecuencia in SelectedFrequencies, Tipo = "Actividad")
- *
- * Mano de obra:
- *   Sum(Tiempo horas) * 110000
- *
- * Consumibles: Fluido | Consumible | Repuesto (aceite/filtro) sin precio SAP
- * Repuestos: tipo Repuesto (sin precio SAP)
+ * Actividades: tipo Actividad según Modelo2
+ * Mano de obra: Sum(Tiempo) * 110000
+ * Consumibles: Fluido | Repuesto | Consumible (insumos)
+ * Observacion: excluida de tabs de cálculo
  */
 export function buildPreventiveQuote(
   input: PreventiveQuoteInput,
@@ -126,8 +112,7 @@ export function buildPreventiveQuote(
 
   const filtered = forEquip.filter((t) => matchesFrecuencia(t, frecuencias));
 
-  // Power Apps: Tipo de item = "Actividad"
-  const activityRows = filtered.filter((t) => isActivityTipo(String(t.tipo_item)));
+  const activityRows = filtered.filter((t) => isActivityRow(t));
   const laborHoursTotal = activityRows.reduce(
     (sum, t) => sum + (Number.isFinite(Number(t.tiempo_horas)) ? Number(t.tiempo_horas) : 0),
     0
@@ -152,35 +137,41 @@ export function buildPreventiveQuote(
   });
 
   const consumableRows = filtered.filter(isConsumableRow).slice().sort(sortByTipoThenItem);
-  const consumables = consumableRows.map((t) => ({
-    item: t.item,
-    quantity: t.cantidad,
-    unit: t.unidad_medida,
-    unitPrice: 0,
-    total: 0,
-    tipoItem: normalizeTipoItem(String(t.tipo_item)),
-    tipoCatalogo: t.tipo_catalogo ?? null,
-    frecuenciaHoras: Number(t.frecuencia_horas) as MaintenanceFrequencyHours,
-    marca: t.marca,
-    modelo: t.modelo,
-    referenciaGenuina: textOrDash(t.referencia_genuina),
-    refSapDispel: textOrDash(t.ref_sap_dispel),
-    refSapOriginal: textOrDash(t.ref_sap_original),
-    referenciaStal: textOrDash(t.referencia_stal),
-    referenciaDonaldson: textOrDash(t.referencia_donaldson),
-    referenciaFleetguard: textOrDash(t.referencia_fleetguard),
-  }));
+  const consumables = consumableRows.map((t) => {
+    const qty = Number(t.cantidad);
+    return {
+      item: t.item,
+      quantity: Number.isFinite(qty) && qty > 0 ? qty : qty === 0 ? 0 : 1,
+      unit: t.unidad_medida,
+      unitPrice: 0,
+      total: 0,
+      tipoItem: resolveEffectiveTipoItem(String(t.tipo_item)),
+      tipoCatalogo: t.tipo_catalogo ?? null,
+      frecuenciaHoras: Number(t.frecuencia_horas) as MaintenanceFrequencyHours,
+      marca: t.marca,
+      modelo: t.modelo,
+      referenciaGenuina: textOrDash(t.referencia_genuina),
+      refSapDispel: textOrDash(t.ref_sap_dispel),
+      refSapOriginal: textOrDash(t.ref_sap_original),
+      referenciaStal: textOrDash(t.referencia_stal),
+      referenciaDonaldson: textOrDash(t.referencia_donaldson),
+      referenciaFleetguard: textOrDash(t.referencia_fleetguard),
+    };
+  });
 
   const partRows = filtered.filter(isPartRow).slice().sort(sortByTipoThenItem);
-  const parts = partRows.map((t) => ({
-    sapCode: resolveCodigoSamm(t),
-    description: t.item,
-    quantity: t.cantidad,
-    unitPrice: 0,
-    total: 0,
-    unit: t.unidad_medida,
-    frecuenciaHoras: Number(t.frecuencia_horas) as MaintenanceFrequencyHours,
-  }));
+  const parts = partRows.map((t) => {
+    const qty = Number(t.cantidad);
+    return {
+      sapCode: resolveCodigoSamm(t),
+      description: t.item,
+      quantity: Number.isFinite(qty) && qty > 0 ? qty : qty === 0 ? 0 : 1,
+      unitPrice: 0,
+      total: 0,
+      unit: t.unidad_medida,
+      frecuenciaHoras: Number(t.frecuencia_horas) as MaintenanceFrequencyHours,
+    };
+  });
 
   const travelCost = calcularCostoDesplazamiento(input.kmTrayecto, input.horasTrayecto);
   const subtotal = laborTotal + travelCost;

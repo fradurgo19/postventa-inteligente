@@ -1,13 +1,14 @@
 /** Frecuencias de mantenimiento preventivo (horas) */
 export type MaintenanceFrequencyHours = 250 | 1000 | 2000 | 4000 | 5000;
 
-/** Incluye Fluido (Excel / Power Apps) además de Consumible */
+/** Incluye tipos del Excel real (columna Modelo2) */
 export type TemparioTipoItem =
   | 'Repuesto'
   | 'Consumible'
   | 'Fluido'
   | 'Actividad'
-  | 'Servicio';
+  | 'Servicio'
+  | 'Observacion';
 
 export interface TemparioMantenimiento {
   id: string;
