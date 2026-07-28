@@ -147,12 +147,14 @@ export function parseExcelDateTime(value: string): string | null {
 }
 
 /**
- * Columna "Tipo de item": Repuesto | Consumible | Actividad | Servicio
+ * Columna "Tipo de item" (Power Apps / Excel):
+ * Repuesto | Fluido | Consumible | Actividad | Servicio
  */
 export function normalizeTipoItem(raw: string): TemparioTipoItem {
   const v = raw.trim().toLowerCase();
   if (!v) return 'Repuesto';
   if (v === 'repuesto' || v.startsWith('repues')) return 'Repuesto';
+  if (v === 'fluido' || v.startsWith('fluid')) return 'Fluido';
   if (v === 'consumible' || v.startsWith('consum')) return 'Consumible';
   if (v === 'actividad' || v.startsWith('activ')) return 'Actividad';
   if (v === 'servicio' || v.startsWith('serv')) return 'Servicio';

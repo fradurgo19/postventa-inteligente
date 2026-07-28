@@ -84,7 +84,13 @@ const TEMPARIO_COLUMNS = [
   'Modificado por',
 ];
 
-const TIPOS_ITEM: TemparioTipoItem[] = ['Repuesto', 'Consumible', 'Actividad', 'Servicio'];
+const TIPOS_ITEM: TemparioTipoItem[] = [
+  'Repuesto',
+  'Fluido',
+  'Consumible',
+  'Actividad',
+  'Servicio',
+];
 const FRECUENCIAS: MaintenanceFrequencyHours[] = [250, 1000, 2000, 4000, 5000];
 const PAGE_SIZE = 15;
 

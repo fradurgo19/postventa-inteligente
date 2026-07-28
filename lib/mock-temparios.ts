@@ -19,7 +19,7 @@ export const MOCK_TEMPARIOS: TemparioMantenimiento[] = [
     procedimiento: 'N/A',
     avisos_claves: 'N/A',
     precio_unitario: 85000,
-    tarifa_mano_obra_h: 95000,
+    tarifa_mano_obra_h: 110000,
     activo: true,
   },
   {
@@ -35,7 +35,7 @@ export const MOCK_TEMPARIOS: TemparioMantenimiento[] = [
     aceite_homologado: '15W-40 CI-4',
     tiempo_horas: 0,
     precio_unitario: 18500,
-    tarifa_mano_obra_h: 95000,
+    tarifa_mano_obra_h: 110000,
     activo: true,
   },
   {
@@ -52,7 +52,7 @@ export const MOCK_TEMPARIOS: TemparioMantenimiento[] = [
     procedimiento: 'Drenar aceite, reemplazar filtros, rellenar según cartilla OEM',
     avisos_claves: 'Verificar torque de tapón de carter',
     precio_unitario: 0,
-    tarifa_mano_obra_h: 95000,
+    tarifa_mano_obra_h: 110000,
     activo: true,
   },
   {
@@ -68,7 +68,7 @@ export const MOCK_TEMPARIOS: TemparioMantenimiento[] = [
     tiempo_horas: 3,
     procedimiento: 'Revisión de mangueras, filtros y niveles',
     precio_unitario: 0,
-    tarifa_mano_obra_h: 95000,
+    tarifa_mano_obra_h: 110000,
     activo: true,
   },
   {
@@ -84,7 +84,7 @@ export const MOCK_TEMPARIOS: TemparioMantenimiento[] = [
     ref_sap_original: '87365432',
     tiempo_horas: 0,
     precio_unitario: 320000,
-    tarifa_mano_obra_h: 95000,
+    tarifa_mano_obra_h: 110000,
     activo: true,
   },
   {
@@ -101,7 +101,7 @@ export const MOCK_TEMPARIOS: TemparioMantenimiento[] = [
     referencia_fleetguard: 'LF16045',
     tiempo_horas: 0,
     precio_unitario: 145000,
-    tarifa_mano_obra_h: 95000,
+    tarifa_mano_obra_h: 110000,
     activo: true,
   },
   {
@@ -117,7 +117,7 @@ export const MOCK_TEMPARIOS: TemparioMantenimiento[] = [
     tiempo_horas: 4,
     procedimiento: 'Mantenimiento preventivo 250H según manual Hitachi',
     precio_unitario: 0,
-    tarifa_mano_obra_h: 95000,
+    tarifa_mano_obra_h: 110000,
     activo: true,
   },
 ];

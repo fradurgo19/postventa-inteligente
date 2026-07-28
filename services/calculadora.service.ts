@@ -39,7 +39,7 @@ function mapTemparioRow(row: Record<string, unknown>): TemparioMantenimiento {
     avisos_claves: row.avisos_claves as string | null,
     tipo_catalogo: (row.tipo_catalogo as string) ?? null,
     precio_unitario: Number(row.precio_unitario ?? 0),
-    tarifa_mano_obra_h: Number(row.tarifa_mano_obra_h ?? 95000),
+    tarifa_mano_obra_h: Number(row.tarifa_mano_obra_h ?? 110000),
     activo: Boolean(row.activo ?? true),
     created_at: (row.created_at as string) ?? null,
     updated_at: (row.updated_at as string) ?? null,
@@ -202,22 +202,29 @@ export async function fetchTemparios(marca: string, modelo: string): Promise<Tem
   }
 
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from('temparios_mantenimiento')
-    .select('*')
-    .eq('activo', true)
-    .ilike('marca', marca)
-    .ilike('modelo', modelo);
+  const pageSize = 1000;
+  const rows: TemparioMantenimiento[] = [];
+  let from = 0;
 
-  if (error || !data?.length) {
-    return MOCK_TEMPARIOS.filter(
-      (t) =>
-        t.marca.toLowerCase() === marca.toLowerCase() &&
-        t.modelo.toLowerCase() === modelo.toLowerCase()
-    );
+  for (;;) {
+    const { data, error } = await supabase
+      .from('temparios_mantenimiento')
+      .select('*')
+      .eq('activo', true)
+      .eq('marca', marca)
+      .eq('modelo', modelo)
+      .range(from, from + pageSize - 1);
+
+    if (error) {
+      throw new Error(error.message || 'No se pudieron cargar temparios');
+    }
+    if (!data?.length) break;
+    rows.push(...data.map(mapTemparioRow));
+    if (data.length < pageSize) break;
+    from += pageSize;
   }
 
-  return data.map(mapTemparioRow);
+  return rows;
 }
 
 function filterMockAdmin(query: TempariosAdminQuery): TemparioMantenimiento[] {
@@ -348,8 +355,7 @@ export async function calculatePreventiveMaintenance(
   input: PreventiveQuoteInput
 ): Promise<PreventiveQuoteResult> {
   const temparios = await fetchTemparios(input.marca, input.modelo);
-  const allTemparios = temparios.length > 0 ? temparios : MOCK_TEMPARIOS;
-  return buildPreventiveQuote(input, allTemparios);
+  return buildPreventiveQuote(input, temparios);
 }
 
 export async function registerTemparioImport(

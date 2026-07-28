@@ -20,6 +20,7 @@ La aplicación **no crea** las tablas automáticamente.
 | 11 | `schema/10_temparios_excel_columns.sql` | Columna tipo_catalogo (TipoItem del Excel) |
 | 12 | `schema/11_temparios_upsert_legacy.sql` | UNIQUE legacy_id para upsert masivo |
 | 13 | `schema/12_temparios_filter_views.sql` | Vistas DISTINCT marca/modelo/tipo para filtros |
+| 14 | `schema/13_temparios_fluido_labor_rate.sql` | CHECK Fluido + default tarifa 110000 COP/h |
 
 ## Dónde ejecutar `supabase functions deploy`
 

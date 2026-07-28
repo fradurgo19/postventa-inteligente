@@ -5,6 +5,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 import {
   Wrench,
   RotateCcw,
@@ -157,6 +158,8 @@ export default function CalculatorPage() {
         horasTrayecto: values.travelTime,
       });
       setResult(quote);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo calcular el mantenimiento');
     } finally {
       setIsCalculating(false);
     }
@@ -501,124 +504,158 @@ export default function CalculatorPage() {
 
                       <TabsContent value="activities" className="mt-0">
                         <div className="overflow-x-auto">
-                          <Table>
-                            <TableHeader>
-                              <TableRow className="bg-muted/30 hover:bg-muted/30">
-                                <TableHead>Actividad</TableHead>
-                                <TableHead>Descripción</TableHead>
-                                <TableHead className="text-right">Horas MO</TableHead>
-                                <TableHead className="text-right">Repuestos</TableHead>
-                                <TableHead className="text-right">Consumibles</TableHead>
-                                <TableHead className="text-right">Subtotal</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {result.activities.map((act) => (
-                                <TableRow key={act.id}>
-                                  <TableCell className="font-medium text-sm whitespace-nowrap">
-                                    {act.activity}
+                          {result.activities.length === 0 ? (
+                            <p className="text-sm text-muted-foreground py-6 text-center">
+                              No hay actividades (tipo Actividad/Servicio) en temparios para esta
+                              marca, modelo y frecuencias aplicadas.
+                            </p>
+                          ) : (
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                  <TableHead>Actividad</TableHead>
+                                  <TableHead>Descripción</TableHead>
+                                  <TableHead className="text-right">Freq. (h)</TableHead>
+                                  <TableHead className="text-right">Tiempo (h)</TableHead>
+                                  <TableHead className="text-right">Mano de obra</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {result.activities.map((act) => (
+                                  <TableRow key={act.id}>
+                                    <TableCell className="font-medium text-sm whitespace-nowrap">
+                                      {act.activity}
+                                    </TableCell>
+                                    <TableCell className="text-xs text-muted-foreground">
+                                      {act.description || '—'}
+                                    </TableCell>
+                                    <TableCell className="text-sm text-right tabular-nums">
+                                      {act.frecuenciaHoras ?? '—'}
+                                    </TableCell>
+                                    <TableCell className="text-sm text-right tabular-nums">
+                                      {act.laborHours.toFixed(2)}
+                                    </TableCell>
+                                    <TableCell className="text-sm text-right font-semibold tabular-nums">
+                                      {formatCOP(act.subtotal)}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                                <TableRow className="bg-muted/30">
+                                  <TableCell colSpan={3} className="font-semibold text-sm">
+                                    Total mano de obra
+                                    <span className="ml-2 font-normal text-muted-foreground">
+                                      ({result.laborHoursTotal.toFixed(2)} h ×{' '}
+                                      {formatCOP(result.laborRate)}/h)
+                                    </span>
                                   </TableCell>
-                                  <TableCell className="text-xs text-muted-foreground">
-                                    {act.description}
+                                  <TableCell className="text-right font-semibold tabular-nums">
+                                    {result.laborHoursTotal.toFixed(2)}
                                   </TableCell>
-                                  <TableCell className="text-sm text-right tabular-nums">
-                                    {act.laborHours.toFixed(1)}
-                                  </TableCell>
-                                  <TableCell className="text-sm text-right tabular-nums">
-                                    {formatCOP(act.parts)}
-                                  </TableCell>
-                                  <TableCell className="text-sm text-right tabular-nums">
-                                    {formatCOP(act.consumables)}
-                                  </TableCell>
-                                  <TableCell className="text-sm text-right font-semibold tabular-nums">
-                                    {formatCOP(act.subtotal)}
+                                  <TableCell className="text-right font-bold tabular-nums">
+                                    {formatCOP(result.costs.labor)}
                                   </TableCell>
                                 </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
+                              </TableBody>
+                            </Table>
+                          )}
                         </div>
                       </TabsContent>
 
                       <TabsContent value="consumables" className="mt-0">
                         <div className="overflow-x-auto">
-                          <Table>
-                            <TableHeader>
-                              <TableRow className="bg-muted/30 hover:bg-muted/30">
-                                <TableHead>Ítem</TableHead>
-                                <TableHead className="text-right">Cant.</TableHead>
-                                <TableHead>Unidad</TableHead>
-                                <TableHead className="text-right">Precio Unit.</TableHead>
-                                <TableHead className="text-right">Total</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {result.consumables.map((c, i) => (
-                                <TableRow key={`${c.item}-${i}`}>
-                                  <TableCell className="font-medium text-sm">{c.item}</TableCell>
-                                  <TableCell className="text-right tabular-nums">{c.quantity}</TableCell>
-                                  <TableCell className="text-muted-foreground">{c.unit}</TableCell>
-                                  <TableCell className="text-right tabular-nums">
-                                    {formatCOP(c.unitPrice)}
-                                  </TableCell>
-                                  <TableCell className="text-right font-semibold tabular-nums">
-                                    {formatCOP(c.total)}
-                                  </TableCell>
+                          {result.consumables.length === 0 ? (
+                            <p className="text-sm text-muted-foreground py-6 text-center">
+                              No hay consumibles/fluidos en temparios para esta selección. Los
+                              precios SAP no están disponibles aún.
+                            </p>
+                          ) : (
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                  <TableHead>Tipo</TableHead>
+                                  <TableHead>Ítem</TableHead>
+                                  <TableHead>Referencia</TableHead>
+                                  <TableHead className="text-right">Freq. (h)</TableHead>
+                                  <TableHead className="text-right">Cant.</TableHead>
+                                  <TableHead>Unidad</TableHead>
                                 </TableRow>
-                              ))}
-                              <TableRow className="bg-muted/30">
-                                <TableCell colSpan={4} className="font-semibold text-sm">
-                                  Total Consumibles
-                                </TableCell>
-                                <TableCell className="text-right font-bold tabular-nums">
-                                  {formatCOP(result.costs.consumables)}
-                                </TableCell>
-                              </TableRow>
-                            </TableBody>
-                          </Table>
+                              </TableHeader>
+                              <TableBody>
+                                {result.consumables.map((c, i) => (
+                                  <TableRow key={`${c.item}-${i}`}>
+                                    <TableCell className="text-xs text-muted-foreground">
+                                      {c.tipoItem ?? 'Fluido'}
+                                    </TableCell>
+                                    <TableCell className="font-medium text-sm">{c.item}</TableCell>
+                                    <TableCell className="text-xs font-mono">
+                                      {c.referencia || '—'}
+                                    </TableCell>
+                                    <TableCell className="text-right tabular-nums text-sm">
+                                      {c.frecuenciaHoras ?? '—'}
+                                    </TableCell>
+                                    <TableCell className="text-right tabular-nums">
+                                      {c.quantity}
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground">{c.unit}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          )}
+                          <p className="text-xs text-muted-foreground mt-3">
+                            Listado desde temparios (Fluido / Consumible). Valores monetarios
+                            omitidos: sin integración SAP.
+                          </p>
                         </div>
                       </TabsContent>
 
                       <TabsContent value="parts" className="mt-0">
                         <div className="overflow-x-auto">
-                          <Table>
-                            <TableHeader>
-                              <TableRow className="bg-muted/30 hover:bg-muted/30">
-                                <TableHead>Código SAP</TableHead>
-                                <TableHead>Descripción</TableHead>
-                                <TableHead className="text-right">Cant.</TableHead>
-                                <TableHead className="text-right">Precio Unit.</TableHead>
-                                <TableHead className="text-right">Total</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {result.parts.map((p, i) => (
-                                <TableRow key={`${p.sapCode}-${i}`}>
-                                  <TableCell>
-                                    <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
-                                      {p.sapCode}
-                                    </code>
-                                  </TableCell>
-                                  <TableCell className="font-medium text-sm">{p.description}</TableCell>
-                                  <TableCell className="text-right tabular-nums">{p.quantity}</TableCell>
-                                  <TableCell className="text-right tabular-nums">
-                                    {formatCOP(p.unitPrice)}
-                                  </TableCell>
-                                  <TableCell className="text-right font-semibold tabular-nums">
-                                    {formatCOP(p.total)}
-                                  </TableCell>
+                          {result.parts.length === 0 ? (
+                            <p className="text-sm text-muted-foreground py-6 text-center">
+                              No hay repuestos en temparios para esta selección. Los precios SAP
+                              no están disponibles aún.
+                            </p>
+                          ) : (
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                  <TableHead>Código / Ref.</TableHead>
+                                  <TableHead>Descripción</TableHead>
+                                  <TableHead className="text-right">Freq. (h)</TableHead>
+                                  <TableHead className="text-right">Cant.</TableHead>
+                                  <TableHead>Unidad</TableHead>
                                 </TableRow>
-                              ))}
-                              <TableRow className="bg-muted/30">
-                                <TableCell colSpan={4} className="font-semibold text-sm">
-                                  Total Repuestos
-                                </TableCell>
-                                <TableCell className="text-right font-bold tabular-nums">
-                                  {formatCOP(result.costs.parts)}
-                                </TableCell>
-                              </TableRow>
-                            </TableBody>
-                          </Table>
+                              </TableHeader>
+                              <TableBody>
+                                {result.parts.map((p, i) => (
+                                  <TableRow key={`${p.sapCode}-${i}`}>
+                                    <TableCell>
+                                      <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
+                                        {p.sapCode}
+                                      </code>
+                                    </TableCell>
+                                    <TableCell className="font-medium text-sm">
+                                      {p.description}
+                                    </TableCell>
+                                    <TableCell className="text-right tabular-nums text-sm">
+                                      {p.frecuenciaHoras ?? '—'}
+                                    </TableCell>
+                                    <TableCell className="text-right tabular-nums">
+                                      {p.quantity}
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground">
+                                      {p.unit || 'Unidad'}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          )}
+                          <p className="text-xs text-muted-foreground mt-3">
+                            Listado desde temparios (Repuesto). Valores monetarios omitidos: sin
+                            integración SAP.
+                          </p>
                         </div>
                       </TabsContent>
                     </Tabs>
@@ -661,16 +698,26 @@ export default function CalculatorPage() {
                 <CardContent className="px-5 pb-5">
                   <div className="space-y-2.5 mb-4">
                     {[
-                      { label: 'Mano de Obra', value: result.costs.labor },
-                      { label: 'Consumibles', value: result.costs.consumables },
-                      { label: 'Repuestos', value: result.costs.parts },
+                      {
+                        label: 'Mano de Obra',
+                        value: result.costs.labor,
+                        hint: `${result.laborHoursTotal.toFixed(2)} h × ${formatCOP(result.laborRate)}`,
+                      },
                       { label: 'Viaje', value: result.costs.travel },
-                    ].map(({ label, value }) => (
-                      <div key={label} className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">{label}</span>
-                        <span className="text-sm tabular-nums font-medium">{formatCOP(value)}</span>
+                    ].map(({ label, value, hint }) => (
+                      <div key={label} className="space-y-0.5">
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">{label}</span>
+                          <span className="text-sm tabular-nums font-medium">{formatCOP(value)}</span>
+                        </div>
+                        {hint ? (
+                          <p className="text-[11px] text-muted-foreground text-right">{hint}</p>
+                        ) : null}
                       </div>
                     ))}
+                    <p className="text-[11px] text-muted-foreground pt-1">
+                      Consumibles y repuestos: solo listado (sin precio SAP).
+                    </p>
                   </div>
                   <Separator className="my-3" />
                   <div className="space-y-2 mb-4">

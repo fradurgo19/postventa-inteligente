@@ -1,7 +1,13 @@
 /** Frecuencias de mantenimiento preventivo (horas) */
 export type MaintenanceFrequencyHours = 250 | 1000 | 2000 | 4000 | 5000;
 
-export type TemparioTipoItem = 'Repuesto' | 'Consumible' | 'Actividad' | 'Servicio';
+/** Incluye Fluido (Excel / Power Apps) además de Consumible */
+export type TemparioTipoItem =
+  | 'Repuesto'
+  | 'Consumible'
+  | 'Fluido'
+  | 'Actividad'
+  | 'Servicio';
 
 export interface TemparioMantenimiento {
   id: string;
@@ -65,22 +71,30 @@ export interface PreventiveActivityLine {
   parts: number;
   consumables: number;
   subtotal: number;
+  frecuenciaHoras?: MaintenanceFrequencyHours;
 }
 
 export interface PreventiveConsumableLine {
   item: string;
   quantity: number;
   unit: string;
+  /** Sin SAP: siempre 0 hasta integración de precios */
   unitPrice: number;
   total: number;
+  tipoItem?: TemparioTipoItem | string;
+  referencia?: string | null;
+  frecuenciaHoras?: MaintenanceFrequencyHours;
 }
 
 export interface PreventivePartLine {
   sapCode: string;
   description: string;
   quantity: number;
+  /** Sin SAP: siempre 0 hasta integración de precios */
   unitPrice: number;
   total: number;
+  unit?: string;
+  frecuenciaHoras?: MaintenanceFrequencyHours;
 }
 
 export interface PreventiveQuoteResult {
@@ -92,6 +106,10 @@ export interface PreventiveQuoteResult {
   kilometers: number;
   status: 'active' | 'maintenance';
   frecuenciasAplicadas: MaintenanceFrequencyHours[];
+  /** Sum(Tiempo horas) de actividades — fórmula Power Apps */
+  laborHoursTotal: number;
+  /** Tarifa COP/h usada (110000) */
+  laborRate: number;
   activities: PreventiveActivityLine[];
   consumables: PreventiveConsumableLine[];
   parts: PreventivePartLine[];

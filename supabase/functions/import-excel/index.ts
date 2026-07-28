@@ -161,13 +161,13 @@ function mapTempario(row: Record<string, string>, createdBy: string) {
   const tipoCatalogo = getField(row, 'TipoItem', 'tipo_catalogo') || null;
   const tipoNorm = tipoDeItem.trim().toLowerCase();
   let tipo = 'Repuesto';
-  if (tipoNorm.startsWith('consum')) tipo = 'Consumible';
+  if (tipoNorm.startsWith('fluido') || tipoNorm === 'fluid') tipo = 'Fluido';
+  else if (tipoNorm.startsWith('consum')) tipo = 'Consumible';
   else if (tipoNorm.startsWith('activ')) tipo = 'Actividad';
   else if (tipoNorm.startsWith('serv')) tipo = 'Servicio';
-  else if (tipoNorm.startsWith('repues') || ['Repuesto', 'Consumible', 'Actividad', 'Servicio'].includes(tipoDeItem)) {
-    tipo = ['Repuesto', 'Consumible', 'Actividad', 'Servicio'].includes(tipoDeItem)
-      ? tipoDeItem
-      : 'Repuesto';
+  else if (tipoNorm.startsWith('repues')) tipo = 'Repuesto';
+  else if (['Repuesto', 'Consumible', 'Fluido', 'Actividad', 'Servicio'].includes(tipoDeItem)) {
+    tipo = tipoDeItem;
   }
 
   const freq = toNumber(getField(row, 'Frecuencia (horas)', 'frecuencia_horas', 'Frecuencia'), 250);
