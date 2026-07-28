@@ -17,9 +17,6 @@
 /backend/dist
 /backend/node_modules
 
-# bolt (legacy scaffold — removed)
-.bolt/
-
 # misc
 .DS_Store
 *.pem
