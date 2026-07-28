@@ -37,6 +37,7 @@ function mapTemparioRow(row: Record<string, unknown>): TemparioMantenimiento {
     tiempo_horas: Number(row.tiempo_horas ?? 0),
     procedimiento: row.procedimiento as string | null,
     avisos_claves: row.avisos_claves as string | null,
+    tipo_catalogo: (row.tipo_catalogo as string) ?? null,
     precio_unitario: Number(row.precio_unitario ?? 0),
     tarifa_mano_obra_h: Number(row.tarifa_mano_obra_h ?? 95000),
     activo: Boolean(row.activo ?? true),

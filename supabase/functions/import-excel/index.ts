@@ -157,10 +157,19 @@ function toNumber(value: string, fallback = 0): number {
 }
 
 function mapTempario(row: Record<string, string>, createdBy: string) {
-  const tipoRaw = getField(row, 'Tipo de item', 'tipo_item', 'TipoItem');
-  const tipo = ['Repuesto', 'Consumible', 'Actividad', 'Servicio'].includes(tipoRaw)
-    ? tipoRaw
-    : 'Repuesto';
+  const tipoDeItem = getField(row, 'Tipo de item', 'tipo_item', 'Tipo de ítem');
+  const tipoCatalogo = getField(row, 'TipoItem', 'tipo_catalogo') || null;
+  const tipoNorm = tipoDeItem.trim().toLowerCase();
+  let tipo = 'Repuesto';
+  if (tipoNorm.startsWith('consum')) tipo = 'Consumible';
+  else if (tipoNorm.startsWith('activ')) tipo = 'Actividad';
+  else if (tipoNorm.startsWith('serv')) tipo = 'Servicio';
+  else if (tipoNorm.startsWith('repues') || ['Repuesto', 'Consumible', 'Actividad', 'Servicio'].includes(tipoDeItem)) {
+    tipo = ['Repuesto', 'Consumible', 'Actividad', 'Servicio'].includes(tipoDeItem)
+      ? tipoDeItem
+      : 'Repuesto';
+  }
+
   const freq = toNumber(getField(row, 'Frecuencia (horas)', 'frecuencia_horas', 'Frecuencia'), 250);
   const frecuencia = [250, 1000, 2000, 4000, 5000].includes(freq) ? freq : 250;
   const legacyRaw = getField(row, 'ID', 'Id', 'legacy_id', 'id_legacy');
@@ -170,12 +179,21 @@ function mapTempario(row: Record<string, string>, createdBy: string) {
   const modificadoPor =
     getField(row, 'Modificado por', 'updated_by', 'Modificado Por') || createdBy;
 
+  const creadoRaw = getField(row, 'Creado', 'created_at');
+  const modificadoRaw = getField(row, 'Modificado', 'updated_at');
+  const parseDate = (v: string): string | null => {
+    if (!v) return null;
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  };
+
   return {
     legacy_id: legacyId,
     marca: getField(row, 'Marca', 'marca'),
     linea: getField(row, 'Linea', 'linea') || '',
     modelo: getField(row, 'Modelo', 'modelo'),
     tipo_item: tipo,
+    tipo_catalogo: tipoCatalogo || null,
     item: getField(row, 'Item', 'item', 'Nombre'),
     unidad_medida: getField(row, 'Unidad de medida', 'unidad_medida') || 'Unidad',
     cantidad: toNumber(getField(row, 'Cantidad', 'cantidad'), 1),
@@ -183,13 +201,15 @@ function mapTempario(row: Record<string, string>, createdBy: string) {
     aceite_homologado: getField(row, 'Aceite Homologado', 'aceite_homologado') || null,
     referencia_genuina: getField(row, 'Referencia Genuina', 'referencia_genuina') || null,
     ref_sap_dispel: getField(row, 'REF SAP DISPEL', 'ref_sap_dispel') || null,
-    ref_sap_original: getField(row, 'REF SAP ORIGINAL', 'REF SAP ORIGINAl', 'ref_sap_original') || null,
+    ref_sap_original: getField(row, 'REF SAP ORIGINAl', 'REF SAP ORIGINAL', 'ref_sap_original') || null,
     referencia_stal: getField(row, 'Referencia Stal', 'referencia_stal') || null,
     referencia_fleetguard: getField(row, 'Referencia Fleetguard', 'referencia_fleetguard') || null,
     referencia_donaldson: getField(row, 'Referencia Donalson', 'Referencia Donaldson', 'referencia_donaldson') || null,
     tiempo_horas: toNumber(getField(row, 'Tiempo (horas)', 'tiempo_horas'), 0),
     procedimiento: getField(row, 'Procedimiento', 'procedimiento') || null,
     avisos_claves: getField(row, 'Avisos Claves', 'avisos_claves') || null,
+    created_at: parseDate(creadoRaw),
+    updated_at: parseDate(modificadoRaw) ?? parseDate(creadoRaw),
     created_by: creadoPor,
     updated_by: modificadoPor,
     activo: true,
@@ -423,14 +443,24 @@ Deno.serve(async (req) => {
     }
 
     if (batchInsert.length > 0) {
-      const { error: insertError } = await admin.from(table).insert(batchInsert);
-      if (insertError) {
-        return new Response(JSON.stringify({ error: insertError.message, errors }), {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+      const chunkSize = 100;
+      for (let i = 0; i < batchInsert.length; i += chunkSize) {
+        const chunk = batchInsert.slice(i, i + chunkSize);
+        const { error: insertError } = await admin.from(table).insert(chunk);
+        if (insertError) {
+          for (const row of chunk) {
+            const { error: rowErr } = await admin.from(table).insert(row);
+            if (rowErr) {
+              recordsError += 1;
+              errors.push({ row: 0, message: rowErr.message });
+            } else {
+              recordsOk += 1;
+            }
+          }
+        } else {
+          recordsOk += chunk.length;
+        }
       }
-      recordsOk += batchInsert.length;
     }
 
     const { data: importRow } = await admin

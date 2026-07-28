@@ -68,7 +68,7 @@ const TEMPARIO_COLUMNS = [
   'Aceite Homologado',
   'Referencia Genuina',
   'REF SAP DISPEL',
-  'REF SAP ORIGINAL',
+  'REF SAP ORIGINAl',
   'Referencia Stal',
   'Referencia Fleetguard',
   'Referencia Donalson',
@@ -282,7 +282,7 @@ export function CalculadoraAdminImport() {
         <TabsContent value="importar" className="mt-4">
           <ExcelImportPanel
             title="Importar Temparios de Mantenimiento"
-            description="Cargue Excel (.xlsx/.xls) o CSV con la estructura completa de temparios. Si el archivo incluye columna ID (legacy), se actualiza el registro existente; si no, se inserta uno nuevo."
+            description="Cargue Excel (.xlsx/.xls) o CSV. Los registros se validan e insertan en temparios_mantenimiento. Si existe la columna ID, se actualiza el registro; si no, se crea uno nuevo. Requiere sesión de administrador."
             expectedColumns={TEMPARIO_COLUMNS}
             modulo="calculadora"
             onImport={async (result) => {
@@ -293,11 +293,18 @@ export function CalculadoraAdminImport() {
                   error: result.recordsError,
                 });
               }
-              toast.success(
-                `Importación: ${result.recordsOk} OK, ${result.recordsError} errores${
-                  result.duplicates ? `, ${result.duplicates} actualizados` : ''
-                }`
-              );
+              if (result.recordsOk > 0) {
+                toast.success(
+                  `Importación completada: ${result.recordsOk} OK` +
+                    (result.duplicates ? `, ${result.duplicates} actualizados` : '') +
+                    (result.recordsError ? `, ${result.recordsError} errores` : '')
+                );
+              } else {
+                toast.error(
+                  result.errors?.[0]?.message ??
+                    `No se importaron registros (${result.recordsError} errores)`
+                );
+              }
               setTab('registros');
               setPage(1);
               void refetch();
@@ -406,6 +413,7 @@ export function CalculadoraAdminImport() {
                       <TableHead className="text-xs">Línea</TableHead>
                       <TableHead className="text-xs">Modelo</TableHead>
                       <TableHead className="text-xs">Tipo</TableHead>
+                      <TableHead className="text-xs">Catálogo</TableHead>
                       <TableHead className="text-xs">Ítem</TableHead>
                       <TableHead className="text-xs text-right">Cant.</TableHead>
                       <TableHead className="text-xs">Freq.</TableHead>
@@ -418,7 +426,7 @@ export function CalculadoraAdminImport() {
                     {isLoading ? (
                       Array.from({ length: 5 }).map((_, i) => (
                         <TableRow key={`sk-${i}`}>
-                          <TableCell colSpan={11}>
+                          <TableCell colSpan={12}>
                             <Skeleton className="h-6 w-full" />
                           </TableCell>
                         </TableRow>
@@ -426,7 +434,7 @@ export function CalculadoraAdminImport() {
                     ) : rows.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={11}
+                          colSpan={12}
                           className="text-center text-sm text-muted-foreground py-10"
                         >
                           No hay temparios con los filtros actuales. Importe un Excel o ajuste la
@@ -448,6 +456,9 @@ export function CalculadoraAdminImport() {
                             <Badge variant="outline" className="text-[10px] font-normal">
                               {row.tipo_item}
                             </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {row.tipo_catalogo || '—'}
                           </TableCell>
                           <TableCell className="text-xs max-w-[180px] truncate" title={row.item}>
                             {row.item}

@@ -24,6 +24,8 @@ export interface TemparioMantenimiento {
   tiempo_horas: number;
   procedimiento?: string | null;
   avisos_claves?: string | null;
+  /** Subtipo Excel columna TipoItem (ej. Filtro) */
+  tipo_catalogo?: string | null;
   precio_unitario: number;
   tarifa_mano_obra_h: number;
   activo: boolean;

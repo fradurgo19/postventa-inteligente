@@ -16,6 +16,8 @@ La aplicación **no crea** las tablas automáticamente.
 | 7 | `schema/06_seed_ejemplo.sql` | Datos de ejemplo (opcional) |
 | 8 | `schema/07_auth_trigger.sql` | Trigger perfil al crear usuario Auth |
 | 9 | `schema/08_temparios_admin.sql` | Índice legacy_id + SELECT admin (temparios) |
+| 10 | `schema/09_seed_admin_user.sql` | Usuario admin@partequipos.com / password123 |
+| 11 | `schema/10_temparios_excel_columns.sql` | Columna tipo_catalogo (TipoItem del Excel) |
 
 ## Dónde ejecutar `supabase functions deploy`
 
@@ -63,7 +65,36 @@ Dashboard → Edge Functions → `send-maintenance-alerts` → **Schedules**:
 
 1. Habilitar Email/Password en Authentication → Providers
 2. Ejecutar `07_auth_trigger.sql`
-3. Crear usuario en Auth y actualizar `perfiles.rol` a `administrador` o `coordinador`
+3. Crear el administrador de pruebas con **una** de estas opciones:
+
+### Opción A — SQL (recomendada)
+
+Ejecutar en SQL Editor el archivo `schema/09_seed_admin_user.sql`.
+
+Credenciales:
+
+- Email: `admin@partequipos.com`
+- Password: `password123`
+- Rol en `perfiles`: `administrador`
+
+### Opción B — Dashboard
+
+1. Authentication → Users → **Add user** → Email / Password  
+   - Email: `admin@partequipos.com`  
+   - Password: `password123`  
+   - Marcar **Auto Confirm User**
+2. Luego en SQL Editor:
+
+```sql
+UPDATE public.perfiles
+SET rol = 'administrador',
+    nombre = 'Administrador PARTEQUIPOS',
+    activo = TRUE,
+    updated_at = NOW()
+WHERE lower(email) = lower('admin@partequipos.com');
+```
+
+Si el perfil aún no existe (sin trigger), créalo con el `id` del usuario en Authentication.
 
 ## Variables de entorno (frontend / Vercel)
 

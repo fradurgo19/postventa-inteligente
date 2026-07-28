@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { isSupabaseConfigured } from '@/lib/supabase/client';
 import { invokeImportExcel, type ImportModulo } from '@/services/import.service';
+import { importTempariosFromFile } from '@/services/tempario-import.service';
+import { useUserStore } from '@/store';
 
 export interface ExcelImportResult {
   fileName: string;
@@ -14,21 +16,22 @@ export interface ExcelImportResult {
   recordsError: number;
   duplicates: number;
   preview: string[];
+  errors?: Array<{ row: number; message: string }>;
 }
 
 interface ExcelImportPanelProps {
-  title: string;
-  description: string;
-  expectedColumns: string[];
-  modulo: ImportModulo;
-  onImport: (result: ExcelImportResult) => void | Promise<void>;
-  className?: string;
+  readonly title: string;
+  readonly description: string;
+  readonly expectedColumns: string[];
+  readonly modulo: ImportModulo;
+  readonly onImport: (result: ExcelImportResult) => void | Promise<void>;
+  readonly className?: string;
 }
 
 /**
  * Panel de importación Excel/CSV.
- * Con Supabase: invoca Edge Function import-excel (.xlsx, .xls, .csv).
- * Sin Supabase: simulación local (demo).
+ * Calculadora: parseo + upsert directo a temparios (cliente).
+ * Otros módulos: Edge Function import-excel.
  */
 export function ExcelImportPanel({
   title,
@@ -38,11 +41,13 @@ export function ExcelImportPanel({
   onImport,
   className,
 }: ExcelImportPanelProps) {
+  const { currentUser } = useUserStore();
   const [dragOver, setDragOver] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [processing, setProcessing] = useState(false);
   const [preview, setPreview] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [rowErrors, setRowErrors] = useState<Array<{ row: number; message: string }>>([]);
 
   const validExtensions = ['.xlsx', '.xls', '.csv'];
 
@@ -54,55 +59,65 @@ export function ExcelImportPanel({
   const processFile = useCallback(
     async (f: File) => {
       setError(null);
+      setRowErrors([]);
       setProcessing(true);
 
       try {
-        if (isSupabaseConfigured()) {
+        let recordsOk = 0;
+        let recordsError = 0;
+        let duplicates = 0;
+        let errors: Array<{ row: number; message: string }> = [];
+
+        if (modulo === 'calculadora') {
+          const response = await importTempariosFromFile(
+            f,
+            currentUser?.email ?? currentUser?.name ?? 'admin'
+          );
+          if (response.error && response.recordsOk === 0) {
+            throw new Error(response.error);
+          }
+          recordsOk = response.recordsOk;
+          recordsError = response.recordsError;
+          duplicates = response.duplicates;
+          errors = response.errors ?? [];
+        } else if (isSupabaseConfigured()) {
           const response = await invokeImportExcel(modulo, f);
-          setPreview([
-            `Archivo: ${f.name}`,
-            `Módulo: ${modulo}`,
-            `Registros OK: ${response.recordsOk}`,
-            `Errores: ${response.recordsError}`,
-            `Duplicados: ${response.duplicates}`,
-          ]);
-
-          await onImport({
-            fileName: f.name,
-            recordsOk: response.recordsOk,
-            recordsError: response.recordsError,
-            duplicates: response.duplicates,
-            preview: expectedColumns,
-          });
+          recordsOk = response.recordsOk;
+          recordsError = response.recordsError;
+          duplicates = response.duplicates;
+          errors = response.errors ?? [];
         } else {
-          await new Promise((r) => setTimeout(r, 1000));
-          const mockRows = Math.floor(20 + Math.random() * 180);
-          const mockErrors = Math.floor(Math.random() * 5);
-          const mockDuplicates = Math.floor(Math.random() * 8);
-
-          setPreview([
-            `Modo demo (sin Supabase): ${f.name}`,
-            `Columnas: ${expectedColumns.slice(0, 4).join(', ')}…`,
-            `Registros simulados: ${mockRows}`,
-            `Duplicados: ${mockDuplicates}`,
-            `Errores: ${mockErrors}`,
-          ]);
-
-          await onImport({
-            fileName: f.name,
-            recordsOk: mockRows - mockErrors,
-            recordsError: mockErrors,
-            duplicates: mockDuplicates,
-            preview: expectedColumns,
-          });
+          await new Promise((r) => setTimeout(r, 800));
+          recordsOk = 25;
+          recordsError = 0;
+          duplicates = 0;
         }
+
+        const previewLines = [
+          `Archivo: ${f.name}`,
+          `Módulo: ${modulo}`,
+          `Registros OK: ${recordsOk}`,
+          `Actualizados (ID existente): ${duplicates}`,
+          `Errores: ${recordsError}`,
+        ];
+        setPreview(previewLines);
+        setRowErrors(errors.slice(0, 8));
+
+        await onImport({
+          fileName: f.name,
+          recordsOk,
+          recordsError,
+          duplicates,
+          preview: expectedColumns,
+          errors,
+        });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error al importar');
       } finally {
         setProcessing(false);
       }
     },
-    [expectedColumns, modulo, onImport]
+    [currentUser?.email, currentUser?.name, expectedColumns, modulo, onImport]
   );
 
   const handleDrop = useCallback(
@@ -130,6 +145,7 @@ export function ExcelImportPanel({
     }
     setFile(f);
     void processFile(f);
+    e.target.value = '';
   };
 
   return (
@@ -160,9 +176,11 @@ export function ExcelImportPanel({
           ) : (
             <Upload className="h-8 w-8 mx-auto text-muted-foreground" />
           )}
-          <p className="mt-2 text-sm font-medium">Arrastre su archivo Excel o CSV aquí</p>
+          <p className="mt-2 text-sm font-medium">
+            {processing ? 'Importando temparios…' : 'Arrastre su archivo Excel o CSV aquí'}
+          </p>
           <p className="text-xs text-muted-foreground mt-1">
-            Formatos: .xlsx · .xls · .csv
+            Formatos: .xlsx · .xls · .csv — se insertan y actualizan registros en la BD
           </p>
           <label className="mt-4 inline-block">
             <input
@@ -170,6 +188,7 @@ export function ExcelImportPanel({
               accept=".xlsx,.xls,.csv"
               className="hidden"
               onChange={handleFileInput}
+              disabled={processing}
             />
             <Button type="button" variant="outline" size="sm" className="mt-2" asChild>
               <span>Seleccionar archivo</span>
@@ -178,9 +197,9 @@ export function ExcelImportPanel({
         </div>
 
         {error && (
-          <div className="flex items-center gap-2 text-xs text-destructive bg-destructive/10 p-3 rounded-lg">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            {error}
+          <div className="flex items-start gap-2 text-xs text-destructive bg-destructive/10 p-3 rounded-lg">
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+            <span>{error}</span>
           </div>
         )}
 
@@ -195,11 +214,24 @@ export function ExcelImportPanel({
                 {line}
               </p>
             ))}
+            {rowErrors.length > 0 && (
+              <div className="pt-2 border-t border-border/60 space-y-1">
+                <p className="text-xs font-medium text-amber-700">Detalle de errores (máx. 8):</p>
+                {rowErrors.map((err) => (
+                  <p
+                    key={`${err.row}-${err.message}`}
+                    className="text-[11px] text-muted-foreground font-mono"
+                  >
+                    Fila {err.row || '—'}: {err.message}
+                  </p>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
         <div className="text-[11px] text-muted-foreground border-t pt-3">
-          <strong>Columnas requeridas:</strong> {expectedColumns.join(' · ')}
+          <strong>Columnas:</strong> {expectedColumns.join(' · ')}
         </div>
       </CardContent>
     </Card>
