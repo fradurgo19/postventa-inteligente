@@ -1,14 +1,11 @@
 import type { TemparioTipoItem, MaintenanceFrequencyHours } from '@/types/database';
-import {
-  normalizeTipoItem,
-  resolveEffectiveTipoItem,
-} from '@/lib/calculadora/tempario-classify';
+import { resolveModelo2, modelo2ToTipoCatalogo } from '@/lib/calculadora/tempario-classify';
 
 const VALID_FREQ: MaintenanceFrequencyHours[] = [250, 1000, 2000, 4000, 5000];
 
 /**
  * Encabezados del Excel real TEMPARIOS (Power Apps / SharePoint).
- * Clasificación = columna Modelo2 (NO "Tipo de item").
+ * Clasificación = columna Modelo2 → BD tipo_item.
  * Cantidad = unidad; Cantidad (Galones) = cantidad numérica.
  */
 export const TEMPARIO_EXCEL_HEADERS = [
@@ -38,13 +35,14 @@ export const TEMPARIO_EXCEL_HEADERS = [
   'Modificado por',
 ] as const;
 
-export { normalizeTipoItem } from '@/lib/calculadora/tempario-classify';
+export { normalizeTipoItem, normalizeModelo2 } from '@/lib/calculadora/tempario-classify';
 
 export interface TemparioImportRow {
   legacy_id: number | null;
   marca: string;
   linea: string;
   modelo: string;
+  /** Valor Excel Modelo2 */
   tipo_item: TemparioTipoItem;
   tipo_catalogo: string | null;
   item: string;
@@ -249,8 +247,8 @@ function resolveUnidadCantidad(row: Record<string, string>): {
 /**
  * Mapea una fila del Excel TEMPARIOS al registro de BD.
  *
- * Excel Modelo2  → BD tipo_item      (Actividad | Repuesto | Fluido | Observacion)
- * Excel TipoItem → BD tipo_catalogo  (Filtro | Aceite | …) — solo detalle
+ * Excel Modelo2 → BD tipo_item  y  BD tipo_catalogo
+ *   Repuesto→Filtro | Fluido→Aceite | Actividad→Actividad | Observacion→Observacion
  */
 export function mapTemparioSheetRow(
   row: Record<string, string>,
@@ -259,12 +257,12 @@ export function mapTemparioSheetRow(
   const tipoRaw = getModelo2Tipo(row);
   if (!tipoRaw) {
     throw new Error(
-      'Falta Modelo2. Debe indicar Actividad, Repuesto, Fluido u Observacion (no usar TipoItem como tipo).'
+      'Falta Modelo2. Debe indicar Actividad, Repuesto, Fluido u Observacion.'
     );
   }
 
-  // Catálogo detalle del Excel (Filtro/Aceite); NUNCA sustituye a Modelo2
-  const tipoCatalogo = textOrNull(getField(row, 'TipoItem', 'tipo_item_catalogo', 'Tipo Item'));
+  const tipoItem = resolveModelo2(tipoRaw);
+  const tipoCatalogo = modelo2ToTipoCatalogo(tipoItem);
   const itemName = getField(row, 'Item', 'item', 'Nombre');
   const { unidad, cantidad } = resolveUnidadCantidad(row);
 
@@ -294,7 +292,7 @@ export function mapTemparioSheetRow(
     marca: getField(row, 'Marca', 'marca'),
     linea: getField(row, 'Linea', 'Línea', 'linea') || '',
     modelo: getField(row, 'Modelo', 'modelo'),
-    tipo_item: resolveEffectiveTipoItem(tipoRaw),
+    tipo_item: tipoItem,
     tipo_catalogo: tipoCatalogo,
     item: itemName,
     unidad_medida: unidad || 'Unidad',

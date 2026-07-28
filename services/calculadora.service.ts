@@ -6,7 +6,7 @@ import type {
   PreventiveQuoteResult,
 } from '@/types/database';
 import { buildPreventiveQuote, normalizeEquipKey } from '@/lib/calculadora/build-quote';
-import { resolveEffectiveTipoItem } from '@/lib/calculadora/tempario-classify';
+import { resolveModelo2 } from '@/lib/calculadora/tempario-classify';
 import {
   MOCK_TEMPARIOS,
   getMockMarcas,
@@ -24,7 +24,7 @@ function mapTemparioRow(row: Record<string, unknown>): TemparioMantenimiento {
     marca: String(row.marca ?? '').trim(),
     linea: row.linea as string | null,
     modelo: String(row.modelo ?? '').trim(),
-    tipo_item: resolveEffectiveTipoItem(String(row.tipo_item ?? 'Repuesto')),
+    tipo_item: resolveModelo2(String(row.tipo_item ?? row.modelo2 ?? 'Repuesto')),
     item,
     unidad_medida: String(row.unidad_medida ?? 'Unidad'),
     cantidad: Number(row.cantidad ?? 1),

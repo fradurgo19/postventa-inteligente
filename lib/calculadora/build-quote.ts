@@ -10,7 +10,7 @@ import {
   isActivityRow,
   isConsumableOrPartRow,
   isPartOnlyRow,
-  resolveEffectiveTipoItem,
+  resolveModelo2,
 } from '@/lib/calculadora/tempario-classify';
 
 /**
@@ -145,7 +145,7 @@ export function buildPreventiveQuote(
       unit: t.unidad_medida,
       unitPrice: 0,
       total: 0,
-      tipoItem: resolveEffectiveTipoItem(String(t.tipo_item)),
+      tipoItem: resolveModelo2(String(t.tipo_item)),
       tipoCatalogo: t.tipo_catalogo ?? null,
       frecuenciaHoras: Number(t.frecuencia_horas) as MaintenanceFrequencyHours,
       marca: t.marca,

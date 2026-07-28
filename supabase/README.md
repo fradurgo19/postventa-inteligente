@@ -17,14 +17,15 @@ La aplicación **no crea** las tablas automáticamente.
 | 8 | `schema/07_auth_trigger.sql` | Trigger perfil al crear usuario Auth |
 | 9 | `schema/08_temparios_admin.sql` | Índice legacy_id + SELECT admin (temparios) |
 | 10 | `schema/09_seed_admin_user.sql` | Usuario admin@partequipos.com / password123 |
-| 11 | `schema/10_temparios_excel_columns.sql` | Columna tipo_catalogo (TipoItem del Excel) |
+| 11 | `schema/10_temparios_excel_columns.sql` | Columna tipo_catalogo (derivado de Modelo2) |
 | 12 | `schema/11_temparios_upsert_legacy.sql` | UNIQUE legacy_id para upsert masivo |
 | 13 | `schema/12_temparios_filter_views.sql` | Vistas DISTINCT marca/modelo/tipo para filtros |
 | 14 | `schema/13_temparios_fluido_labor_rate.sql` | CHECK Fluido + default tarifa 110000 COP/h |
 | — | `schema/14_temparios_diagnose_tipos.sql` | Diagnóstico opcional: conteo tipos/frecuencias |
 | 15 | `schema/15_fix_frequency_matrix_2000.sql` | Matriz horómetro: 2000 h en 2000/4000/6000/8000 |
 | 16 | `schema/16_modelo2_tipo_observacion.sql` | CHECK tipo_item incluye Observacion (Modelo2) |
-| 17 | `schema/17_truncate_temparios_reimport.sql` | Vaciar temparios y reimportar Excel con Modelo2 |
+| 17 | `schema/17_truncate_temparios_reimport.sql` | Vaciar temparios antes de reimportar Excel |
+| 18 | `schema/18_rename_tipo_item_to_modelo2.sql` | tipo_item = Excel Modelo2 (revierte rename si aplica) |
 
 ## Dónde ejecutar `supabase functions deploy`
 

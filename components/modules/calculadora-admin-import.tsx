@@ -56,6 +56,7 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import type { TemparioMantenimiento, TemparioTipoItem, MaintenanceFrequencyHours } from '@/types/database';
+import { modelo2ToTipoCatalogo } from '@/lib/calculadora/tempario-classify';
 
 const TEMPARIO_COLUMNS = [
   'Marca',
@@ -228,6 +229,7 @@ export function CalculadoraAdminImport() {
           linea: form.linea.trim() || null,
           modelo: form.modelo.trim(),
           tipo_item: form.tipo_item,
+          tipo_catalogo: modelo2ToTipoCatalogo(form.tipo_item),
           item: form.item.trim(),
           unidad_medida: form.unidad_medida.trim() || 'Unidad',
           cantidad: Number(form.cantidad) || 1,
@@ -294,7 +296,7 @@ export function CalculadoraAdminImport() {
         <TabsContent value="importar" className="mt-4">
           <ExcelImportPanel
             title="Importar Temparios de Mantenimiento"
-            description="Importante: vacíe la tabla con schema/17_truncate_temparios_reimport.sql y luego cargue el Excel. Modelo2 → tipo_item (Actividad/Repuesto/Fluido/Observacion). TipoItem → tipo_catalogo (Filtro/Aceite). Cantidad = unidad; Cantidad (Galones) = cantidad; Tiempo = horas MO."
+            description="Excel Modelo2 → tipo_item y tipo_catalogo (Repuesto→Filtro, Fluido→Aceite, Actividad, Observacion). Vaciar con SQL 17, aplicar SQL 18 y reimportar."
             expectedColumns={TEMPARIO_COLUMNS}
             modulo="calculadora"
             onImport={async (result) => {
@@ -456,7 +458,7 @@ export function CalculadoraAdminImport() {
                       <TableHead className="text-xs">Marca</TableHead>
                       <TableHead className="text-xs">Línea</TableHead>
                       <TableHead className="text-xs">Modelo</TableHead>
-                      <TableHead className="text-xs">Modelo2</TableHead>
+                      <TableHead className="text-xs">Tipo ítem (Modelo2)</TableHead>
                       <TableHead className="text-xs">Catálogo</TableHead>
                       <TableHead className="text-xs">Ítem</TableHead>
                       <TableHead className="text-xs text-right">Cant.</TableHead>
@@ -604,7 +606,7 @@ export function CalculadoraAdminImport() {
               <Field label="Modelo *">
                 <Input value={form.modelo} onChange={(e) => setField('modelo', e.target.value)} />
               </Field>
-              <Field label="Modelo2 (tipo)">
+              <Field label="Tipo ítem (Modelo2)">
                   <Select
                   value={form.tipo_item}
                   onValueChange={(v) => setField('tipo_item', v as TemparioTipoItem)}

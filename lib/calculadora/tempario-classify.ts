@@ -1,8 +1,7 @@
 import type { TemparioTipoItem } from '@/types/database';
 
 /**
- * Normaliza el valor de Modelo2 (Excel) — única fuente de clasificación.
- * Valores: Repuesto | Fluido | Actividad | Observacion | Consumible | Servicio
+ * Normaliza valor Excel Modelo2 → tipo_item en BD.
  */
 export function normalizeTipoItem(raw: string): TemparioTipoItem {
   const v = raw.trim().toLowerCase();
@@ -16,17 +15,15 @@ export function normalizeTipoItem(raw: string): TemparioTipoItem {
   return 'Repuesto';
 }
 
-/** Alias: el tipo efectivo es solo el de Modelo2 / tipo_item en BD. */
-export function resolveEffectiveTipoItem(tipoRaw: string): TemparioTipoItem {
-  return normalizeTipoItem(tipoRaw || 'Repuesto');
-}
+export const normalizeModelo2 = normalizeTipoItem;
+export const resolveModelo2 = (raw: string) => normalizeTipoItem(raw || 'Repuesto');
+export const resolveEffectiveTipoItem = resolveModelo2;
 
 export function isActivityRow(row: { tipo_item: string }): boolean {
   const t = normalizeTipoItem(row.tipo_item);
   return t === 'Actividad' || t === 'Servicio';
 }
 
-/** Insumos: Fluido / Consumible / Repuesto (no Actividad ni Observacion). */
 export function isConsumableOrPartRow(row: { tipo_item: string }): boolean {
   const t = normalizeTipoItem(row.tipo_item);
   return t === 'Fluido' || t === 'Consumible' || t === 'Repuesto';
@@ -38,4 +35,29 @@ export function isPartOnlyRow(row: { tipo_item: string }): boolean {
 
 export function isFluidoRow(row: { tipo_item: string }): boolean {
   return normalizeTipoItem(row.tipo_item) === 'Fluido';
+}
+
+/**
+ * tipo_catalogo derivado de Modelo2 (columna primordial):
+ *   Repuesto     → Filtro
+ *   Fluido       → Aceite
+ *   Actividad    → Actividad
+ *   Observacion  → Observacion
+ */
+export function modelo2ToTipoCatalogo(modelo2: TemparioTipoItem | string): string {
+  const t = normalizeTipoItem(String(modelo2));
+  switch (t) {
+    case 'Repuesto':
+      return 'Filtro';
+    case 'Fluido':
+    case 'Consumible':
+      return 'Aceite';
+    case 'Actividad':
+    case 'Servicio':
+      return 'Actividad';
+    case 'Observacion':
+      return 'Observacion';
+    default:
+      return t;
+  }
 }

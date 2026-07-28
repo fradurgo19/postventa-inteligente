@@ -8,7 +8,7 @@ ALTER TABLE temparios_mantenimiento
   ADD COLUMN IF NOT EXISTS tipo_catalogo TEXT;
 
 COMMENT ON COLUMN temparios_mantenimiento.tipo_catalogo IS
-  'Subtipo del Excel (columna TipoItem), ej. Filtro, Aceite. Distinto de tipo_item.';
+  'Derivado de Modelo2: Repuesto→Filtro | Fluido→Aceite | Actividad | Observacion';
 
 COMMENT ON COLUMN temparios_mantenimiento.legacy_id IS
   'ID numérico del Excel de temparios (columna ID).';

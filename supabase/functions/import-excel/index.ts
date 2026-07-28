@@ -187,7 +187,13 @@ function mapTempario(row: Record<string, string>, createdBy: string) {
     tipo = tipoRaw;
   }
 
-  const tipoCatalogo = getField(row, 'TipoItem', 'tipo_catalogo') || null;
+  // tipo_catalogo desde Modelo2: Repuesto→Filtro, Fluido→Aceite, Actividad, Observacion
+  let tipoCatalogo = 'Filtro';
+  if (tipo === 'Fluido' || tipo === 'Consumible') tipoCatalogo = 'Aceite';
+  else if (tipo === 'Actividad' || tipo === 'Servicio') tipoCatalogo = 'Actividad';
+  else if (tipo === 'Observacion') tipoCatalogo = 'Observacion';
+  else if (tipo === 'Repuesto') tipoCatalogo = 'Filtro';
+
   const hasGalones = Object.keys(row).some((k) =>
     k.trim().toLowerCase().replace(/\s+/g, ' ').includes('cantidad (galones)')
   );

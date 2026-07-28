@@ -1,7 +1,7 @@
 /** Frecuencias de mantenimiento preventivo (horas) */
 export type MaintenanceFrequencyHours = 250 | 1000 | 2000 | 4000 | 5000;
 
-/** Incluye tipos del Excel real (columna Modelo2) */
+/** Valores válidos de tipo_item (= Excel Modelo2) */
 export type TemparioTipoItem =
   | 'Repuesto'
   | 'Consumible'
@@ -10,12 +10,16 @@ export type TemparioTipoItem =
   | 'Servicio'
   | 'Observacion';
 
+/** Alias: valor Excel Modelo2 */
+export type Modelo2Clasificacion = TemparioTipoItem;
+
 export interface TemparioMantenimiento {
   id: string;
   legacy_id?: number | null;
   marca: string;
   linea?: string | null;
   modelo: string;
+  /** Valor Excel columna Modelo2 */
   tipo_item: TemparioTipoItem;
   item: string;
   unidad_medida: string;
