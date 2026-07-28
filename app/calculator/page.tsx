@@ -489,11 +489,17 @@ export default function CalculatorPage() {
                 <Card>
                   <CardContent className="p-4">
                     <Tabs defaultValue="activities">
-                      <TabsList className="mb-4">
+                      <TabsList className="mb-4 h-auto flex-wrap gap-1">
                         <TabsTrigger value="activities" className="text-sm">
                           Actividades
                           <Badge variant="secondary" className="ml-1.5 text-xs font-normal">
                             {result.activities.length}
+                          </Badge>
+                        </TabsTrigger>
+                        <TabsTrigger value="fluids" className="text-sm">
+                          Fluidos
+                          <Badge variant="secondary" className="ml-1.5 text-xs font-normal">
+                            {result.fluids.length}
                           </Badge>
                         </TabsTrigger>
                         <TabsTrigger value="consumables" className="text-sm">
@@ -591,13 +597,103 @@ export default function CalculatorPage() {
                         </div>
                       </TabsContent>
 
+                      <TabsContent value="fluids" className="mt-0">
+                        <div className="overflow-x-auto">
+                          {result.fluids.length === 0 ? (
+                            <div className="py-6 text-center space-y-1">
+                              <p className="text-sm text-muted-foreground">
+                                No hay filas con tipo{' '}
+                                <span className="font-medium text-foreground">Fluido</span> para
+                                frecuencias {result.frecuenciasAplicadas.join(', ')} h.
+                              </p>
+                              {result.matchMeta && (
+                                <p className="text-xs text-muted-foreground">
+                                  Temparios en frecuencia: {result.matchMeta.tempariosFrecuencia}
+                                  {result.matchMeta.tiposEnEquipo.length > 0
+                                    ? ` · Tipos: ${result.matchMeta.tiposEnEquipo.join(', ')}`
+                                    : ''}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                  <TableHead className="text-right">Freq. (h)</TableHead>
+                                  <TableHead>Fluido</TableHead>
+                                  <TableHead className="text-right">Cant.</TableHead>
+                                  <TableHead>Unidad</TableHead>
+                                  <TableHead>Aceite homologado</TableHead>
+                                  <TableHead>Ref. genuina</TableHead>
+                                  <TableHead>REF SAP DISPEL</TableHead>
+                                  <TableHead>REF SAP original</TableHead>
+                                  <TableHead>Ref. Stal</TableHead>
+                                  <TableHead>Ref. Donaldson</TableHead>
+                                  <TableHead>Ref. Fleetguard</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {result.fluids.map((f, i) => (
+                                  <TableRow key={`fluid-${f.item}-${i}`}>
+                                    <TableCell className="text-right tabular-nums text-sm">
+                                      {f.frecuenciaHoras ?? '—'}
+                                    </TableCell>
+                                    <TableCell className="font-medium text-sm min-w-[12rem]">
+                                      <span className="block">{f.item}</span>
+                                      <span className="text-[11px] text-muted-foreground">
+                                        Modelo2: {f.tipoItem ?? 'Fluido'}
+                                        {f.tipoCatalogo
+                                          ? ` · Catálogo: ${f.tipoCatalogo}`
+                                          : ''}
+                                      </span>
+                                    </TableCell>
+                                    <TableCell className="text-right tabular-nums">
+                                      {f.quantity}
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground text-sm">
+                                      {f.unit}
+                                    </TableCell>
+                                    <TableCell className="text-xs whitespace-nowrap">
+                                      {refCell(f.aceiteHomologado)}
+                                    </TableCell>
+                                    <TableCell className="text-xs font-mono whitespace-nowrap">
+                                      {refCell(f.referenciaGenuina)}
+                                    </TableCell>
+                                    <TableCell className="text-xs font-mono whitespace-nowrap">
+                                      {refCell(f.refSapDispel)}
+                                    </TableCell>
+                                    <TableCell className="text-xs font-mono whitespace-nowrap">
+                                      {refCell(f.refSapOriginal)}
+                                    </TableCell>
+                                    <TableCell className="text-xs font-mono whitespace-nowrap">
+                                      {refCell(f.referenciaStal)}
+                                    </TableCell>
+                                    <TableCell className="text-xs font-mono whitespace-nowrap">
+                                      {refCell(f.referenciaDonaldson)}
+                                    </TableCell>
+                                    <TableCell className="text-xs font-mono whitespace-nowrap">
+                                      {refCell(f.referenciaFleetguard)}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          )}
+                          <p className="text-xs text-muted-foreground mt-3">
+                            Fluidos (Modelo2 = Fluido / catálogo Aceite) según marca, modelo y
+                            frecuencias del horómetro. Sin precios (SAP no conectado).
+                          </p>
+                        </div>
+                      </TabsContent>
+
                       <TabsContent value="consumables" className="mt-0">
                         <div className="overflow-x-auto">
                           {result.consumables.length === 0 ? (
                             <div className="py-6 text-center space-y-1">
                               <p className="text-sm text-muted-foreground">
-                                No hay consumibles (Fluido / Repuesto / filtro-aceite) para
-                                frecuencias {result.frecuenciasAplicadas.join(', ')} h.
+                                No hay filas con tipo{' '}
+                                <span className="font-medium text-foreground">Consumible</span>{' '}
+                                para frecuencias {result.frecuenciasAplicadas.join(', ')} h.
                               </p>
                               {result.matchMeta && (
                                 <p className="text-xs text-muted-foreground">
@@ -626,7 +722,7 @@ export default function CalculatorPage() {
                               </TableHeader>
                               <TableBody>
                                 {result.consumables.map((c, i) => (
-                                  <TableRow key={`${c.item}-${i}`}>
+                                  <TableRow key={`cons-${c.item}-${i}`}>
                                     <TableCell className="text-right tabular-nums text-sm">
                                       {c.frecuenciaHoras ?? '—'}
                                     </TableCell>
@@ -669,8 +765,8 @@ export default function CalculatorPage() {
                             </Table>
                           )}
                           <p className="text-xs text-muted-foreground mt-3">
-                            Insumos (aceite, filtro, etc.) según marca, modelo y frecuencias del
-                            horómetro. Sin precios (SAP no conectado).
+                            Consumibles (Modelo2 = Consumible). Los fluidos y repuestos están en
+                            sus pestañas. Sin precios (SAP no conectado).
                           </p>
                         </div>
                       </TabsContent>
@@ -782,7 +878,7 @@ export default function CalculatorPage() {
                       </div>
                     ))}
                     <p className="text-[11px] text-muted-foreground pt-1">
-                      Consumibles y repuestos: solo listado (sin precio SAP).
+                      Fluidos, consumibles y repuestos: solo listado (sin precio SAP).
                     </p>
                   </div>
                   <Separator className="my-3" />

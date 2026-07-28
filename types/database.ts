@@ -102,7 +102,12 @@ export interface PreventiveConsumableLine {
   referenciaStal?: string;
   referenciaDonaldson?: string;
   referenciaFleetguard?: string;
+  /** Aceite homologado (relevante en Fluidos) */
+  aceiteHomologado?: string;
 }
+
+/** Línea de Fluido (Modelo2 = Fluido) — mismo shape que consumible */
+export type PreventiveFluidLine = PreventiveConsumableLine;
 
 export interface PreventivePartLine {
   sapCode: string;
@@ -129,7 +134,11 @@ export interface PreventiveQuoteResult {
   /** Tarifa COP/h usada (110000) */
   laborRate: number;
   activities: PreventiveActivityLine[];
+  /** Modelo2 = Fluido */
+  fluids: PreventiveFluidLine[];
+  /** Modelo2 = Consumible */
   consumables: PreventiveConsumableLine[];
+  /** Modelo2 = Repuesto */
   parts: PreventivePartLine[];
   /** Diagnóstico de cruce tempario ↔ filtros (UI vacía) */
   matchMeta?: {
@@ -139,6 +148,7 @@ export interface PreventiveQuoteResult {
   };
   costs: {
     labor: number;
+    fluids: number;
     consumables: number;
     parts: number;
     travel: number;

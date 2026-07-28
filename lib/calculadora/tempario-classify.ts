@@ -24,9 +24,15 @@ export function isActivityRow(row: { tipo_item: string }): boolean {
   return t === 'Actividad' || t === 'Servicio';
 }
 
+/** Insumos amplios (legacy): Fluido + Consumible + Repuesto */
 export function isConsumableOrPartRow(row: { tipo_item: string }): boolean {
   const t = normalizeTipoItem(row.tipo_item);
   return t === 'Fluido' || t === 'Consumible' || t === 'Repuesto';
+}
+
+/** Solo Consumible (pestaña Consumibles; excluye Fluido y Repuesto) */
+export function isConsumableOnlyRow(row: { tipo_item: string }): boolean {
+  return normalizeTipoItem(row.tipo_item) === 'Consumible';
 }
 
 export function isPartOnlyRow(row: { tipo_item: string }): boolean {

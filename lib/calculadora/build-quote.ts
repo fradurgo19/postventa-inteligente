@@ -2,13 +2,15 @@ import type {
   TemparioMantenimiento,
   PreventiveQuoteInput,
   PreventiveQuoteResult,
+  PreventiveConsumableLine,
   MaintenanceFrequencyHours,
 } from '@/types/database';
 import { getFrecuenciasPorHorometro } from '@/lib/maintenance-frequency';
 import { calcularCostoDesplazamiento, calcularIva, DEFAULT_TARIFA } from '@/lib/travel-cost';
 import {
   isActivityRow,
-  isConsumableOrPartRow,
+  isConsumableOnlyRow,
+  isFluidoRow,
   isPartOnlyRow,
   resolveModelo2,
 } from '@/lib/calculadora/tempario-classify';
@@ -30,11 +32,15 @@ export function isActivityTipo(tipo: string): boolean {
 }
 
 export function isConsumableRow(t: { tipo_item: string; item: string }): boolean {
-  return isConsumableOrPartRow(t);
+  return isConsumableOnlyRow(t);
 }
 
 export function isPartRow(t: { tipo_item: string; item: string }): boolean {
   return isPartOnlyRow(t);
+}
+
+export function isFluidRow(t: { tipo_item: string; item: string }): boolean {
+  return isFluidoRow(t);
 }
 
 export function matchesMarcaModelo(
@@ -87,6 +93,34 @@ function textOrDash(value: string | null | undefined): string {
   return v || '—';
 }
 
+function resolveQuantity(cantidad: number): number {
+  const qty = Number(cantidad);
+  if (!Number.isFinite(qty)) return 1;
+  return qty;
+}
+
+function mapInsumoLine(t: TemparioMantenimiento): PreventiveConsumableLine {
+  return {
+    item: t.item,
+    quantity: resolveQuantity(t.cantidad),
+    unit: t.unidad_medida,
+    unitPrice: 0,
+    total: 0,
+    tipoItem: resolveModelo2(String(t.tipo_item)),
+    tipoCatalogo: t.tipo_catalogo ?? null,
+    frecuenciaHoras: Number(t.frecuencia_horas) as MaintenanceFrequencyHours,
+    marca: t.marca,
+    modelo: t.modelo,
+    referenciaGenuina: textOrDash(t.referencia_genuina),
+    refSapDispel: textOrDash(t.ref_sap_dispel),
+    refSapOriginal: textOrDash(t.ref_sap_original),
+    referenciaStal: textOrDash(t.referencia_stal),
+    referenciaDonaldson: textOrDash(t.referencia_donaldson),
+    referenciaFleetguard: textOrDash(t.referencia_fleetguard),
+    aceiteHomologado: textOrDash(t.aceite_homologado),
+  };
+}
+
 function randomSerial(marca: string): string {
   const prefix = marca.slice(0, 3).toUpperCase();
   return `${prefix}${Math.floor(100000 + Math.random() * 900000)}`;
@@ -95,9 +129,10 @@ function randomSerial(marca: string): string {
 /**
  * Cotización preventiva — Power Apps / Excel Modelo2.
  *
- * Actividades: tipo Actividad según Modelo2
- * Mano de obra: Sum(Tiempo) * 110000
- * Consumibles: Fluido | Repuesto | Consumible (insumos)
+ * Actividades: Modelo2 Actividad|Servicio → Sum(Tiempo)*110000
+ * Fluidos: Modelo2 Fluido
+ * Consumibles: Modelo2 Consumible
+ * Repuestos: Modelo2 Repuesto
  * Observacion: excluida de tabs de cálculo
  */
 export function buildPreventiveQuote(
@@ -136,42 +171,31 @@ export function buildPreventiveQuote(
     };
   });
 
-  const consumableRows = filtered.filter(isConsumableRow).slice().sort(sortByTipoThenItem);
-  const consumables = consumableRows.map((t) => {
-    const qty = Number(t.cantidad);
-    return {
-      item: t.item,
-      quantity: Number.isFinite(qty) && qty > 0 ? qty : qty === 0 ? 0 : 1,
-      unit: t.unidad_medida,
-      unitPrice: 0,
-      total: 0,
-      tipoItem: resolveModelo2(String(t.tipo_item)),
-      tipoCatalogo: t.tipo_catalogo ?? null,
-      frecuenciaHoras: Number(t.frecuencia_horas) as MaintenanceFrequencyHours,
-      marca: t.marca,
-      modelo: t.modelo,
-      referenciaGenuina: textOrDash(t.referencia_genuina),
-      refSapDispel: textOrDash(t.ref_sap_dispel),
-      refSapOriginal: textOrDash(t.ref_sap_original),
-      referenciaStal: textOrDash(t.referencia_stal),
-      referenciaDonaldson: textOrDash(t.referencia_donaldson),
-      referenciaFleetguard: textOrDash(t.referencia_fleetguard),
-    };
-  });
+  const fluids = filtered
+    .filter(isFluidoRow)
+    .slice()
+    .sort(sortByTipoThenItem)
+    .map(mapInsumoLine);
 
-  const partRows = filtered.filter(isPartRow).slice().sort(sortByTipoThenItem);
-  const parts = partRows.map((t) => {
-    const qty = Number(t.cantidad);
-    return {
+  const consumables = filtered
+    .filter(isConsumableOnlyRow)
+    .slice()
+    .sort(sortByTipoThenItem)
+    .map(mapInsumoLine);
+
+  const parts = filtered
+    .filter(isPartOnlyRow)
+    .slice()
+    .sort(sortByTipoThenItem)
+    .map((t) => ({
       sapCode: resolveCodigoSamm(t),
       description: t.item,
-      quantity: Number.isFinite(qty) && qty > 0 ? qty : qty === 0 ? 0 : 1,
+      quantity: resolveQuantity(t.cantidad),
       unitPrice: 0,
       total: 0,
       unit: t.unidad_medida,
       frecuenciaHoras: Number(t.frecuencia_horas) as MaintenanceFrequencyHours,
-    };
-  });
+    }));
 
   const travelCost = calcularCostoDesplazamiento(input.kmTrayecto, input.horasTrayecto);
   const subtotal = laborTotal + travelCost;
@@ -193,6 +217,7 @@ export function buildPreventiveQuote(
     laborHoursTotal,
     laborRate: TARIFA_MANO_OBRA_COP,
     activities,
+    fluids,
     consumables,
     parts,
     matchMeta: {
@@ -202,6 +227,7 @@ export function buildPreventiveQuote(
     },
     costs: {
       labor: laborTotal,
+      fluids: 0,
       consumables: 0,
       parts: 0,
       travel: travelCost,
