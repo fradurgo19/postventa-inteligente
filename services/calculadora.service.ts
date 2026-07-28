@@ -5,7 +5,8 @@ import type {
   PreventiveQuoteInput,
   PreventiveQuoteResult,
 } from '@/types/database';
-import { buildPreventiveQuote } from '@/lib/calculadora/build-quote';
+import { buildPreventiveQuote, normalizeEquipKey } from '@/lib/calculadora/build-quote';
+import { normalizeTipoItem } from '@/lib/calculadora/tempario-import';
 import {
   MOCK_TEMPARIOS,
   getMockMarcas,
@@ -19,11 +20,11 @@ function mapTemparioRow(row: Record<string, unknown>): TemparioMantenimiento {
   return {
     id: String(row.id),
     legacy_id: row.legacy_id as number | null,
-    marca: String(row.marca),
+    marca: String(row.marca ?? '').trim(),
     linea: row.linea as string | null,
-    modelo: String(row.modelo),
-    tipo_item: row.tipo_item as TemparioMantenimiento['tipo_item'],
-    item: String(row.item),
+    modelo: String(row.modelo ?? '').trim(),
+    tipo_item: normalizeTipoItem(String(row.tipo_item ?? 'Repuesto')),
+    item: String(row.item ?? ''),
     unidad_medida: String(row.unidad_medida ?? 'Unidad'),
     cantidad: Number(row.cantidad ?? 1),
     frecuencia_horas: Number(row.frecuencia_horas) as TemparioMantenimiento['frecuencia_horas'],
@@ -46,6 +47,10 @@ function mapTemparioRow(row: Record<string, unknown>): TemparioMantenimiento {
     created_by: (row.created_by as string) ?? null,
     updated_by: (row.updated_by as string) ?? null,
   };
+}
+
+function escapeIlike(value: string): string {
+  return value.trim().replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
 
 export interface TempariosAdminQuery {
@@ -192,12 +197,14 @@ export async function fetchTiposItem(): Promise<string[]> {
 }
 
 export async function fetchTemparios(marca: string, modelo: string): Promise<TemparioMantenimiento[]> {
+  if (!marca?.trim() || !modelo?.trim()) return [];
+
   if (!isSupabaseConfigured()) {
     return mockStore.filter(
       (t) =>
         t.activo &&
-        t.marca.toLowerCase() === marca.toLowerCase() &&
-        t.modelo.toLowerCase() === modelo.toLowerCase()
+        normalizeEquipKey(t.marca) === normalizeEquipKey(marca) &&
+        normalizeEquipKey(t.modelo) === normalizeEquipKey(modelo)
     );
   }
 
@@ -205,14 +212,16 @@ export async function fetchTemparios(marca: string, modelo: string): Promise<Tem
   const pageSize = 1000;
   const rows: TemparioMantenimiento[] = [];
   let from = 0;
+  const marcaPattern = escapeIlike(marca);
+  const modeloPattern = escapeIlike(modelo);
 
+  // No filtrar solo activo=true: filas con activo NULL quedarían ocultas
   for (;;) {
     const { data, error } = await supabase
       .from('temparios_mantenimiento')
       .select('*')
-      .eq('activo', true)
-      .eq('marca', marca)
-      .eq('modelo', modelo)
+      .ilike('marca', marcaPattern)
+      .ilike('modelo', modeloPattern)
       .range(from, from + pageSize - 1);
 
     if (error) {
@@ -224,7 +233,13 @@ export async function fetchTemparios(marca: string, modelo: string): Promise<Tem
     from += pageSize;
   }
 
-  return rows;
+  // Refinar en cliente (espacios / guiones en modelo) + excluir inactivos explícitos
+  return rows.filter(
+    (t) =>
+      t.activo !== false &&
+      normalizeEquipKey(t.marca) === normalizeEquipKey(marca) &&
+      normalizeEquipKey(t.modelo) === normalizeEquipKey(modelo)
+  );
 }
 
 function filterMockAdmin(query: TempariosAdminQuery): TemparioMantenimiento[] {

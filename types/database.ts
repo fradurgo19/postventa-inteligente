@@ -72,6 +72,10 @@ export interface PreventiveActivityLine {
   consumables: number;
   subtotal: number;
   frecuenciaHoras?: MaintenanceFrequencyHours;
+  marca?: string;
+  modelo?: string;
+  /** Código SAMM / referencia de catálogo */
+  codigoSamm?: string;
 }
 
 export interface PreventiveConsumableLine {
@@ -84,6 +88,8 @@ export interface PreventiveConsumableLine {
   tipoItem?: TemparioTipoItem | string;
   referencia?: string | null;
   frecuenciaHoras?: MaintenanceFrequencyHours;
+  marca?: string;
+  modelo?: string;
 }
 
 export interface PreventivePartLine {
@@ -113,6 +119,12 @@ export interface PreventiveQuoteResult {
   activities: PreventiveActivityLine[];
   consumables: PreventiveConsumableLine[];
   parts: PreventivePartLine[];
+  /** Diagnóstico de cruce tempario ↔ filtros (UI vacía) */
+  matchMeta?: {
+    tempariosEquipo: number;
+    tempariosFrecuencia: number;
+    tiposEnEquipo: string[];
+  };
   costs: {
     labor: number;
     consumables: number;

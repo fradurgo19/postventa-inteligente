@@ -505,17 +505,32 @@ export default function CalculatorPage() {
                       <TabsContent value="activities" className="mt-0">
                         <div className="overflow-x-auto">
                           {result.activities.length === 0 ? (
-                            <p className="text-sm text-muted-foreground py-6 text-center">
-                              No hay actividades (tipo Actividad/Servicio) en temparios para esta
-                              marca, modelo y frecuencias aplicadas.
-                            </p>
+                            <div className="py-6 text-center space-y-1">
+                              <p className="text-sm text-muted-foreground">
+                                No hay filas con tipo{' '}
+                                <span className="font-medium text-foreground">Actividad</span> para
+                                esta marca, modelo y frecuencias (
+                                {result.frecuenciasAplicadas.join(', ')} h).
+                              </p>
+                              {result.matchMeta && (
+                                <p className="text-xs text-muted-foreground">
+                                  Temparios equipo: {result.matchMeta.tempariosEquipo} · En
+                                  frecuencia: {result.matchMeta.tempariosFrecuencia}
+                                  {result.matchMeta.tiposEnEquipo.length > 0
+                                    ? ` · Tipos en BD: ${result.matchMeta.tiposEnEquipo.join(', ')}`
+                                    : ' · Sin registros en temparios para esta marca/modelo'}
+                                </p>
+                              )}
+                            </div>
                           ) : (
                             <Table>
                               <TableHeader>
                                 <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                  <TableHead className="text-right">Frecuencia</TableHead>
+                                  <TableHead>Marca</TableHead>
+                                  <TableHead>Modelo</TableHead>
                                   <TableHead>Actividad</TableHead>
-                                  <TableHead>Descripción</TableHead>
-                                  <TableHead className="text-right">Freq. (h)</TableHead>
+                                  <TableHead>Código SAMM</TableHead>
                                   <TableHead className="text-right">Tiempo (h)</TableHead>
                                   <TableHead className="text-right">Mano de obra</TableHead>
                                 </TableRow>
@@ -523,14 +538,22 @@ export default function CalculatorPage() {
                               <TableBody>
                                 {result.activities.map((act) => (
                                   <TableRow key={act.id}>
-                                    <TableCell className="font-medium text-sm whitespace-nowrap">
-                                      {act.activity}
-                                    </TableCell>
-                                    <TableCell className="text-xs text-muted-foreground">
-                                      {act.description || '—'}
-                                    </TableCell>
                                     <TableCell className="text-sm text-right tabular-nums">
                                       {act.frecuenciaHoras ?? '—'}
+                                    </TableCell>
+                                    <TableCell className="text-sm whitespace-nowrap">
+                                      {act.marca ?? result.brand}
+                                    </TableCell>
+                                    <TableCell className="text-sm whitespace-nowrap">
+                                      {act.modelo ?? result.model}
+                                    </TableCell>
+                                    <TableCell className="font-medium text-sm">
+                                      {act.activity}
+                                    </TableCell>
+                                    <TableCell>
+                                      <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
+                                        {act.codigoSamm || '—'}
+                                      </code>
                                     </TableCell>
                                     <TableCell className="text-sm text-right tabular-nums">
                                       {act.laborHours.toFixed(2)}
@@ -541,11 +564,10 @@ export default function CalculatorPage() {
                                   </TableRow>
                                 ))}
                                 <TableRow className="bg-muted/30">
-                                  <TableCell colSpan={3} className="font-semibold text-sm">
+                                  <TableCell colSpan={5} className="font-semibold text-sm">
                                     Total mano de obra
                                     <span className="ml-2 font-normal text-muted-foreground">
-                                      ({result.laborHoursTotal.toFixed(2)} h ×{' '}
-                                      {formatCOP(result.laborRate)}/h)
+                                      (Sum tiempo × {formatCOP(result.laborRate)}/h)
                                     </span>
                                   </TableCell>
                                   <TableCell className="text-right font-semibold tabular-nums">
@@ -564,18 +586,30 @@ export default function CalculatorPage() {
                       <TabsContent value="consumables" className="mt-0">
                         <div className="overflow-x-auto">
                           {result.consumables.length === 0 ? (
-                            <p className="text-sm text-muted-foreground py-6 text-center">
-                              No hay consumibles/fluidos en temparios para esta selección. Los
-                              precios SAP no están disponibles aún.
-                            </p>
+                            <div className="py-6 text-center space-y-1">
+                              <p className="text-sm text-muted-foreground">
+                                No hay consumibles (Fluido / Consumible) para esta marca, modelo y
+                                frecuencias ({result.frecuenciasAplicadas.join(', ')} h).
+                              </p>
+                              {result.matchMeta && (
+                                <p className="text-xs text-muted-foreground">
+                                  Temparios en frecuencia: {result.matchMeta.tempariosFrecuencia}
+                                  {result.matchMeta.tiposEnEquipo.length > 0
+                                    ? ` · Tipos: ${result.matchMeta.tiposEnEquipo.join(', ')}`
+                                    : ''}
+                                </p>
+                              )}
+                            </div>
                           ) : (
                             <Table>
                               <TableHeader>
                                 <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                  <TableHead className="text-right">Frecuencia</TableHead>
+                                  <TableHead>Marca</TableHead>
+                                  <TableHead>Modelo</TableHead>
                                   <TableHead>Tipo</TableHead>
                                   <TableHead>Ítem</TableHead>
-                                  <TableHead>Referencia</TableHead>
-                                  <TableHead className="text-right">Freq. (h)</TableHead>
+                                  <TableHead>Código SAMM</TableHead>
                                   <TableHead className="text-right">Cant.</TableHead>
                                   <TableHead>Unidad</TableHead>
                                 </TableRow>
@@ -583,15 +617,21 @@ export default function CalculatorPage() {
                               <TableBody>
                                 {result.consumables.map((c, i) => (
                                   <TableRow key={`${c.item}-${i}`}>
+                                    <TableCell className="text-right tabular-nums text-sm">
+                                      {c.frecuenciaHoras ?? '—'}
+                                    </TableCell>
+                                    <TableCell className="text-sm whitespace-nowrap">
+                                      {c.marca ?? result.brand}
+                                    </TableCell>
+                                    <TableCell className="text-sm whitespace-nowrap">
+                                      {c.modelo ?? result.model}
+                                    </TableCell>
                                     <TableCell className="text-xs text-muted-foreground">
                                       {c.tipoItem ?? 'Fluido'}
                                     </TableCell>
                                     <TableCell className="font-medium text-sm">{c.item}</TableCell>
                                     <TableCell className="text-xs font-mono">
                                       {c.referencia || '—'}
-                                    </TableCell>
-                                    <TableCell className="text-right tabular-nums text-sm">
-                                      {c.frecuenciaHoras ?? '—'}
                                     </TableCell>
                                     <TableCell className="text-right tabular-nums">
                                       {c.quantity}
@@ -603,8 +643,7 @@ export default function CalculatorPage() {
                             </Table>
                           )}
                           <p className="text-xs text-muted-foreground mt-3">
-                            Listado desde temparios (Fluido / Consumible). Valores monetarios
-                            omitidos: sin integración SAP.
+                            Listado temparios (Fluido / Consumible). Sin precios (SAP no conectado).
                           </p>
                         </div>
                       </TabsContent>
