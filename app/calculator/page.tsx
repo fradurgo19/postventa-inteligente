@@ -560,12 +560,6 @@ export default function CalculatorPage() {
                             {result.fluids.length}
                           </Badge>
                         </TabsTrigger>
-                        <TabsTrigger value="consumables" className="text-sm">
-                          Consumibles
-                          <Badge variant="secondary" className="ml-1.5 text-xs font-normal">
-                            {result.consumables.length}
-                          </Badge>
-                        </TabsTrigger>
                         <TabsTrigger value="parts" className="text-sm">
                           Repuestos
                           <Badge variant="secondary" className="ml-1.5 text-xs font-normal">
@@ -744,91 +738,6 @@ export default function CalculatorPage() {
                         </div>
                       </TabsContent>
 
-                      <TabsContent value="consumables" className="mt-0">
-                        <div className="overflow-x-auto">
-                          {result.consumables.length === 0 ? (
-                            <div className="py-6 text-center space-y-1">
-                              <p className="text-sm text-muted-foreground">
-                                No hay filas con tipo{' '}
-                                <span className="font-medium text-foreground">Consumible</span>{' '}
-                                para frecuencias {result.frecuenciasAplicadas.join(', ')} h.
-                              </p>
-                              {result.matchMeta && (
-                                <p className="text-xs text-muted-foreground">
-                                  Temparios en frecuencia: {result.matchMeta.tempariosFrecuencia}
-                                  {result.matchMeta.tiposEnEquipo.length > 0
-                                    ? ` · Tipos: ${result.matchMeta.tiposEnEquipo.join(', ')}`
-                                    : ''}
-                                </p>
-                              )}
-                            </div>
-                          ) : (
-                            <Table>
-                              <TableHeader>
-                                <TableRow className="bg-muted/30 hover:bg-muted/30">
-                                  <TableHead className="text-right">Freq. (h)</TableHead>
-                                  <TableHead>Consumible</TableHead>
-                                  <TableHead className="text-right">Cant.</TableHead>
-                                  <TableHead>Unidad</TableHead>
-                                  <TableHead>Ref. genuina</TableHead>
-                                  <TableHead>REF SAP DISPEL</TableHead>
-                                  <TableHead>REF SAP original</TableHead>
-                                  <TableHead>Ref. Stal</TableHead>
-                                  <TableHead>Ref. Donaldson</TableHead>
-                                  <TableHead>Ref. Fleetguard</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {result.consumables.map((c, i) => (
-                                  <TableRow key={`cons-${c.item}-${i}`}>
-                                    <TableCell className="text-right tabular-nums text-sm">
-                                      {c.frecuenciaHoras ?? '—'}
-                                    </TableCell>
-                                    <TableCell className="font-medium text-sm min-w-[12rem]">
-                                      <span className="block">{c.item}</span>
-                                      <span className="text-[11px] text-muted-foreground">
-                                        Modelo2: {c.tipoItem ?? '—'}
-                                        {c.tipoCatalogo
-                                          ? ` · Catálogo: ${c.tipoCatalogo}`
-                                          : ''}
-                                      </span>
-                                    </TableCell>
-                                    <TableCell className="text-right tabular-nums">
-                                      {c.quantity}
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground text-sm">
-                                      {c.unit}
-                                    </TableCell>
-                                    <TableCell className="text-xs font-mono whitespace-nowrap">
-                                      {refCell(c.referenciaGenuina)}
-                                    </TableCell>
-                                    <TableCell className="text-xs font-mono whitespace-nowrap">
-                                      {refCell(c.refSapDispel)}
-                                    </TableCell>
-                                    <TableCell className="text-xs font-mono whitespace-nowrap">
-                                      {refCell(c.refSapOriginal)}
-                                    </TableCell>
-                                    <TableCell className="text-xs font-mono whitespace-nowrap">
-                                      {refCell(c.referenciaStal)}
-                                    </TableCell>
-                                    <TableCell className="text-xs font-mono whitespace-nowrap">
-                                      {refCell(c.referenciaDonaldson)}
-                                    </TableCell>
-                                    <TableCell className="text-xs font-mono whitespace-nowrap">
-                                      {refCell(c.referenciaFleetguard)}
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          )}
-                          <p className="text-xs text-muted-foreground mt-3">
-                            Consumibles (Modelo2 = Consumible). Los fluidos y repuestos están en
-                            sus pestañas. Sin precios (SAP no conectado).
-                          </p>
-                        </div>
-                      </TabsContent>
-
                       <TabsContent value="parts" className="mt-0">
                         <div className="overflow-x-auto">
                           {result.parts.length === 0 ? (
@@ -840,9 +749,9 @@ export default function CalculatorPage() {
                             <Table>
                               <TableHeader>
                                 <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                  <TableHead className="text-right">Freq. (h)</TableHead>
                                   <TableHead>Código / Ref.</TableHead>
                                   <TableHead>Descripción</TableHead>
-                                  <TableHead className="text-right">Freq. (h)</TableHead>
                                   <TableHead className="text-right">Cant.</TableHead>
                                   <TableHead>Unidad</TableHead>
                                 </TableRow>
@@ -850,6 +759,9 @@ export default function CalculatorPage() {
                               <TableBody>
                                 {result.parts.map((p, i) => (
                                   <TableRow key={`${p.sapCode}-${i}`}>
+                                    <TableCell className="text-right tabular-nums text-sm">
+                                      {p.frecuenciaHoras ?? '—'}
+                                    </TableCell>
                                     <TableCell>
                                       <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
                                         {p.sapCode}
@@ -857,9 +769,6 @@ export default function CalculatorPage() {
                                     </TableCell>
                                     <TableCell className="font-medium text-sm">
                                       {p.description}
-                                    </TableCell>
-                                    <TableCell className="text-right tabular-nums text-sm">
-                                      {p.frecuenciaHoras ?? '—'}
                                     </TableCell>
                                     <TableCell className="text-right tabular-nums">
                                       {p.quantity}
@@ -936,7 +845,7 @@ export default function CalculatorPage() {
                       </div>
                     ))}
                     <p className="text-[11px] text-muted-foreground pt-1">
-                      Fluidos, consumibles y repuestos: solo listado (sin precio SAP).
+                      Fluidos y repuestos: solo listado (sin precio SAP).
                     </p>
                   </div>
                   <Separator className="my-3" />

@@ -310,9 +310,15 @@ export async function fetchTempariosAdmin(
     q = q.eq('tipo_item', query.tipo);
   }
   if (query.search?.trim()) {
-    const s = query.search.trim();
+    const s = escapeIlike(query.search);
     q = q.or(
-      `item.ilike.%${s}%,referencia_genuina.ilike.%${s}%,ref_sap_original.ilike.%${s}%,ref_sap_dispel.ilike.%${s}%`
+      [
+        `item.ilike.%${s}%`,
+        `modelo.ilike.%${s}%`,
+        `referencia_genuina.ilike.%${s}%`,
+        `ref_sap_original.ilike.%${s}%`,
+        `ref_sap_dispel.ilike.%${s}%`,
+      ].join(',')
     );
   }
 

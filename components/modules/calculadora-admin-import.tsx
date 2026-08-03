@@ -361,8 +361,8 @@ export function CalculadoraAdminImport() {
                           setPage(1);
                         }
                       }}
-                      placeholder="Buscar ítem / ref…"
-                      className="h-8 pl-8 w-44 text-sm"
+                      placeholder="Ítem, modelo o ref…"
+                      className="h-8 pl-8 w-52 text-sm"
                     />
                   </div>
                   <Button
