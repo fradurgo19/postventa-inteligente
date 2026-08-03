@@ -27,6 +27,7 @@ La aplicación **no crea** las tablas automáticamente.
 | 17 | `schema/17_truncate_temparios_reimport.sql` | Vaciar temparios antes de reimportar Excel |
 | 18 | `schema/18_rename_tipo_item_to_modelo2.sql` | tipo_item = Excel Modelo2 (revierte rename si aplica) |
 | 19 | `schema/19_telemetria_normalize_relations.sql` | Sedes + máquinas + FKs + UNIQUE serie + RLS clientes/asesores |
+| 20 | `schema/20_admin_module.sql` | Configuración sistema + RLS admin perfiles/auditoría |
 
 ## Dónde ejecutar `supabase functions deploy`
 

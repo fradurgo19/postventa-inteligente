@@ -640,7 +640,7 @@ export async function importTelemetriaFromFile(
       .update({
         registros_ok: recordsOk,
         registros_error: recordsError,
-        estado: recordsError > 0 && recordsOk === 0 ? 'error' : 'ok',
+        estado: recordsError > 0 && recordsOk === 0 ? 'fallido' : recordsError > 0 ? 'parcial' : 'completado',
       })
       .eq('id', importBatchId);
   }

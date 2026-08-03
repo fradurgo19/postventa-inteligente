@@ -21,6 +21,7 @@ export function ProyectadosImportPanel() {
       templateButtonLabel="Descargar plantilla TELEMETRÍA"
       onImport={async (result) => {
         await queryClient.invalidateQueries({ queryKey: ['proyectados'] });
+        await queryClient.invalidateQueries({ queryKey: ['admin'] });
 
         if (result.recordsOk > 0) {
           toast.success('Telemetría cargada', {
