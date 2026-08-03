@@ -260,27 +260,86 @@ function mapTempario(row: Record<string, string>, createdBy: string) {
 }
 
 function mapTelemetria(row: Record<string, string>, createdBy: string) {
+  const clean = (v: string) => {
+    const t = (v || '').trim();
+    if (!t) return '';
+    const u = t.toUpperCase();
+    if (u === '#N/D' || u === 'N/D' || u === 'ND') return '';
+    return t;
+  };
+
+  const get = (...aliases: string[]) => clean(getField(row, ...aliases));
+  const num = (raw: string) => {
+    if (!raw) return null;
+    const n = Number(raw.replace(/\s/g, '').replace(',', '.'));
+    return Number.isFinite(n) ? n : null;
+  };
+  const parseDate = (raw: string) => {
+    if (!raw) return null;
+    if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+    const m = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+    if (!m) return null;
+    let y = m[3];
+    if (y.length === 2) y = `20${y}`;
+    return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  };
+
+  const serie = get('Serie.', 'Serie', 'serie', 'N° serie', 'numero_serie');
+  const asesor2 = get('Asesor2', 'ASESOR 2', 'Asesor 2');
+  const asesor = get('ASESOR', 'Asesor', 'asesor_email');
+  const emailCliente = get('email', 'Email');
+  const correo = get('Correo');
+
   return {
-    titulo: getField(row, 'Título', 'Titulo', 'titulo') || null,
-    email: getField(row, 'email', 'Correo') || null,
-    nit: getField(row, 'Nit', 'nit') || null,
-    telefono: getField(row, 'Telefono', 'telefono') || null,
-    serie: getField(row, 'Serie.', 'Serie', 'serie', 'N° serie', 'numero_serie'),
-    modelo: getField(row, 'Modelo', 'modelo'),
-    horometro: toNumber(getField(row, 'Horometro', 'horometro'), 0),
-    promedio_h: toNumber(getField(row, 'Promedio_h', 'promedio_h'), 0) || null,
-    ciudad: getField(row, 'Ciudad', 'ciudad') || null,
-    latitud: toNumber(getField(row, 'Latitud', 'latitud'), 0) || null,
-    longitud: toNumber(getField(row, 'Longitud', 'longitud'), 0) || null,
-    fecha_primer_mtto: getField(row, 'Fecha Primer Mtto', 'fecha_primer_mtto') || null,
-    fecha_segundo_mtto: getField(row, 'Fecha Segundo Mtto', 'fecha_segundo_mtto') || null,
-    fecha_tercer_mtto: getField(row, 'Fecha Tercer Mtto', 'fecha_tercer_mtto') || null,
-    sede: getField(row, 'Sede', 'sede') || null,
-    asesor_email: getField(row, 'Asesor', 'asesor_email', 'ASESOR 2') || null,
-    marca: getField(row, 'Marca', 'marca'),
-    tipo_mtto: toNumber(getField(row, 'Tipo Mtto', 'tipo_mtto'), 0) || null,
-    estado: getField(row, 'Estado', 'estado') || 'Pendiente',
-    tipo_maquina: getField(row, 'TipoDeMaquina', 'tipo_maquina') || null,
+    titulo: get('Nombre del cliente', 'Nombre del Cliente', 'Título', 'Titulo', 'titulo') || null,
+    email: emailCliente.includes('@') ? emailCliente : null,
+    nit: get('Nit', 'nit') || null,
+    telefono: get('Telefono', 'Teléfono', 'telefono') || null,
+    serie,
+    modelo: get('Modelo', 'modelo'),
+    horometro: num(get('Horometro', 'horometro')) ?? 0,
+    promedio_h: num(get('Promedio_h', 'promedio_h')),
+    ciudad: get('Ciudad', 'ciudad') || null,
+    ultima_fecha_comunicacion:
+      parseDate(get('Última fecha/hora de común', 'Ultima fecha/hora de comun')) || null,
+    latitud: num(get('Latitud', 'latitud')),
+    longitud: num(get('Longitud', 'longitud')),
+    dias_primer_mtto: num(get('Dias Primer Mtto')),
+    proximo_primer_mtto: num(get('Proximo Primer Mtto', 'Próximo Primer Mtto')),
+    dias_segundo_mtto: num(get('Dias Segundo Mtto')),
+    proximo_segundo_mtto: num(get('Proximo Segundo Mtto')),
+    dias_tercer_mtto: num(get('Dias Tercer Mtto')),
+    proximo_tercer_mtto: num(get('Proximo Tercer Mtto')),
+    fecha_primer_mtto: parseDate(get('Fecha Primer Mtto', 'fecha_primer_mtto')),
+    fecha_segundo_mtto: parseDate(get('Fecha Segundo Mtto', 'fecha_segundo_mtto')),
+    fecha_tercer_mtto: parseDate(get('Fecha Tercer Mtto', 'fecha_tercer_mtto')),
+    distancia_bogota: num(get('Distancia Bogota', 'Distancia Bogotá')),
+    distancia_medellin: num(get('Distancia Medellin', 'Distancia Medellín')),
+    distancia_barranquilla: num(get('Distacia Barranquilla', 'Distancia Barranquilla')),
+    distancia_monteria: num(get('Distancia Monteria', 'Distancia Montería')),
+    distancia_cali: num(get('Distancia Cali')),
+    distancia_bucaramanga: num(get('Distancia Bucaramanga')),
+    distancia_ibague: num(get('Distancia Ibague', 'Distancia Ibagué')),
+    distancia_istmina: num(get('Distancia Istmina')),
+    distancia_minima: num(get('Distacia Minima', 'Distancia Minima', 'Distancia Mínima')),
+    sede: get('Sede', 'sede') || null,
+    asesor_email: (asesor.includes('@') ? asesor : asesor2.includes('@') ? asesor2 : '') || null,
+    asesor_secundario_email: asesor2.includes('@') ? asesor2 : null,
+    marca: get('Marca', 'marca'),
+    tipo_mtto: num(get('Tipo Mtto', 'tipo_mtto')),
+    numero_serie: get('N° serie', 'Nº serie', 'numero_serie') || serie || null,
+    tipo_oportunidad: get('Tipo Cliente', 'tipo_oportunidad') || null,
+    estado: get('Estado', 'estado') || 'Pendiente',
+    estado2: get('Estado2', 'estado2') || null,
+    detalle: get('Detalle', 'detalle') || null,
+    observaciones: get('Observaciones', 'observaciones') || null,
+    reenviar_correo: ['true', '1', 'si', 'sí', 'verdadero'].includes(
+      get('Reenviar Correo', 'reenviar_correo').toLowerCase()
+    ),
+    mes_creado: get('MesCreado', 'Mes Creado', 'mes_creado') || null,
+    correo_enviado: correo || null,
+    anio: num(get('Año', 'Anio', 'anio')),
+    tipo_maquina: get('TipoDeMaquina', 'Tipo de Maquina', 'tipo_maquina') || null,
     created_by: createdBy,
   };
 }

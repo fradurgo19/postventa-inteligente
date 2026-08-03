@@ -18,6 +18,10 @@ import {
   importTempariosFromFile,
   type TemparioImportProgress,
 } from '@/services/tempario-import.service';
+import {
+  importTelemetriaFromFile,
+  type TelemetriaImportProgress,
+} from '@/services/telemetria-import.service';
 import { useUserStore } from '@/store';
 
 export interface ExcelImportResult {
@@ -42,6 +46,8 @@ interface ExcelImportPanelProps {
   readonly templateButtonLabel?: string;
 }
 
+type UploadProgress = TemparioImportProgress | TelemetriaImportProgress;
+
 export function ExcelImportPanel({
   title,
   description,
@@ -59,7 +65,7 @@ export function ExcelImportPanel({
   const [preview, setPreview] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Array<{ row: number; message: string }>>([]);
-  const [progress, setProgress] = useState<TemparioImportProgress | null>(null);
+  const [progress, setProgress] = useState<UploadProgress | null>(null);
   const [downloadingTemplate, setDownloadingTemplate] = useState(false);
 
   const validExtensions = ['.xlsx', '.xls', '.csv'];
@@ -113,6 +119,20 @@ export function ExcelImportPanel({
           duplicates = response.duplicates;
           total = response.total ?? recordsOk + recordsError;
           errors = response.errors ?? [];
+        } else if (modulo === 'proyectados') {
+          const response = await importTelemetriaFromFile(
+            f,
+            currentUser?.email ?? currentUser?.name ?? 'admin',
+            (p) => setProgress({ ...p })
+          );
+          if (response.error && response.recordsOk === 0) {
+            throw new Error(response.error);
+          }
+          recordsOk = response.recordsOk;
+          recordsError = response.recordsError;
+          duplicates = response.duplicates;
+          total = response.total ?? recordsOk + recordsError;
+          errors = response.errors ?? [];
         } else if (isSupabaseConfigured()) {
           const response = await invokeImportExcel(modulo, f);
           recordsOk = response.recordsOk;
@@ -126,11 +146,16 @@ export function ExcelImportPanel({
           total = 25;
         }
 
+        const updatedLabel =
+          modulo === 'proyectados'
+            ? `Actualizados (misma serie): ${duplicates}`
+            : `Actualizados (mismo ID): ${duplicates}`;
+
         const previewLines = [
           `Archivo: ${f.name}`,
           `Filas leídas del Excel: ${total}`,
           `Registros cargados OK: ${recordsOk}`,
-          `Actualizados (mismo ID): ${duplicates}`,
+          updatedLabel,
           `Errores / omitidos: ${recordsError}`,
           recordsOk + recordsError < total
             ? `Diferencia vs archivo: ${total - recordsOk - recordsError}`
@@ -248,7 +273,9 @@ export function ExcelImportPanel({
             {processing
               ? progress?.phase === 'parse'
                 ? 'Leyendo Excel…'
-                : `Cargando en base de datos… ${progress?.processed ?? 0}/${progress?.total ?? '—'}`
+                : progress?.phase === 'relations'
+                  ? 'Normalizando clientes / asesores / sedes / máquinas…'
+                  : `Cargando en base de datos… ${progress?.processed ?? 0}/${progress?.total ?? '—'}`
               : 'Arrastre su archivo Excel o CSV aquí'}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
