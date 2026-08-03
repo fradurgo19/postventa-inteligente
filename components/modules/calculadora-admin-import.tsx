@@ -57,33 +57,10 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import type { TemparioMantenimiento, TemparioTipoItem, MaintenanceFrequencyHours } from '@/types/database';
 import { modelo2ToTipoCatalogo } from '@/lib/calculadora/tempario-classify';
-
-const TEMPARIO_COLUMNS = [
-  'Marca',
-  'Linea',
-  'Modelo',
-  'Modelo2',
-  'Item',
-  'Cantidad',
-  'Cantidad (Galones)',
-  'Frecuencia',
-  'Aceite Homologado',
-  'Referencia Genuina',
-  'REF SAP DISPEL',
-  'REF SAP ORIGINAl',
-  'Referencia Stal',
-  'Referencia Fleetguard',
-  'Referencia Donalson',
-  'Tiempo',
-  'Procedimiento',
-  'Observaciones',
-  'ID',
-  'TipoItem',
-  'Modificado',
-  'Creado',
-  'Creado por',
-  'Modificado por',
-];
+import {
+  TEMPARIO_EXCEL_COLUMNS,
+  downloadTemparioExcelTemplate,
+} from '@/lib/calculadora/tempario-template';
 
 const TIPOS_ITEM: TemparioTipoItem[] = [
   'Repuesto',
@@ -296,9 +273,11 @@ export function CalculadoraAdminImport() {
         <TabsContent value="importar" className="mt-4">
           <ExcelImportPanel
             title="Importar Temparios de Mantenimiento"
-            description="Excel Modelo2 → tipo_item y tipo_catalogo (Repuesto→Filtro, Fluido→Aceite, Actividad, Observacion). Vaciar con SQL 17, aplicar SQL 18 y reimportar."
-            expectedColumns={TEMPARIO_COLUMNS}
+            description="1) Descargue la plantilla Excel (columna inicial: Marca). 2) Complete Modelo2 (Actividad | Repuesto | Fluido | Observacion). 3) Suba el archivo para cargar a la BD. tipo_catalogo se deriva de Modelo2 (Repuesto→Filtro, Fluido→Aceite)."
+            expectedColumns={TEMPARIO_EXCEL_COLUMNS}
             modulo="calculadora"
+            onDownloadTemplate={downloadTemparioExcelTemplate}
+            templateButtonLabel="Descargar plantilla TEMPARIOS"
             onImport={async (result) => {
               if (!isSupabaseConfigured()) {
                 await importMutation.mutateAsync({

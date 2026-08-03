@@ -1,7 +1,14 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { Upload, FileSpreadsheet, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import {
+  Upload,
+  FileSpreadsheet,
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  Download,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -19,17 +26,20 @@ export interface ExcelImportResult {
   recordsError: number;
   duplicates: number;
   total: number;
-  preview: string[];
+  preview: readonly string[];
   errors?: Array<{ row: number; message: string }>;
 }
 
 interface ExcelImportPanelProps {
   readonly title: string;
   readonly description: string;
-  readonly expectedColumns: string[];
+  readonly expectedColumns: readonly string[];
   readonly modulo: ImportModulo;
   readonly onImport: (result: ExcelImportResult) => void | Promise<void>;
   readonly className?: string;
+  /** Si se define, muestra botón para descargar la plantilla Excel. */
+  readonly onDownloadTemplate?: () => void | Promise<void>;
+  readonly templateButtonLabel?: string;
 }
 
 export function ExcelImportPanel({
@@ -39,6 +49,8 @@ export function ExcelImportPanel({
   modulo,
   onImport,
   className,
+  onDownloadTemplate,
+  templateButtonLabel = 'Descargar plantilla Excel',
 }: ExcelImportPanelProps) {
   const { currentUser } = useUserStore();
   const [dragOver, setDragOver] = useState(false);
@@ -48,8 +60,24 @@ export function ExcelImportPanel({
   const [error, setError] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Array<{ row: number; message: string }>>([]);
   const [progress, setProgress] = useState<TemparioImportProgress | null>(null);
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
 
   const validExtensions = ['.xlsx', '.xls', '.csv'];
+
+  const handleDownloadTemplate = async () => {
+    if (!onDownloadTemplate || downloadingTemplate) return;
+    setDownloadingTemplate(true);
+    setError(null);
+    try {
+      await onDownloadTemplate();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'No se pudo descargar la plantilla Excel'
+      );
+    } finally {
+      setDownloadingTemplate(false);
+    }
+  };
 
   const validateFile = (f: File): boolean => {
     const ext = f.name.slice(f.name.lastIndexOf('.')).toLowerCase();
@@ -174,6 +202,30 @@ export function ExcelImportPanel({
         <p className="text-xs text-muted-foreground">{description}</p>
       </CardHeader>
       <CardContent className="space-y-4">
+        {onDownloadTemplate ? (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+            <p className="text-xs text-muted-foreground">
+              Descargue la plantilla (inicia en <strong>Marca</strong>), complete los datos y
+              súbala a continuación.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 shrink-0 border-[#cf1b22]/30 text-[#cf1b22] hover:bg-[#cf1b22]/5"
+              onClick={() => void handleDownloadTemplate()}
+              disabled={processing || downloadingTemplate}
+            >
+              {downloadingTemplate ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5 mr-1.5" />
+              )}
+              {templateButtonLabel}
+            </Button>
+          </div>
+        ) : null}
+
         <div
           onDragOver={(e) => {
             e.preventDefault();
