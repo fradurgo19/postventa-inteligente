@@ -210,7 +210,7 @@ const MOCK_ACTIVITY: ActivityItem[] = [
     icon: <LogIn size={15} />,
     iconBg: "#f8fafc",
     iconColor: "#475569",
-    description: "Santiago Gómez inició sesión desde 190.26.45.12",
+    description: "Inicio de sesión registrado en la plataforma",
     timestamp: "2024-12-05T08:32:00Z",
     relativeTime: "hace 4 horas",
   },
@@ -422,7 +422,7 @@ export default function DashboardPage() {
           <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 leading-tight">
             Bienvenido de nuevo,{" "}
             <span className="text-[#cf1b22]">
-              {currentUser.name.split(" ")[0]}!
+              {(currentUser?.name?.trim().split(/\s+/)[0] || "Usuario")}!
             </span>
           </h1>
           <p className="mt-1 text-sm text-gray-500 flex items-center gap-2">

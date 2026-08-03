@@ -8,7 +8,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { User, UserRole } from "@/lib/mock-data";
-import { DEFAULT_USER } from "@/lib/mock-data";
 import { signOut as supabaseSignOut } from "@/lib/supabase/auth";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -41,28 +40,34 @@ export interface CartItem {
   imageUrl?: string;
 }
 
+const LOGGED_OUT_STATE = {
+  currentUser: null as User | null,
+  role: "Viewer" as UserRole,
+  isAuthenticated: false,
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. User Store
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface UserState {
-  /** The currently authenticated user. Defaults to the mock Administrator. */
-  currentUser: User;
+  /** Usuario autenticado; null si no hay sesión (nunca mock Santiago Gómez). */
+  currentUser: User | null;
   role: UserRole;
   isAuthenticated: boolean;
 
-  /** Replace the current user (e.g. after a role switch in demo mode). */
+  /** Establece el usuario tras login / hidratación de sesión Supabase. */
   setUser: (user: User) => void;
-  /** Clear the session (Supabase + store) and mark user logged out. */
+  /** Limpia el store local (sin llamar a Supabase). */
+  clearSession: () => void;
+  /** Cierra sesión en Supabase y limpia el store. */
   logout: () => Promise<void>;
 }
 
 export const useUserStore = create<UserState>()(
   persist(
     (set) => ({
-      currentUser: DEFAULT_USER,
-      role: DEFAULT_USER.role,
-      isAuthenticated: true,
+      ...LOGGED_OUT_STATE,
 
       setUser: (user) =>
         set({
@@ -71,21 +76,27 @@ export const useUserStore = create<UserState>()(
           isAuthenticated: true,
         }),
 
+      clearSession: () => set({ ...LOGGED_OUT_STATE }),
+
       logout: async () => {
         try {
           await supabaseSignOut();
         } finally {
-          set({
-            currentUser: DEFAULT_USER,
-            role: DEFAULT_USER.role,
-            isAuthenticated: false,
-          });
+          set({ ...LOGGED_OUT_STATE });
         }
       },
     }),
     {
       name: "partequipos-user",
+      version: 2,
       storage: createJSONStorage(() => sessionStorage),
+      /** Invalida sesión mock antigua (Santiago Gómez / DEFAULT_USER). */
+      migrate: () => ({ ...LOGGED_OUT_STATE }),
+      partialize: (state) => ({
+        currentUser: state.currentUser,
+        role: state.role,
+        isAuthenticated: state.isAuthenticated,
+      }),
     }
   )
 );

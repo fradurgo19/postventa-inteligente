@@ -1,5 +1,4 @@
 import type { User, UserRole } from '@/lib/mock-data';
-import { DEFAULT_USER } from '@/lib/mock-data';
 import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
 const ROLE_MAP: Record<string, UserRole> = {
@@ -8,6 +7,28 @@ const ROLE_MAP: Record<string, UserRole> = {
   asesor_comercial: 'Sales Advisor',
   tecnico: 'Technician',
   visualizador: 'Viewer',
+};
+
+const PERMISSIONS_BY_ROLE: Record<UserRole, string[]> = {
+  Administrator: ['*'],
+  Coordinator: [
+    'machines:read',
+    'machines:write',
+    'maintenance:read',
+    'maintenance:write',
+    'parts:read',
+    'customers:read',
+  ],
+  'Sales Advisor': [
+    'customers:read',
+    'customers:write',
+    'parts:read',
+    'quotes:read',
+    'quotes:write',
+    'machines:read',
+  ],
+  Technician: ['machines:read', 'maintenance:read', 'maintenance:write', 'parts:read'],
+  Viewer: ['dashboard:read', 'reports:read'],
 };
 
 export function mapDbRoleToApp(rol: string | null | undefined): UserRole {
@@ -24,6 +45,40 @@ export function mapAppRoleToDb(role: UserRole): string {
     Viewer: 'visualizador',
   };
   return reverse[role];
+}
+
+function initialsFromName(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((p) => p[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function buildUser(params: {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  department?: string;
+  isActive?: boolean;
+}): User {
+  const now = new Date().toISOString();
+  return {
+    id: params.id,
+    name: params.name,
+    email: params.email,
+    role: params.role,
+    avatar: initialsFromName(params.name) || 'U',
+    phone: '',
+    department: params.department ?? 'Posventa',
+    isActive: params.isActive ?? true,
+    lastLogin: now,
+    createdAt: now,
+    permissions: PERMISSIONS_BY_ROLE[params.role],
+  };
 }
 
 interface PerfilRow {
@@ -44,37 +99,26 @@ export async function fetchProfileAsUser(userId: string, emailFallback: string):
     .maybeSingle();
 
   const perfil = data as PerfilRow | null;
+  const email = (perfil?.email || emailFallback || '').trim();
+  const fallbackName = email.includes('@') ? email.split('@')[0] : email || 'Usuario';
+
   if (!perfil) {
-    return {
-      ...DEFAULT_USER,
+    return buildUser({
       id: userId,
-      email: emailFallback,
-      name: emailFallback.split('@')[0],
+      email: email || emailFallback,
+      name: fallbackName,
       role: 'Viewer',
-      permissions: DEFAULT_USER.permissions,
-    };
+    });
   }
 
-  const role = mapDbRoleToApp(perfil.rol);
-
-  return {
+  return buildUser({
     id: perfil.id,
-    name: perfil.nombre,
-    email: perfil.email || emailFallback,
-    role,
-    avatar: perfil.nombre
-      .split(' ')
-      .map((p) => p[0])
-      .join('')
-      .slice(0, 2)
-      .toUpperCase(),
-    phone: '',
+    name: (perfil.nombre || '').trim() || fallbackName,
+    email: email || emailFallback,
+    role: mapDbRoleToApp(perfil.rol),
     department: perfil.sede ?? 'Posventa',
     isActive: perfil.activo ?? true,
-    lastLogin: new Date().toISOString(),
-    createdAt: new Date().toISOString(),
-    permissions: DEFAULT_USER.permissions,
-  };
+  });
 }
 
 export interface AuthResult {
@@ -91,10 +135,15 @@ export async function signInWithPassword(
 ): Promise<AuthResult> {
   if (!isSupabaseConfigured()) {
     const { USERS } = await import('@/lib/mock-data');
+    const normalized = email.toLowerCase();
     const found =
-      email === 'admin@partequipos.com' && password === 'password123'
+      normalized === 'admin@partequipos.com' && password === 'password123'
         ? USERS[0]
-        : USERS.find((u) => u.email.toLowerCase() === email.toLowerCase()) ?? DEFAULT_USER;
+        : USERS.find((u) => u.email.toLowerCase() === normalized);
+
+    if (!found) {
+      throw new Error('Credenciales inválidas');
+    }
 
     return { user: found, sessionExists: true };
   }
@@ -123,8 +172,37 @@ export async function getSessionUser(): Promise<User | null> {
   const { data } = await supabase.auth.getSession();
   if (!data.session?.user) return null;
 
-  return fetchProfileAsUser(
-    data.session.user.id,
-    data.session.user.email ?? ''
-  );
+  return fetchProfileAsUser(data.session.user.id, data.session.user.email ?? '');
+}
+
+/** Suscripción a cambios de sesión Supabase (SIGNED_IN / SIGNED_OUT). */
+export function subscribeAuthChanges(
+  onUser: (user: User | null) => void
+): () => void {
+  if (!isSupabaseConfigured()) {
+    return () => undefined;
+  }
+
+  const supabase = getSupabaseClient();
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((event, session) => {
+    void (async () => {
+      if (event === 'SIGNED_OUT' || !session?.user) {
+        onUser(null);
+        return;
+      }
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        const user = await fetchProfileAsUser(
+          session.user.id,
+          session.user.email ?? ''
+        );
+        onUser(user);
+      }
+    })();
+  });
+
+  return () => {
+    subscription.unsubscribe();
+  };
 }

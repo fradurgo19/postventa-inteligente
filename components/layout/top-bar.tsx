@@ -47,9 +47,12 @@ export function TopBar({ onMenuToggle, sidebarOpen = true, className }: TopBarPr
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  const displayName = currentUser?.name?.trim() || 'Usuario';
+  const displayEmail = currentUser?.email?.trim() || '';
+
   const initials =
-    currentUser.avatar ||
-    currentUser.name
+    currentUser?.avatar ||
+    displayName
       .split(' ')
       .filter(Boolean)
       .map((p) => p[0])
@@ -179,7 +182,7 @@ export function TopBar({ onMenuToggle, sidebarOpen = true, className }: TopBarPr
               disabled={isLoggingOut}
             >
               <Avatar className="h-7 w-7">
-                <AvatarImage src="" alt={`Avatar de ${currentUser.name}`} />
+                <AvatarImage src="" alt={`Avatar de ${displayName}`} />
                 <AvatarFallback
                   className="text-xs font-semibold text-white"
                   style={{ background: 'linear-gradient(135deg, #cf1b22 0%, #a51519 100%)' }}
@@ -189,7 +192,7 @@ export function TopBar({ onMenuToggle, sidebarOpen = true, className }: TopBarPr
               </Avatar>
               <div className="hidden md:flex flex-col items-start leading-none">
                 <span className="text-xs font-semibold text-foreground max-w-[120px] truncate">
-                  {currentUser.name}
+                  {displayName}
                 </span>
                 <span className="text-[10px] text-muted-foreground">{roleLabel(role)}</span>
               </div>
@@ -200,8 +203,8 @@ export function TopBar({ onMenuToggle, sidebarOpen = true, className }: TopBarPr
           <DropdownMenuContent align="end" className="w-52">
             <DropdownMenuLabel className="font-normal">
               <div className="flex flex-col gap-0.5">
-                <p className="font-semibold text-sm text-foreground">{currentUser.name}</p>
-                <p className="text-xs text-muted-foreground truncate">{currentUser.email}</p>
+                <p className="font-semibold text-sm text-foreground">{displayName}</p>
+                <p className="text-xs text-muted-foreground truncate">{displayEmail || '—'}</p>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
