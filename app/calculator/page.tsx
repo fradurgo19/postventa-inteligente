@@ -19,6 +19,7 @@ import {
   MapPin,
   Hash,
   List,
+  ExternalLink,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -70,6 +71,10 @@ import { CalculadoraAdminImport } from '@/components/modules/calculadora-admin-i
 import type { TelemetriaEquipo, PreventiveQuoteResult } from '@/types/database';
 
 const HOROMETRO_OPTIONS = getHorometroOptions();
+
+/** Maps Colombia — consultar km y tiempo de un trayecto */
+const GOOGLE_MAPS_TRAVEL_URL =
+  'https://www.google.com/maps/@5.5665967,-75.3132633,6.25z?entry=ttu';
 
 const INACTIVE_ESTADOS = new Set(['inactivo', 'inactiva', 'baja', 'cancelado', 'cancelada']);
 
@@ -210,7 +215,7 @@ export default function CalculatorPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 items-end">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-3 items-start">
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Marca
@@ -328,9 +333,13 @@ export default function CalculatorPage() {
                 type="number"
                 min={0}
                 className="h-9 text-sm pl-8"
+                aria-describedby="km-trayecto-hint"
                 {...register('kilometers')}
               />
             </div>
+            <p id="km-trayecto-hint" className="text-[10px] text-muted-foreground leading-tight">
+              Un trayecto (ida)
+            </p>
           </div>
 
           <div className="space-y-1.5">
@@ -338,36 +347,71 @@ export default function CalculatorPage() {
               Tiempo viaje (h)
             </Label>
             <div className="relative">
-              <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <Input
                 type="number"
                 min={0}
                 step={0.5}
                 className="h-9 text-sm pl-8"
+                aria-describedby="tiempo-viaje-hint"
                 {...register('travelTime')}
               />
             </div>
+            <p id="tiempo-viaje-hint" className="text-[10px] text-muted-foreground leading-tight">
+              Un trayecto (ida)
+            </p>
           </div>
 
-          <div className="flex gap-2">
-            <Button
-              type="submit"
-              className="flex-1 h-9 text-sm font-semibold bg-[#cf1b22] hover:bg-[#a51519] text-white"
-              disabled={isCalculating}
-            >
-              <Wrench className="w-4 h-4 mr-1.5" />
-              {isCalculating ? 'Calculando…' : 'Calcular'}
-            </Button>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Ruta
+            </Label>
             <Button
               type="button"
               variant="outline"
-              className="h-9 px-3"
-              onClick={handleReset}
-              disabled={isCalculating}
-              aria-label="Reiniciar"
+              className="h-9 w-full text-sm border-[#cf1b22]/30 text-[#cf1b22] hover:bg-[#cf1b22]/5"
+              asChild
             >
-              <RotateCcw className="w-4 h-4" />
+              <a
+                href={GOOGLE_MAPS_TRAVEL_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Abrir Google Maps para calcular kilómetros y tiempo de viaje"
+              >
+                <MapPin className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                Google Maps
+                <ExternalLink className="w-3 h-3 ml-1.5 shrink-0 opacity-70" />
+              </a>
             </Button>
+            <p className="text-[10px] text-muted-foreground leading-tight">
+              Calcular km y tiempo
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Acción
+            </Label>
+            <div className="flex gap-2">
+              <Button
+                type="submit"
+                className="flex-1 h-9 text-sm font-semibold bg-[#cf1b22] hover:bg-[#a51519] text-white"
+                disabled={isCalculating}
+              >
+                <Wrench className="w-4 h-4 mr-1.5" />
+                {isCalculating ? 'Calculando…' : 'Calcular'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 px-3"
+                onClick={handleReset}
+                disabled={isCalculating}
+                aria-label="Reiniciar"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </form>
