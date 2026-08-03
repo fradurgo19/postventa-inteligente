@@ -72,9 +72,9 @@ import type { TelemetriaEquipo, PreventiveQuoteResult } from '@/types/database';
 
 const HOROMETRO_OPTIONS = getHorometroOptions();
 
-/** Maps Colombia — consultar km y tiempo de un trayecto */
+/** Maps — direcciones para consultar km y tiempo de un trayecto */
 const GOOGLE_MAPS_TRAVEL_URL =
-  'https://www.google.com/maps/@5.5665967,-75.3132633,6.25z?entry=ttu';
+  'https://www.google.com/maps/dir///@6.5870014,-77.8974512,7z?entry=ttu';
 
 const INACTIVE_ESTADOS = new Set(['inactivo', 'inactiva', 'baja', 'cancelado', 'cancelada']);
 
@@ -215,7 +215,7 @@ export default function CalculatorPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-3 items-start">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-3 items-end">
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Marca
@@ -324,12 +324,21 @@ export default function CalculatorPage() {
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Km trayecto
-            </Label>
+            <div className="flex items-center gap-1.5 min-h-4 flex-wrap">
+              <Label
+                htmlFor="km-trayecto"
+                className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+              >
+                Km trayecto
+              </Label>
+              <span id="km-trayecto-hint" className="text-[10px] text-muted-foreground normal-case">
+                Un trayecto (ida)
+              </span>
+            </div>
             <div className="relative">
               <Gauge className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <Input
+                id="km-trayecto"
                 type="number"
                 min={0}
                 className="h-9 text-sm pl-8"
@@ -337,18 +346,24 @@ export default function CalculatorPage() {
                 {...register('kilometers')}
               />
             </div>
-            <p id="km-trayecto-hint" className="text-[10px] text-muted-foreground leading-tight">
-              Un trayecto (ida)
-            </p>
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Tiempo viaje (h)
-            </Label>
+            <div className="flex items-center gap-1.5 min-h-4 flex-wrap">
+              <Label
+                htmlFor="tiempo-viaje"
+                className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
+              >
+                Tiempo viaje (h)
+              </Label>
+              <span id="tiempo-viaje-hint" className="text-[10px] text-muted-foreground normal-case">
+                Un trayecto (ida)
+              </span>
+            </div>
             <div className="relative">
               <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <Input
+                id="tiempo-viaje"
                 type="number"
                 min={0}
                 step={0.5}
@@ -357,15 +372,17 @@ export default function CalculatorPage() {
                 {...register('travelTime')}
               />
             </div>
-            <p id="tiempo-viaje-hint" className="text-[10px] text-muted-foreground leading-tight">
-              Un trayecto (ida)
-            </p>
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Ruta
-            </Label>
+            <div className="flex items-center gap-1.5 min-h-4 flex-wrap">
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Ruta
+              </Label>
+              <span className="text-[10px] text-muted-foreground normal-case">
+                Calcular km y tiempo
+              </span>
+            </div>
             <Button
               type="button"
               variant="outline"
@@ -383,9 +400,6 @@ export default function CalculatorPage() {
                 <ExternalLink className="w-3 h-3 ml-1.5 shrink-0 opacity-70" />
               </a>
             </Button>
-            <p className="text-[10px] text-muted-foreground leading-tight">
-              Calcular km y tiempo
-            </p>
           </div>
 
           <div className="space-y-1.5">
