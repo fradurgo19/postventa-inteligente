@@ -29,7 +29,6 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
   SelectContent,
@@ -68,6 +67,7 @@ import {
 } from '@/lib/maintenance-frequency';
 import { useUserStore } from '@/store';
 import { CalculadoraAdminImport } from '@/components/modules/calculadora-admin-import';
+import { SectionFrame } from '@/components/ui/section-frame';
 import type { TelemetriaEquipo, PreventiveQuoteResult } from '@/types/database';
 
 const HOROMETRO_OPTIONS = getHorometroOptions();
@@ -195,13 +195,16 @@ export default function CalculatorPage() {
   };
 
   return (
-    <div className="flex flex-col gap-4 -m-6 min-h-[calc(100vh-8rem)]">
+    <div className="flex flex-col gap-4 -m-6 min-h-[calc(100vh-8rem)] p-4 md:p-5">
       {/* ── TOP FILTERS ── */}
-      <form
+      <SectionFrame
+        as="form"
+        variant="filters"
+        chipLabel="Filtros"
         onSubmit={handleSubmit(onSubmit)}
-        className="bg-card border-b border-border px-5 py-4 space-y-4"
+        className="px-5 py-4 space-y-4"
       >
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1 pr-24">
           <div className="w-8 h-8 rounded-lg bg-[#cf1b22] flex items-center justify-center">
             <Wrench className="w-4 h-4 text-white" />
           </div>
@@ -428,22 +431,21 @@ export default function CalculatorPage() {
             </div>
           </div>
         </div>
-      </form>
+      </SectionFrame>
 
       {/* ── MAIN + SUMMARY ── */}
-      <div className="flex flex-1 gap-0 min-h-0 px-0 pb-0">
-        <main className="flex-1 overflow-y-auto px-5 pb-5 space-y-4">
+      <div className="flex flex-1 gap-4 min-h-0">
+        <main className="flex-1 overflow-y-auto space-y-4 min-w-0">
           {/* Selected equipment card */}
-          <Card className="overflow-hidden">
-            <CardContent className="p-0">
-              <div className="flex flex-col sm:flex-row">
-                <div className="w-full sm:w-44 h-32 sm:h-auto bg-muted/70 flex flex-col items-center justify-center border-b sm:border-b-0 sm:border-r border-border gap-2">
-                  <Truck className="w-10 h-10 text-muted-foreground/40" />
-                  <span className="text-[10px] text-muted-foreground/50 uppercase tracking-wide">
+          <SectionFrame variant="equipment" chipLabel="Equipo" className="overflow-hidden">
+            <div className="flex flex-col sm:flex-row">
+                <div className="w-full sm:w-44 h-32 sm:h-auto bg-[#2563eb]/5 flex flex-col items-center justify-center border-b sm:border-b-0 sm:border-r border-[#2563eb]/20 gap-2">
+                  <Truck className="w-10 h-10 text-[#2563eb]/50" />
+                  <span className="text-[10px] text-[#1d4ed8]/70 uppercase tracking-wide">
                     {selectedMachine?.marca ?? 'Equipo'}
                   </span>
                 </div>
-                <div className="flex-1 p-5">
+                <div className="flex-1 p-5 pr-24">
                   <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
                     <div>
                       <h3 className="text-lg font-bold text-foreground">
@@ -461,7 +463,7 @@ export default function CalculatorPage() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="border-[#cf1b22]/30 text-[#cf1b22] hover:bg-[#cf1b22]/5"
+                      className="border-[#2563eb]/30 text-[#1d4ed8] hover:bg-[#2563eb]/5"
                       onClick={() => setMachineSheetOpen(true)}
                     >
                       <List className="w-4 h-4 mr-1.5" />
@@ -504,7 +506,7 @@ export default function CalculatorPage() {
                       ].map(({ icon: Icon, label, value }) => (
                         <div key={label} className="space-y-0.5">
                           <div className="flex items-center gap-1.5">
-                            <Icon className="w-3 h-3 text-muted-foreground" />
+                            <Icon className="w-3 h-3 text-[#2563eb]" />
                             <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
                               {label}
                             </span>
@@ -516,27 +518,24 @@ export default function CalculatorPage() {
                       ))}
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/40 rounded-lg px-3 py-3">
-                      <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground bg-[#2563eb]/5 rounded-lg px-3 py-3 border border-[#2563eb]/15">
+                      <AlertCircle className="w-4 h-4 flex-shrink-0 text-[#2563eb]" />
                       Use el botón para listar las máquinas de telemetría y seleccionar una.
                     </div>
                   )}
                 </div>
               </div>
-            </CardContent>
-          </Card>
+          </SectionFrame>
 
           {/* Results tabs */}
           <AnimatePresence mode="wait">
             {isCalculating && (
-              <Card>
-                <CardContent className="p-5 space-y-3">
-                  <Skeleton className="h-8 w-48" />
-                  {['sk-1', 'sk-2', 'sk-3', 'sk-4', 'sk-5'].map((id) => (
-                    <Skeleton key={id} className="h-4 w-full" />
-                  ))}
-                </CardContent>
-              </Card>
+              <SectionFrame variant="catalog" chipLabel="Detalle" className="p-5 space-y-3">
+                <Skeleton className="h-8 w-48" />
+                {['sk-1', 'sk-2', 'sk-3', 'sk-4', 'sk-5'].map((id) => (
+                  <Skeleton key={id} className="h-4 w-full" />
+                ))}
+              </SectionFrame>
             )}
             {!isCalculating && result && (
               <motion.div
@@ -544,23 +543,35 @@ export default function CalculatorPage() {
                 animate={{ opacity: 1, y: 0 }}
                 className="space-y-4"
               >
-                <Card>
-                  <CardContent className="p-4">
-                    <Tabs defaultValue="activities">
-                      <TabsList className="mb-4 h-auto flex-wrap gap-1">
-                        <TabsTrigger value="activities" className="text-sm">
+                <SectionFrame
+                  variant="catalog"
+                  chipLabel="Actividades · Fluidos · Repuestos"
+                  className="p-4 pt-5"
+                >
+                  <Tabs defaultValue="activities">
+                      <TabsList className="mb-4 h-auto flex-wrap gap-1 bg-[#16a34a]/10 border border-[#16a34a]/20">
+                        <TabsTrigger
+                          value="activities"
+                          className="text-sm data-[state=active]:bg-[#16a34a] data-[state=active]:text-white"
+                        >
                           Actividades
                           <Badge variant="secondary" className="ml-1.5 text-xs font-normal">
                             {result.activities.length}
                           </Badge>
                         </TabsTrigger>
-                        <TabsTrigger value="fluids" className="text-sm">
+                        <TabsTrigger
+                          value="fluids"
+                          className="text-sm data-[state=active]:bg-[#16a34a] data-[state=active]:text-white"
+                        >
                           Fluidos
                           <Badge variant="secondary" className="ml-1.5 text-xs font-normal">
                             {result.fluids.length}
                           </Badge>
                         </TabsTrigger>
-                        <TabsTrigger value="parts" className="text-sm">
+                        <TabsTrigger
+                          value="parts"
+                          className="text-sm data-[state=active]:bg-[#16a34a] data-[state=active]:text-white"
+                        >
                           Repuestos
                           <Badge variant="secondary" className="ml-1.5 text-xs font-normal">
                             {result.parts.length}
@@ -788,21 +799,20 @@ export default function CalculatorPage() {
                         </div>
                       </TabsContent>
                     </Tabs>
-                  </CardContent>
-                </Card>
+                </SectionFrame>
               </motion.div>
             )}
             {!isCalculating && !result && (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-                  <Wrench className="w-10 h-10 text-muted-foreground mb-3" />
+              <SectionFrame variant="muted" chipLabel="Pendiente" className="py-16 px-5">
+                <div className="flex flex-col items-center justify-center text-center">
+                  <Wrench className="w-10 h-10 text-[#475569]/60 mb-3" />
                   <h3 className="font-semibold text-foreground mb-1">Sin cálculo aún</h3>
                   <p className="text-sm text-muted-foreground max-w-sm">
                     Complete marca, modelo y horómetro en la barra superior, o seleccione una
                     máquina de telemetría y pulse Calcular.
                   </p>
-                </CardContent>
-              </Card>
+                </div>
+              </SectionFrame>
             )}
           </AnimatePresence>
 
@@ -814,17 +824,23 @@ export default function CalculatorPage() {
         </main>
 
         {/* Right summary */}
-        <aside className="w-[300px] flex-shrink-0 border-l border-border bg-card overflow-y-auto hidden lg:block">
-          <div className="p-5">
+        <aside className="w-[300px] flex-shrink-0 hidden lg:block">
+          <SectionFrame
+            as="aside"
+            variant="costs"
+            chipLabel="Resumen"
+            className="sticky top-0 overflow-y-auto max-h-[calc(100vh-10rem)]"
+          >
+          <div className="p-5 pt-10">
             {result ? (
-              <Card>
-                <CardHeader className="pb-3 pt-4 px-5">
-                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-[#cf1b22]" />
+              <div>
+                <div className="pb-3">
+                  <h3 className="text-sm font-semibold flex items-center gap-2 text-foreground">
+                    <FileText className="w-4 h-4 text-[#d97706]" />
                     Resumen de Costos
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-5 pb-5">
+                  </h3>
+                </div>
+                <div>
                   <div className="space-y-2.5 mb-4">
                     {[
                       {
@@ -863,9 +879,9 @@ export default function CalculatorPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex justify-between py-2 px-3 rounded-lg bg-[#cf1b22]/5 border border-[#cf1b22]/20 mb-5">
-                    <span className="text-sm font-bold text-[#cf1b22]">TOTAL</span>
-                    <span className="text-base font-extrabold text-[#cf1b22] tabular-nums">
+                  <div className="flex justify-between py-2 px-3 rounded-lg bg-[#d97706]/10 border border-[#d97706]/30 mb-5">
+                    <span className="text-sm font-bold text-[#b45309]">TOTAL</span>
+                    <span className="text-base font-extrabold text-[#b45309] tabular-nums">
                       {formatCOP(result.costs.total)}
                     </span>
                   </div>
@@ -876,22 +892,23 @@ export default function CalculatorPage() {
                     </Button>
                     <Button
                       variant="outline"
-                      className="w-full h-9 border-[#cf1b22]/30 text-[#cf1b22]"
+                      className="w-full h-9 border-[#d97706]/40 text-[#b45309] hover:bg-[#d97706]/5"
                     >
                       <Save className="w-4 h-4 mr-2" />
                       Guardar Cotización
                     </Button>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             ) : (
               <div className="flex flex-col items-center justify-center min-h-[240px] text-center px-4">
-                <FileText className="w-8 h-8 text-muted-foreground mb-2" />
-                <p className="text-sm font-medium text-muted-foreground">Resumen de Costos</p>
+                <FileText className="w-8 h-8 text-[#d97706]/70 mb-2" />
+                <p className="text-sm font-medium text-foreground">Resumen de Costos</p>
                 <p className="text-xs text-muted-foreground mt-1">Aparecerá después del cálculo</p>
               </div>
             )}
           </div>
+          </SectionFrame>
         </aside>
       </div>
 
