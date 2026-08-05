@@ -1,5 +1,6 @@
 import type { UserRole } from '@/lib/mock-data';
 import { mapAppRoleToDb, mapDbRoleToApp } from '@/lib/supabase/auth';
+import { isFeatureEnabled } from '@/lib/feature-flags';
 
 export interface RoleCatalogEntry {
   id: string;
@@ -94,7 +95,10 @@ export const MODULE_ACCESS: Record<string, Record<UserRole, boolean>> = {
   },
 };
 
-export const APP_MODULES = Object.keys(MODULE_ACCESS);
+export const APP_MODULES = Object.keys(MODULE_ACCESS).filter((mod) => {
+  if (mod === 'Repuestos CPP') return isFeatureEnabled('cppModule');
+  return true;
+});
 
 export const PERM_CAPABILITIES: Record<UserRole, string[]> = {
   Administrator: [

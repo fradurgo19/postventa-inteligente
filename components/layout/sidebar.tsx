@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { isFeatureEnabled, type FeatureFlagKey } from '@/lib/feature-flags';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -20,17 +21,25 @@ interface SidebarProps {
   className?: string;
 }
 
-const navItems = [
+const navItems: {
+  label: string;
+  href: string;
+  icon: typeof LayoutDashboard;
+  feature?: FeatureFlagKey;
+}[] = [
   { label: 'Panel Principal', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Calculadora', href: '/calculator', icon: Calculator },
   { label: 'Mantenimiento Proyectado', href: '/projected-maintenance', icon: Calendar },
-  { label: 'Repuestos CPP', href: '/cpp', icon: Package },
+  { label: 'Repuestos CPP', href: '/cpp', icon: Package, feature: 'cppModule' },
   { label: 'Panel Ejecutivo', href: '/executive-dashboard', icon: BarChart3 },
   { label: 'Administración', href: '/administration', icon: Settings },
 ];
 
 export function Sidebar({ isOpen, onToggle, className }: Readonly<SidebarProps>) {
   const pathname = usePathname();
+  const visibleNav = navItems.filter(
+    (item) => item.feature == null || isFeatureEnabled(item.feature)
+  );
 
   return (
       <aside
@@ -44,7 +53,7 @@ export function Sidebar({ isOpen, onToggle, className }: Readonly<SidebarProps>)
       >
         <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4 scrollbar-thin min-w-[15rem]">
           <ul className="flex flex-col gap-1 px-2">
-            {navItems.map((item) => {
+            {visibleNav.map((item) => {
               const Icon = item.icon;
               const isActive =
                 pathname === item.href ||

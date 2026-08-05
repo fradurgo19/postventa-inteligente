@@ -24,6 +24,7 @@ import { useUserStore } from "@/store";
 import { DASHBOARD_KPIS } from "@/lib/mock-data";
 import type { UserRole } from "@/lib/mock-data";
 import { formatCOP } from "@/lib/mock-data";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -219,16 +220,20 @@ const MOCK_ACTIVITY: ActivityItem[] = [
 // ── Role-based card filter ─────────────────────────────────────────────────────
 
 function filterCardsForRole(cards: ModuleCard[], role: UserRole): ModuleCard[] {
-  // Technician and Viewer: only Calculator and CPP
-  if (role === "Technician" || role === "Viewer") {
-    return cards.filter((c) => c.id === "calculator" || c.id === "cpp");
+  const withFeatures = isFeatureEnabled('cppModule')
+    ? cards
+    : cards.filter((c) => c.id !== 'cpp');
+
+  // Technician and Viewer: Calculator (y CPP solo si el módulo está activo)
+  if (role === 'Technician' || role === 'Viewer') {
+    return withFeatures.filter((c) => c.id === 'calculator' || c.id === 'cpp');
   }
   // Coordinator and Sales Advisor: no Administration
-  if (role === "Coordinator" || role === "Sales Advisor") {
-    return cards.filter((c) => !c.allowedRoles || c.allowedRoles.includes(role));
+  if (role === 'Coordinator' || role === 'Sales Advisor') {
+    return withFeatures.filter((c) => !c.allowedRoles || c.allowedRoles.includes(role));
   }
-  // Administrator: all cards
-  return cards;
+  // Administrator: all enabled cards
+  return withFeatures;
 }
 
 // ── Framer Motion variants ─────────────────────────────────────────────────────
