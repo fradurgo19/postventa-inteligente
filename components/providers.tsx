@@ -6,9 +6,10 @@ import { Toaster } from 'sonner';
 import { queryClient } from '@/lib/query-client';
 import { getSessionUser, subscribeAuthChanges } from '@/lib/supabase/auth';
 import { isSupabaseConfigured } from '@/lib/supabase/client';
+import { InactivityGuard } from '@/components/auth/inactivity-guard';
 import { useUserStore } from '@/store';
 
-function AuthHydrator({ children }: { children: React.ReactNode }) {
+function AuthHydrator({ children }: Readonly<{ children: React.ReactNode }>) {
   const setUser = useUserStore((s) => s.setUser);
   const clearSession = useUserStore((s) => s.clearSession);
 
@@ -51,10 +52,12 @@ function AuthHydrator({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthHydrator>{children}</AuthHydrator>
+      <AuthHydrator>
+        <InactivityGuard>{children}</InactivityGuard>
+      </AuthHydrator>
       <Toaster position="top-right" richColors closeButton />
     </QueryClientProvider>
   );

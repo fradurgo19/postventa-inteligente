@@ -46,6 +46,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { DualScrollContainer } from '@/components/ui/dual-scroll-container';
 import {
   Dialog,
   DialogContent,
@@ -429,8 +430,8 @@ export function CalculadoraAdminImport() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <Table>
+              <DualScrollContainer>
+                <Table noScrollWrapper className="min-w-[960px]">
                   <TableHeader>
                     <TableRow className="bg-muted/30 hover:bg-muted/30">
                       <TableHead className="text-xs">ID</TableHead>
@@ -530,7 +531,7 @@ export function CalculadoraAdminImport() {
                     )}
                   </TableBody>
                 </Table>
-              </div>
+              </DualScrollContainer>
 
               <div className="flex items-center justify-between px-4 py-3 border-t border-border">
                 <span className="text-xs text-muted-foreground">
