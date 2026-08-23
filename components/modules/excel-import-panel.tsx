@@ -103,6 +103,7 @@ export function ExcelImportPanel({
         let recordsError = 0;
         let duplicates = 0;
         let total = 0;
+        let skipped = 0;
         let errors: Array<{ row: number; message: string }> = [];
 
         if (modulo === 'calculadora') {
@@ -132,6 +133,7 @@ export function ExcelImportPanel({
           recordsError = response.recordsError;
           duplicates = response.duplicates;
           total = response.total ?? recordsOk + recordsError;
+          skipped = response.skipped ?? 0;
           errors = response.errors ?? [];
         } else if (isSupabaseConfigured()) {
           const response = await invokeImportExcel(modulo, f);
@@ -154,12 +156,13 @@ export function ExcelImportPanel({
         const previewLines = [
           `Archivo: ${f.name}`,
           `Filas leídas del Excel: ${total}`,
+          ...(skipped > 0 ? [`Filas omitidas (vacías / sin serie): ${skipped}`] : []),
           `Registros cargados OK: ${recordsOk}`,
           updatedLabel,
-          `Errores / omitidos: ${recordsError}`,
-          recordsOk + recordsError < total
-            ? `Diferencia vs archivo: ${total - recordsOk - recordsError}`
-            : 'Cobertura: 100% de filas procesadas',
+          `Errores: ${recordsError}`,
+          recordsOk + recordsError + skipped < total
+            ? `Diferencia vs archivo: ${total - recordsOk - recordsError - skipped}`
+            : 'Cobertura: 100% de filas con datos de equipo procesadas',
         ];
         setPreview(previewLines);
         setRowErrors(errors.slice(0, 12));

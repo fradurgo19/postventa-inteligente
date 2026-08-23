@@ -574,7 +574,8 @@ export async function importTelemetriaFromFile(
       recordsOk: 0,
       recordsError: parseErrors.length,
       duplicates: 0,
-      total: parseErrors.length,
+      total: parsed.rawTotal,
+      skipped: parsed.skipped,
       errors: parseErrors.slice(0, MAX_ERROR_SAMPLES),
       error: parseErrors[0]?.message ?? 'El archivo no contiene filas de datos',
     };
@@ -658,7 +659,8 @@ export async function importTelemetriaFromFile(
     recordsOk,
     recordsError,
     duplicates: result.updated,
-    total: deduped.length + parseErrors.length,
+    total: parsed.rawTotal,
+    skipped: parsed.skipped,
     errors: allErrors,
   };
 }

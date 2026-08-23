@@ -8,6 +8,7 @@ export interface ImportExcelResponse {
   recordsError: number;
   duplicates: number;
   total?: number;
+  skipped?: number;
   errors?: Array<{ row: number; message: string }>;
   error?: string;
 }

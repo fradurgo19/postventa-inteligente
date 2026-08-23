@@ -108,6 +108,46 @@ export interface TelemetriaMappedRow {
 export interface TelemetriaParseResult {
   rows: TelemetriaMappedRow[];
   errors: Array<{ row: number; message: string }>;
+  /** Filas vacías o sin datos de equipo (omitidas sin error). */
+  skipped: number;
+  /** Total de filas de datos leídas del archivo (sin encabezado). */
+  rawTotal: number;
+  /** Fila Excel (1-based) donde están los encabezados. */
+  headerRow: number;
+}
+
+interface TelemetriaRawSheetRow {
+  excelRow: number;
+  data: Record<string, string>;
+}
+
+function compactHeader(header: string): string {
+  return normalizeHeader(header).replace(/[\s_.]+/g, '');
+}
+
+function cellToString(value: unknown): string {
+  if (value == null) return '';
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    if (Number.isInteger(value) && Math.abs(value) >= 1e6) {
+      return value.toFixed(0);
+    }
+    return String(value);
+  }
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  return '';
+}
+
+function normalizeSerieValue(raw: string): string | null {
+  const v = cleanCell(raw);
+  if (!v) return null;
+  if (/^\d+(\.0+)?$/.test(v)) {
+    return String(Math.trunc(Number(v)));
+  }
+  return v;
 }
 
 function normalizeHeader(header: string): string {
@@ -121,17 +161,101 @@ function normalizeHeader(header: string): string {
 }
 
 function getField(row: Record<string, string>, ...aliases: string[]): string {
+  const wanted = new Set(aliases.map(compactHeader));
   for (const alias of aliases) {
     const direct = row[alias];
     if (direct != null && String(direct).trim()) return String(direct).trim();
   }
-  const wanted = aliases.map(normalizeHeader);
   for (const [key, value] of Object.entries(row)) {
-    if (wanted.includes(normalizeHeader(key)) && String(value).trim()) {
+    if (wanted.has(compactHeader(key)) && String(value).trim()) {
       return String(value).trim();
     }
   }
   return '';
+}
+
+function findTelemetriaHeaderRowIndex(matrix: unknown[][]): number {
+  for (let i = 0; i < Math.min(matrix.length, 50); i++) {
+    const cells = (matrix[i] ?? []).map((cell) => compactHeader(cellToString(cell)));
+    const nonEmptyHeaders = cells.filter(Boolean).length;
+    if (nonEmptyHeaders < 5) continue;
+
+    if (cells.some((c) => c === 'nombredelcliente' || c.includes('nombredelcliente'))) {
+      return i;
+    }
+    const markers = ['serie', 'modelo', 'marca', 'horometro', 'nombredelcliente'];
+    const score = markers.filter((m) => cells.some((c) => c.includes(m))).length;
+    if (score >= 4) return i;
+  }
+  return -1;
+}
+
+function matrixToRows(matrix: unknown[][], headerIdx: number): TelemetriaRawSheetRow[] {
+  const headers = (matrix[headerIdx] ?? []).map((h) => cellToString(h).trim());
+  const rows: TelemetriaRawSheetRow[] = [];
+
+  for (let r = headerIdx + 1; r < matrix.length; r++) {
+    const line = matrix[r] ?? [];
+    const data: Record<string, string> = {};
+    let hasData = false;
+
+    headers.forEach((header, col) => {
+      if (!header) return;
+      const value = cellToString(line[col]).trim();
+      if (value) hasData = true;
+      data[header] = value;
+    });
+
+    if (hasData) {
+      rows.push({ excelRow: r + 1, data });
+    }
+  }
+
+  return rows;
+}
+
+function resolveSerie(row: Record<string, string>): string {
+  const candidates = [
+    getField(row, 'Serie.', 'Serie', 'serie', 'SERIE', 'Serial', 'Serial Number'),
+    getField(
+      row,
+      'N° serie',
+      'Nº serie',
+      'No serie',
+      'No. serie',
+      'Numero serie',
+      'Número de serie',
+      'numero_serie',
+      'N° Serie'
+    ),
+  ];
+  for (const candidate of candidates) {
+    const normalized = normalizeSerieValue(candidate);
+    if (normalized) return normalized;
+  }
+  return '';
+}
+
+function resolveModelo(row: Record<string, string>): string {
+  return (
+    cleanCell(getField(row, 'Modelo', 'modelo', 'MODELO', 'TipoDeMaquina', 'Tipo de Maquina')) ??
+    ''
+  );
+}
+
+function resolveMarca(row: Record<string, string>): string {
+  return cleanCell(getField(row, 'Marca', 'marca', 'MARCA', 'Brand')) ?? '';
+}
+
+function hasEquipmentData(row: Record<string, string>): boolean {
+  if (resolveSerie(row)) return true;
+  if (resolveModelo(row)) return true;
+  if (resolveMarca(row)) return true;
+  const cliente = cleanCell(
+    getField(row, 'Nombre del cliente', 'Nombre del Cliente', 'Título', 'Titulo', 'titulo')
+  );
+  const horometro = getField(row, 'Horometro', 'Horómetro', 'horometro');
+  return Boolean(cliente || cleanCell(horometro));
 }
 
 /** Trata #N/D / N/D / vacío como ausente. */
@@ -155,7 +279,7 @@ function toNumber(raw: string, fallback = 0): number {
 function toNumberOrNull(raw: string): number | null {
   const v = cleanCell(raw);
   if (v == null) return null;
-  const n = toNumber(v, NaN);
+  const n = toNumber(v, Number.NaN);
   return Number.isFinite(n) ? n : null;
 }
 
@@ -215,15 +339,15 @@ export function mapTelemetriaSheetRow(
   row: Record<string, string>,
   createdBy: string
 ): TelemetriaMappedRow {
-  const serie =
-    cleanCell(getField(row, 'Serie.', 'Serie', 'serie', 'N° serie', 'Nº serie', 'numero_serie')) ??
-    '';
-  const modelo = cleanCell(getField(row, 'Modelo', 'modelo')) ?? '';
-  const marca = cleanCell(getField(row, 'Marca', 'marca')) ?? '';
+  const serie = resolveSerie(row);
+  let modelo = resolveModelo(row);
+  let marca = resolveMarca(row);
 
-  if (!serie || !modelo || !marca) {
-    throw new Error('Serie, Modelo y Marca son obligatorios');
+  if (!serie) {
+    throw new Error('Serie es obligatoria');
   }
+  if (!modelo) modelo = 'SIN MODELO';
+  if (!marca) marca = 'SIN MARCA';
 
   const emailCliente = cleanCell(getField(row, 'email', 'Email', 'E-mail'));
   const correoFlag = cleanCell(getField(row, 'Correo', 'correo_enviado'));
@@ -311,69 +435,113 @@ export function mapTelemetriaSheetRow(
 
 export async function parseTelemetriaFile(file: File): Promise<TelemetriaParseResult> {
   const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
-  let rawRows: Record<string, string>[] = [];
+  let rawRows: TelemetriaRawSheetRow[] = [];
+  let headerRow = 1;
 
   if (ext === 'csv' || ext === 'txt') {
     const text = await file.text();
-    rawRows = parseCsv(text);
+    const parsed = parseCsvWithHeader(text);
+    rawRows = parsed.rows;
+    headerRow = parsed.headerRow;
   } else if (ext === 'xlsx' || ext === 'xls') {
     const XLSX = await import('xlsx');
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
     const sheetName = workbook.SheetNames[0];
-    if (!sheetName) return { rows: [], errors: [{ row: 0, message: 'Excel sin hojas' }] };
+    if (!sheetName) {
+      return {
+        rows: [],
+        errors: [{ row: 0, message: 'Excel sin hojas' }],
+        skipped: 0,
+        rawTotal: 0,
+        headerRow: 0,
+      };
+    }
     const sheet = workbook.Sheets[sheetName];
-    const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+    const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+      header: 1,
       defval: '',
-      raw: false,
-    });
-    rawRows = json.map((row) => {
-      const out: Record<string, string> = {};
-      for (const [k, v] of Object.entries(row)) {
-        out[String(k).trim()] = v == null ? '' : String(v).trim();
-      }
-      return out;
-    });
+      raw: true,
+    }) as unknown[][];
+
+    const headerIdx = findTelemetriaHeaderRowIndex(matrix);
+    if (headerIdx < 0) {
+      return {
+        rows: [],
+        errors: [
+          {
+            row: 0,
+            message:
+              'No se encontró la fila de encabezados (Nombre del cliente / Serie / Modelo / Marca). Use la plantilla oficial.',
+          },
+        ],
+        skipped: 0,
+        rawTotal: 0,
+        headerRow: 0,
+      };
+    }
+
+    headerRow = headerIdx + 1;
+    rawRows = matrixToRows(matrix, headerIdx);
   } else {
     return {
       rows: [],
       errors: [{ row: 0, message: 'Formato no soportado. Use .xlsx, .xls o .csv' }],
+      skipped: 0,
+      rawTotal: 0,
+      headerRow: 0,
     };
   }
 
   const rows: TelemetriaMappedRow[] = [];
   const errors: Array<{ row: number; message: string }> = [];
+  let skipped = 0;
 
-  rawRows.forEach((row, idx) => {
+  for (const { excelRow, data } of rawRows) {
+    if (!hasEquipmentData(data)) {
+      skipped += 1;
+      continue;
+    }
+
+    if (!resolveSerie(data)) {
+      skipped += 1;
+      continue;
+    }
+
     try {
-      rows.push(mapTelemetriaSheetRow(row, 'import'));
+      rows.push(mapTelemetriaSheetRow(data, 'import'));
     } catch (err) {
       errors.push({
-        row: idx + 2,
+        row: excelRow,
         message: err instanceof Error ? err.message : 'Fila inválida',
       });
     }
-  });
+  }
 
-  return { rows, errors };
+  return {
+    rows,
+    errors,
+    skipped,
+    rawTotal: rawRows.length,
+    headerRow,
+  };
 }
 
-function parseCsv(text: string): Record<string, string>[] {
+function parseCsvWithHeader(text: string): { rows: TelemetriaRawSheetRow[]; headerRow: number } {
   const lines = text
     .replace(/^\uFEFF/, '')
     .split(/\r?\n/)
     .filter((l) => l.trim().length > 0);
-  if (lines.length < 2) return [];
+  if (lines.length < 2) return { rows: [], headerRow: 1 };
 
-  const headers = splitCsvLine(lines[0]).map((h) => h.trim());
-  return lines.slice(1).map((line) => {
-    const values = splitCsvLine(line);
-    const row: Record<string, string> = {};
-    headers.forEach((header, i) => {
-      row[header] = (values[i] ?? '').trim();
-    });
-    return row;
-  });
+  const matrix = lines.map((line) => splitCsvLine(line));
+  const headerIdx = findTelemetriaHeaderRowIndex(matrix);
+  const resolvedHeaderIdx = headerIdx >= 0 ? headerIdx : 0;
+
+  return {
+    rows: matrixToRows(matrix, resolvedHeaderIdx),
+    headerRow: resolvedHeaderIdx + 1,
+  };
 }
 
 function splitCsvLine(line: string): string[] {
