@@ -169,13 +169,26 @@ export async function getSessionUser(): Promise<User | null> {
   if (!isSupabaseConfigured()) return null;
 
   const supabase = getSupabaseClient();
-  const { data } = await supabase.auth.getSession();
-  if (!data.session?.user) return null;
 
-  return fetchProfileAsUser(data.session.user.id, data.session.user.email ?? '');
+  // getUser valida el JWT con el servidor; getSession solo lee storage local.
+  const { data: userData, error } = await supabase.auth.getUser();
+  if (error || !userData.user) {
+    const { data: local } = await supabase.auth.getSession();
+    if (local.session) {
+      await supabase.auth.signOut({ scope: 'local' });
+    }
+    return null;
+  }
+
+  const user = await fetchProfileAsUser(userData.user.id, userData.user.email ?? '');
+  if (user.isActive === false) {
+    await supabase.auth.signOut({ scope: 'local' });
+    return null;
+  }
+  return user;
 }
 
-/** Suscripción a cambios de sesión Supabase (SIGNED_IN / SIGNED_OUT). */
+/** Suscripción a cambios de sesión Supabase (SIGNED_IN / SIGNED_OUT / refresh). */
 export function subscribeAuthChanges(
   onUser: (user: User | null) => void
 ): () => void {
@@ -188,16 +201,34 @@ export function subscribeAuthChanges(
     data: { subscription },
   } = supabase.auth.onAuthStateChange((event, session) => {
     void (async () => {
-      if (event === 'SIGNED_OUT' || !session?.user) {
+      if (
+        event === 'SIGNED_OUT' ||
+        (event === 'INITIAL_SESSION' && !session?.user)
+      ) {
         onUser(null);
         return;
       }
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-        const user = await fetchProfileAsUser(
-          session.user.id,
-          session.user.email ?? ''
-        );
-        onUser(user);
+
+      if (!session?.user) {
+        onUser(null);
+        return;
+      }
+
+      if (
+        event === 'SIGNED_IN' ||
+        event === 'TOKEN_REFRESHED' ||
+        event === 'USER_UPDATED' ||
+        event === 'INITIAL_SESSION'
+      ) {
+        try {
+          const user = await fetchProfileAsUser(
+            session.user.id,
+            session.user.email ?? ''
+          );
+          onUser(user);
+        } catch {
+          onUser(null);
+        }
       }
     })();
   });

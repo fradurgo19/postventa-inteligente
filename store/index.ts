@@ -10,6 +10,9 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import type { User, UserRole } from "@/lib/mock-data";
 import { signOut as supabaseSignOut } from "@/lib/supabase/auth";
 
+/** Rol placeholder solo interno; la UI no debe mostrarlo sin sesión. */
+const ANONYMOUS_ROLE: UserRole = "Viewer";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -42,7 +45,7 @@ export interface CartItem {
 
 const LOGGED_OUT_STATE = {
   currentUser: null as User | null,
-  role: "Viewer" as UserRole,
+  role: ANONYMOUS_ROLE,
   isAuthenticated: false,
 };
 
@@ -51,55 +54,61 @@ const LOGGED_OUT_STATE = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface UserState {
-  /** Usuario autenticado; null si no hay sesión (nunca mock Santiago Gómez). */
+  /** Usuario autenticado; null si no hay sesión. */
   currentUser: User | null;
   role: UserRole;
   isAuthenticated: boolean;
+  /** true cuando ya se validó la sesión contra Supabase (o modo mock). */
+  authReady: boolean;
 
   /** Establece el usuario tras login / hidratación de sesión Supabase. */
   setUser: (user: User) => void;
   /** Limpia el store local (sin llamar a Supabase). */
   clearSession: () => void;
+  setAuthReady: (ready: boolean) => void;
   /** Cierra sesión en Supabase y limpia el store. */
   logout: () => Promise<void>;
 }
 
-export const useUserStore = create<UserState>()(
-  persist(
-    (set) => ({
-      ...LOGGED_OUT_STATE,
+/**
+ * La sesión NO se persiste en Zustand: solo Supabase Auth (localStorage JWT).
+ * Evita “Usuario Visualizador” fantasma tras días sin entrar.
+ */
+export const useUserStore = create<UserState>()((set) => ({
+  ...LOGGED_OUT_STATE,
+  authReady: false,
 
-      setUser: (user) =>
-        set({
-          currentUser: user,
-          role: user.role,
-          isAuthenticated: true,
-        }),
-
-      clearSession: () => set({ ...LOGGED_OUT_STATE }),
-
-      logout: async () => {
-        try {
-          await supabaseSignOut();
-        } finally {
-          set({ ...LOGGED_OUT_STATE });
-        }
-      },
+  setUser: (user) =>
+    set({
+      currentUser: user,
+      role: user.role,
+      isAuthenticated: true,
+      authReady: true,
     }),
-    {
-      name: "partequipos-user",
-      version: 2,
-      storage: createJSONStorage(() => sessionStorage),
-      /** Invalida sesión mock antigua (Santiago Gómez / DEFAULT_USER). */
-      migrate: () => ({ ...LOGGED_OUT_STATE }),
-      partialize: (state) => ({
-        currentUser: state.currentUser,
-        role: state.role,
-        isAuthenticated: state.isAuthenticated,
-      }),
+
+  clearSession: () => set({ ...LOGGED_OUT_STATE, authReady: true }),
+
+  setAuthReady: (ready) => set({ authReady: ready }),
+
+  logout: async () => {
+    try {
+      await supabaseSignOut();
+    } finally {
+      set({ ...LOGGED_OUT_STATE, authReady: true });
     }
-  )
-);
+  },
+}));
+
+/** Limpia restos de versiones anteriores que guardaban sesión en sessionStorage. */
+export function purgeStaleUserPersistence(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem("partequipos-user");
+    window.localStorage.removeItem("partequipos-user");
+  } catch {
+    // ignore quota / private mode
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 2. Notification Store

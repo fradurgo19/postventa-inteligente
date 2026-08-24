@@ -42,13 +42,16 @@ function roleLabel(role: string): string {
 export function TopBar({ onMenuToggle, sidebarOpen = true, className }: TopBarProps) {
   const router = useRouter();
   const notificationCount = useNotificationCount();
-  const { currentUser, role, logout } = useUserStore();
+  const { currentUser, role, isAuthenticated, logout } = useUserStore();
   const [searchFocused, setSearchFocused] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const displayName = currentUser?.name?.trim() || 'Usuario';
-  const displayEmail = currentUser?.email?.trim() || '';
+  const displayName = isAuthenticated
+    ? currentUser?.name?.trim() || currentUser?.email?.trim() || 'Usuario'
+    : 'Invitado';
+  const displayEmail = isAuthenticated ? currentUser?.email?.trim() || '' : '';
+  const displayRole = isAuthenticated ? roleLabel(role) : 'Sin sesión';
 
   const initials =
     currentUser?.avatar ||
@@ -194,7 +197,7 @@ export function TopBar({ onMenuToggle, sidebarOpen = true, className }: TopBarPr
                 <span className="text-xs font-semibold text-foreground max-w-[120px] truncate">
                   {displayName}
                 </span>
-                <span className="text-[10px] text-muted-foreground">{roleLabel(role)}</span>
+                <span className="text-[10px] text-muted-foreground">{displayRole}</span>
               </div>
               <ChevronDown className="h-3.5 w-3.5 hidden md:block transition-transform duration-150 group-data-[state=open]:rotate-180" />
             </Button>
