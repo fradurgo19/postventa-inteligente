@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ProyectadosImportPanel } from '@/components/modules/proyectados-import-panel';
 import {
@@ -62,7 +62,12 @@ import {
 } from "@/components/ui/table";
 import { KPICard } from "@/components/ui/kpi-card";
 import { AppShell } from "@/components/layout/app-shell";
-import { useProjectedKpis } from "@/hooks/use-projected-maintenance";
+import {
+  useProjectedKpis,
+  useTelemetriaEquipos,
+  useProyectadosImportHistory,
+} from "@/hooks/use-projected-maintenance";
+import type { ProyectadosImportLog } from "@/services/projected-maintenance.service";
 import { formatCOP } from "@/lib/mock-data";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -76,33 +81,31 @@ import {
   parseFlexibleDate,
   type ReportFiltersState,
 } from "@/lib/report-filters";
+import {
+  mapTelemetriaToOpportunityRows,
+  mapTelemetriaToCalendarEvents,
+  aggregateCiudadesFromTelemetria,
+  aggregateMarcasPie,
+  type MaintenanceStatusUi,
+  type TelemetriaOpportunityRow,
+  type TelemetriaCalendarEvent,
+} from "@/lib/proyectados/map-telemetria-ui";
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-type MaintenanceStatus = "Scheduled" | "Overdue" | "In Progress" | "Completed";
+type MaintenanceStatus = MaintenanceStatusUi;
 
 interface MaintenanceEvent {
-  id: number;
+  id: string;
   day: number;
   title: string;
   status: MaintenanceStatus;
 }
 
-interface MaintenanceRow {
-  id: number;
-  equipment: string;
-  brand: string;
-  model: string;
-  client: string;
-  hours: number;
-  lastMaintenance: string;
-  nextDue: string;
-  status: MaintenanceStatus;
-  advisor: string;
-}
+type MaintenanceRow = TelemetriaOpportunityRow;
 
 interface ImportRecord {
-  id: number;
+  id: string;
   date: string;
   fileName: string;
   records: number;
@@ -133,80 +136,40 @@ interface CityDot {
   cy: number;
 }
 
-// ─── Mock Data ─────────────────────────────────────────────────────────────────
-
-const MAINTENANCE_EVENTS: MaintenanceEvent[] = [
-  { id: 1,  day: 2,  title: "CAT 320 – PM500",        status: "Completed"  },
-  { id: 2,  day: 3,  title: "Volvo EC220 – PM1000",   status: "Completed"  },
-  { id: 3,  day: 5,  title: "Komatsu PC200 – PM250",  status: "Completed"  },
-  { id: 4,  day: 7,  title: "Hitachi ZX200 – PM500",  status: "Overdue"    },
-  { id: 5,  day: 8,  title: "JCB 3CX – PM250",        status: "Overdue"    },
-  { id: 6,  day: 10, title: "CAT 336 – PM2000",       status: "In Progress"},
-  { id: 7,  day: 12, title: "Doosan DX225 – PM500",   status: "Scheduled"  },
-  { id: 8,  day: 13, title: "Liebherr R926 – PM1000", status: "Scheduled"  },
-  { id: 9,  day: 15, title: "Volvo L120 – PM250",     status: "Scheduled"  },
-  { id: 10, day: 16, title: "CAT 966 – PM500",        status: "Scheduled"  },
-  { id: 11, day: 17, title: "Komatsu D65 – PM1000",   status: "In Progress"},
-  { id: 12, day: 19, title: "Hitachi EX200 – PM250",  status: "Scheduled"  },
-  { id: 13, day: 21, title: "JCB 540-170 – PM500",    status: "Scheduled"  },
-  { id: 14, day: 22, title: "CAT 420F – PM2000",      status: "Scheduled"  },
-  { id: 15, day: 24, title: "Doosan DX300 – PM250",   status: "Scheduled"  },
-  { id: 16, day: 25, title: "Volvo EC480 – PM1000",   status: "Scheduled"  },
-  { id: 17, day: 27, title: "CAT 390 – PM500",        status: "Scheduled"  },
-  { id: 18, day: 28, title: "Komatsu PC400 – PM2000", status: "Scheduled"  },
-  { id: 19, day: 29, title: "Liebherr LTM – PM250",   status: "Scheduled"  },
-  { id: 20, day: 30, title: "Hitachi ZX350 – PM1000", status: "Scheduled"  },
-];
-
-const OPPORTUNITY_ROWS: MaintenanceRow[] = [
-  { id: 1,  equipment: "CAT 320 GC",      brand: "Caterpillar", model: "320 GC",    client: "Cemex Colombia",    hours: 2480, lastMaintenance: "15/05/2025", nextDue: "15/07/2025", status: "Scheduled",   advisor: "Carlos Ruiz"    },
-  { id: 2,  equipment: "Volvo EC220E",     brand: "Volvo CE",    model: "EC220E",    client: "Holcim Colombia",   hours: 3150, lastMaintenance: "01/04/2025", nextDue: "01/06/2025", status: "Overdue",     advisor: "Mónica Torres"  },
-  { id: 3,  equipment: "Komatsu PC200-8",  brand: "Komatsu",     model: "PC200-8",   client: "Argos S.A.",        hours: 1870, lastMaintenance: "20/06/2025", nextDue: "20/08/2025", status: "Scheduled",   advisor: "Felipe Gómez"   },
-  { id: 4,  equipment: "CAT 336 Next",     brand: "Caterpillar", model: "336 Next",  client: "Mineros S.A.",      hours: 4200, lastMaintenance: "10/03/2025", nextDue: "10/05/2025", status: "Overdue",     advisor: "Sandra Mejía"   },
-  { id: 5,  equipment: "JCB 3CX Compact",  brand: "JCB",         model: "3CX",       client: "Drummond Ltd.",     hours: 980,  lastMaintenance: "28/06/2025", nextDue: "28/09/2025", status: "In Progress", advisor: "Andrés Vargas"   },
-  { id: 6,  equipment: "Hitachi ZX200-6",  brand: "Hitachi",     model: "ZX200-6",   client: "Holcim Colombia",   hours: 2760, lastMaintenance: "05/05/2025", nextDue: "05/08/2025", status: "Scheduled",   advisor: "Laura Castro"    },
-  { id: 7,  equipment: "Doosan DX225LC",   brand: "Doosan",      model: "DX225LC",   client: "Cemex Colombia",    hours: 5100, lastMaintenance: "15/02/2025", nextDue: "15/04/2025", status: "Overdue",     advisor: "Carlos Ruiz"    },
-  { id: 8,  equipment: "Volvo L120H",      brand: "Volvo CE",    model: "L120H",     client: "Argos S.A.",        hours: 3400, lastMaintenance: "18/06/2025", nextDue: "18/09/2025", status: "Completed",   advisor: "Felipe Gómez"   },
-  { id: 9,  equipment: "CAT 966M XE",      brand: "Caterpillar", model: "966M XE",   client: "Mineros S.A.",      hours: 1600, lastMaintenance: "22/06/2025", nextDue: "22/09/2025", status: "Completed",   advisor: "Sandra Mejía"   },
-  { id: 10, equipment: "Liebherr R926 Li", brand: "Liebherr",    model: "R926 Li",   client: "Drummond Ltd.",     hours: 2200, lastMaintenance: "30/05/2025", nextDue: "30/07/2025", status: "In Progress", advisor: "Andrés Vargas"   },
-];
-
-const IMPORT_HISTORY: ImportRecord[] = [
-  { id: 1, date: "10/07/2025 09:14", fileName: "equipos_julio_2025.xlsx",   records: 156, status: "Success",    user: "admin@partequipos.co" },
-  { id: 2, date: "03/07/2025 14:32", fileName: "mantenimientos_q2.xlsx",    records: 89,  status: "Success",    user: "supervisor@partequipos.co" },
-  { id: 3, date: "25/06/2025 11:05", fileName: "importacion_junio.csv",     records: 42,  status: "Failed",     user: "admin@partequipos.co" },
-  { id: 4, date: "18/06/2025 08:47", fileName: "equipos_semana24.xlsx",     records: 78,  status: "Success",    user: "asistente@partequipos.co" },
-  { id: 5, date: "10/06/2025 16:20", fileName: "consolidado_mayo_2025.xls", records: 201, status: "Processing", user: "admin@partequipos.co" },
-];
-
+// Roadmap de producto (no es data de prueba de negocio)
 const AUTOMATION_STEPS: AutomationStep[] = [
-  { number: 1, icon: Cpu,        title: "Integración SAP",       description: "Extrae diariamente a las 6 AM los datos de equipos directamente del módulo SAP PM. Sincroniza horómetros, órdenes de trabajo y maestros de equipos automáticamente.", status: "Planned"         },
-  { number: 2, icon: RefreshCw,  title: "Análisis de Horómetro",   description: "Compara las lecturas actuales del horómetro con los umbrales de mantenimiento definidos por modelo. Marca los equipos que se acercan a los intervalos de servicio con ventanas de tolerancia configurables.", status: "Planned"         },
-  { number: 3, icon: Calendar,   title: "Programación Automática",  description: "Crea órdenes de trabajo en borrador con 30 días de anticipación según las horas de operación proyectadas y los planes de mantenimiento. Asigna automáticamente a los asesores de servicio disponibles.", status: "In Development"  },
-  { number: 4, icon: Bell,       title: "Motor de Notificaciones",   description: "Envía alertas automáticas por correo y SMS a los asesores de servicio y clientes finales cuando el mantenimiento está próximo. Recordatorios configurables a 30, 15 y 7 días.", status: "Planned"         },
-  { number: 5, icon: FileText,   title: "Generación de PDF",        description: "Genera automáticamente cotizaciones de mantenimiento personalizadas con precios de repuestos actuales, estimaciones de mano de obra e historial de servicio. Se adjuntan a las órdenes de trabajo y se envían por correo.", status: "Planned"         },
-  { number: 6, icon: Zap,        title: "Actualización del Panel",      description: "Recálculo de KPIs en tiempo real y actualización del panel después de cada ciclo de flujo de trabajo. Seguimiento de tasas de cumplimiento, tendencias de vencimiento y métricas de desempeño de asesores.", status: "In Development"  },
+  { number: 1, icon: Cpu,        title: "IntegraciÃ³n SAP",       description: "Extrae diariamente a las 6 AM los datos de equipos directamente del mÃ³dulo SAP PM. Sincroniza horÃ³metros, Ã³rdenes de trabajo y maestros de equipos automÃ¡ticamente.", status: "Planned"         },
+  { number: 2, icon: RefreshCw,  title: "AnÃ¡lisis de HorÃ³metro",   description: "Compara las lecturas actuales del horÃ³metro con los umbrales de mantenimiento definidos por modelo. Marca los equipos que se acercan a los intervalos de servicio con ventanas de tolerancia configurables.", status: "Planned"         },
+  { number: 3, icon: Calendar,   title: "ProgramaciÃ³n AutomÃ¡tica",  description: "Crea Ã³rdenes de trabajo en borrador con 30 dÃ­as de anticipaciÃ³n segÃºn las horas de operaciÃ³n proyectadas y los planes de mantenimiento. Asigna automÃ¡ticamente a los asesores de servicio disponibles.", status: "In Development"  },
+  { number: 4, icon: Bell,       title: "Motor de Notificaciones",   description: "EnvÃ­a alertas automÃ¡ticas por correo y SMS a los asesores de servicio y clientes finales cuando el mantenimiento estÃ¡ prÃ³ximo. Recordatorios configurables a 30, 15 y 7 dÃ­as.", status: "Planned"         },
+  { number: 5, icon: FileText,   title: "GeneraciÃ³n de PDF",        description: "Genera automÃ¡ticamente cotizaciones de mantenimiento personalizadas con precios de repuestos actuales, estimaciones de mano de obra e historial de servicio. Se adjuntan a las Ã³rdenes de trabajo y se envÃ­an por correo.", status: "Planned"         },
+  { number: 6, icon: Zap,        title: "Actualizacion del Panel",      description: "Recalculo de KPIs en tiempo real y actualizacion del panel despues de cada ciclo de flujo de trabajo. Seguimiento de tasas de cumplimiento, tendencias de vencimiento y metricas de desempeno de asesores.", status: "In Development"  },
 ];
 
-const BRAND_DATA: BrandData[] = [
-  { name: "Caterpillar", value: 52, color: "#cf1b22" },
-  { name: "Volvo CE",    value: 31, color: "#f97316" },
-  { name: "Komatsu",     value: 28, color: "#3b82f6" },
-  { name: "Hitachi",     value: 24, color: "#8b5cf6" },
-  { name: "JCB",         value: 21, color: "#10b981" },
-];
+/** Posiciones aproximadas en el SVG de Colombia (claves sin tildes; cityCoords normaliza). */
+const CITY_COORDS: Record<string, { cx: number; cy: number }> = {
+  bogota: { cx: 178, cy: 245 },
+  medellin: { cx: 155, cy: 190 },
+  cali: { cx: 138, cy: 280 },
+  barranquilla: { cx: 172, cy: 98 },
+  bucaramanga: { cx: 192, cy: 175 },
+  pereira: { cx: 147, cy: 225 },
+  manizales: { cx: 152, cy: 210 },
+  monteria: { cx: 160, cy: 120 },
+  ibague: { cx: 165, cy: 250 },
+  istmina: { cx: 120, cy: 230 },
+};
 
-const CITY_DOTS: CityDot[] = [
-  { id: "bogota",       name: "Bogotá",       count: 48, status: "active",   cx: 178, cy: 245 },
-  { id: "medellin",     name: "Medellín",     count: 31, status: "active",   cx: 155, cy: 190 },
-  { id: "cali",         name: "Cali",         count: 22, status: "warning",  cx: 138, cy: 280 },
-  { id: "barranquilla", name: "Barranquilla", count: 18, status: "active",   cx: 172, cy: 98  },
-  { id: "bucaramanga",  name: "Bucaramanga",  count: 15, status: "critical", cx: 192, cy: 175 },
-  { id: "pereira",      name: "Pereira",      count: 12, status: "warning",  cx: 147, cy: 225 },
-  { id: "manizales",    name: "Manizales",    count: 10, status: "active",   cx: 152, cy: 210 },
-];
+function cityCoords(name: string, index: number): { cx: number; cy: number } {
+  const key = name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  if (CITY_COORDS[key]) return CITY_COORDS[key];
+  return { cx: 140 + (index % 5) * 18, cy: 140 + Math.floor(index / 5) * 28 };
+}
 
-// ─── Helpers ───────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const STATUS_CONFIG: Record<
   MaintenanceStatus,
@@ -236,9 +199,9 @@ function getFirstDayOfWeek(year: number, month: number): number {
   return new Date(year, month, 1).getDay();
 }
 
-// ─── Sub-components ────────────────────────────────────────────────────────────
+// â”€â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-/** KPI Row — datos desde v_kpi_* / telemetría */
+/** KPI Row â€” datos desde v_kpi_* / telemetrÃ­a */
 function KPIRow() {
   const { data: kpis, isLoading } = useProjectedKpis();
 
@@ -270,7 +233,7 @@ function KPIRow() {
         changeType="up"
         icon={Wrench}
         variant="default"
-        description="Telemetría registrada"
+        description="TelemetrÃ­a registrada"
       />
       <KPICard
         title="Clientes"
@@ -288,7 +251,7 @@ function KPIRow() {
         changeType="up"
         icon={AlertTriangle}
         variant="danger"
-        description="Próximos mantenimientos"
+        description="PrÃ³ximos mantenimientos"
       />
       <KPICard
         title="Alertas Enviadas"
@@ -388,7 +351,7 @@ function KpiChartsSection() {
       <Card className="border-border shadow-sm">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold">
-            Insumos Proyectados — {formatCOP(kpis.insumosProyectadosTotal)}
+            Insumos Proyectados â€” {formatCOP(kpis.insumosProyectadosTotal)}
           </CardTitle>
         </CardHeader>
         <CardContent className="h-56">
@@ -431,20 +394,32 @@ function KpiChartsSection() {
   );
 }
 
-/** Monthly Maintenance Calendar */
+/** Monthly Maintenance Calendar â€” fechas reales de telemetrÃ­a */
 function MaintenanceCalendar() {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [hoveredEvent, setHoveredEvent] = useState<MaintenanceEvent | null>(null);
+  const { data: equipos = [] } = useTelemetriaEquipos();
 
   const daysInMonth = getDaysInMonth(viewYear, viewMonth);
   const firstDay = getFirstDayOfWeek(viewYear, viewMonth);
 
+  const monthEvents = useMemo(() => {
+    return mapTelemetriaToCalendarEvents(equipos).filter(
+      (ev) => ev.month === viewMonth && ev.year === viewYear
+    );
+  }, [equipos, viewMonth, viewYear]);
+
   const eventsByDay: Record<number, MaintenanceEvent[]> = {};
-  MAINTENANCE_EVENTS.forEach((ev) => {
+  monthEvents.forEach((ev) => {
     if (!eventsByDay[ev.day]) eventsByDay[ev.day] = [];
-    eventsByDay[ev.day].push(ev);
+    eventsByDay[ev.day].push({
+      id: ev.id,
+      day: ev.day,
+      title: ev.title,
+      status: ev.status,
+    });
   });
 
   const prevMonth = () => {
@@ -482,7 +457,7 @@ function MaintenanceCalendar() {
       <CardContent className="pt-0">
         {/* Day headers */}
         <div className="grid grid-cols-7 mb-1">
-          {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map((d) => (
+          {["Dom", "Lun", "Mar", "MiÃ©", "Jue", "Vie", "SÃ¡b"].map((d) => (
             <div key={d} className="text-center text-[10px] font-semibold text-muted-foreground py-1">
               {d}
             </div>
@@ -524,12 +499,12 @@ function MaintenanceCalendar() {
                           onMouseEnter={() => setHoveredEvent(ev)}
                           onMouseLeave={() => setHoveredEvent(null)}
                         >
-                          {ev.title.split("–")[0].trim()}
+                          {ev.title.split("â€“")[0].trim()}
                         </div>
                       ))}
                       {events.length > 2 && (
                         <span className="text-[9px] text-muted-foreground pl-0.5">
-                          +{events.length - 2} más
+                          +{events.length - 2} mÃ¡s
                         </span>
                       )}
                     </div>
@@ -551,7 +526,7 @@ function MaintenanceCalendar() {
             >
               <p className="font-semibold">{hoveredEvent.title}</p>
               <p className="text-muted-foreground text-xs">
-                Día {hoveredEvent.day} ·{" "}
+                DÃ­a {hoveredEvent.day} Â·{" "}
                 <span
                   className={`font-medium ${
                     hoveredEvent.status === "Overdue" ? "text-[#cf1b22]" : ""
@@ -597,13 +572,20 @@ function OpportunitiesTable({
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
   const rowsPerPage = 10;
+  const { data: equipos = [], isLoading } = useTelemetriaEquipos();
 
-  const filtered = OPPORTUNITY_ROWS.filter((r) => {
+  const opportunityRows = useMemo(
+    () => mapTelemetriaToOpportunityRows(equipos),
+    [equipos]
+  );
+
+  const filtered = opportunityRows.filter((r) => {
     const matchSearch =
       r.equipment.toLowerCase().includes(search.toLowerCase()) ||
       r.brand.toLowerCase().includes(search.toLowerCase()) ||
       r.advisor.toLowerCase().includes(search.toLowerCase()) ||
-      r.client.toLowerCase().includes(search.toLowerCase());
+      r.client.toLowerCase().includes(search.toLowerCase()) ||
+      r.serie.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === "all" || r.status === statusFilter;
     const matchReport =
       matchesStringFilter(r.brand, reportFilters.marca) &&
@@ -615,16 +597,21 @@ function OpportunitiesTable({
 
   const totalRows = filtered.length;
   const pageRows = filtered.slice((page - 1) * rowsPerPage, page * rowsPerPage);
+
+  if (isLoading) {
+    return <Skeleton className="h-64 w-full rounded-xl" />;
+  }
+
   return (
     <Card className="border-border shadow-sm">
       <CardHeader className="pb-3">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <CardTitle className="text-base font-semibold">Oportunidades Próximas</CardTitle>
+          <CardTitle className="text-base font-semibold">Oportunidades PrÃ³ximas</CardTitle>
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <div className="relative flex-1 sm:w-52">
               <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input
-                placeholder="Buscar equipo…"
+                placeholder="Buscar equipoâ€¦"
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 className="pl-8 h-8 text-sm"
@@ -663,8 +650,8 @@ function OpportunitiesTable({
                 <TableHead className="text-xs font-semibold">Marca</TableHead>
                 <TableHead className="text-xs font-semibold">Modelo</TableHead>
                 <TableHead className="text-xs font-semibold text-right">Horas</TableHead>
-                <TableHead className="text-xs font-semibold">Último Mant.</TableHead>
-                <TableHead className="text-xs font-semibold">Próximo Venc.</TableHead>
+                <TableHead className="text-xs font-semibold">Ãšltimo Mant.</TableHead>
+                <TableHead className="text-xs font-semibold">PrÃ³ximo Venc.</TableHead>
                 <TableHead className="text-xs font-semibold">Estado</TableHead>
                 <TableHead className="text-xs font-semibold pr-4">Asesor</TableHead>
               </TableRow>
@@ -705,7 +692,7 @@ function OpportunitiesTable({
           <span className="text-xs text-muted-foreground">
             {totalRows === 0
               ? "Sin resultados"
-              : `Mostrando ${(page - 1) * rowsPerPage + 1}–${Math.min(page * rowsPerPage, totalRows)} de ${totalRows} resultados`}
+              : `Mostrando ${(page - 1) * rowsPerPage + 1}â€“${Math.min(page * rowsPerPage, totalRows)} de ${totalRows} resultados`}
           </span>
           <div className="flex items-center gap-1">
             <Button
@@ -746,9 +733,24 @@ function OpportunitiesTable({
   );
 }
 
-/** Colombia SVG Map */
+/** Colombia SVG Map â€” sedes/ciudades desde telemetrÃ­a */
 function ColombiaMap() {
   const [tooltip, setTooltip] = useState<CityDot | null>(null);
+  const { data: equipos = [] } = useTelemetriaEquipos();
+
+  const cityDots: CityDot[] = useMemo(() => {
+    return aggregateCiudadesFromTelemetria(equipos).map((c, i) => {
+      const coords = cityCoords(c.name, i);
+      return {
+        id: c.name.toLowerCase().replace(/\s+/g, "-"),
+        name: c.name,
+        count: c.count,
+        status: c.status,
+        cx: coords.cx,
+        cy: coords.cy,
+      };
+    });
+  }, [equipos]);
 
   return (
     <Card className="border-border shadow-sm">
@@ -756,18 +758,23 @@ function ColombiaMap() {
         <div className="flex items-center justify-between">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <MapPin className="h-4 w-4 text-[#cf1b22]" />
-            Distribución de Equipos por Ciudad
+            DistribuciÃ³n de Equipos por Ciudad/Sede
           </CardTitle>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="relative w-full" style={{ paddingBottom: "90%" }}>
+        {cityDots.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-8 text-center">
+            Sin datos de telemetrÃ­a. Importe la carga masiva para ver la distribuciÃ³n.
+          </p>
+        ) : null}
+        <div className={`relative w-full ${cityDots.length === 0 ? "opacity-40" : ""}`} style={{ paddingBottom: "90%" }}>
           <svg
             viewBox="0 0 340 440"
             className="absolute inset-0 w-full h-full"
             xmlns="http://www.w3.org/2000/svg"
           >
-            {/* ── Colombia outline (simplified, recognizable shape) ── */}
+            {/* â”€â”€ Colombia outline (simplified, recognizable shape) â”€â”€ */}
             <defs>
               <linearGradient id="colMap" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stopColor="#f8fafc" />
@@ -880,7 +887,7 @@ function ColombiaMap() {
             ))}
 
             {/* City dots */}
-            {CITY_DOTS.map((city) => (
+            {cityDots.map((city) => (
               <g key={city.id}>
                 {/* Pulse ring */}
                 <circle
@@ -960,7 +967,7 @@ function ColombiaMap() {
             [
               { label: "Activo",   status: "active"   },
               { label: "Advertencia",  status: "warning"  },
-              { label: "Crítico", status: "critical" },
+              { label: "CrÃ­tico", status: "critical" },
             ] as { label: string; status: CityDot["status"] }[]
           ).map(({ label, status }) => (
             <div key={status} className="flex items-center gap-1.5">
@@ -981,21 +988,24 @@ function ColombiaMap() {
 const CustomBrandTooltip = ({
   active,
   payload,
+  total,
 }: {
   active?: boolean;
   payload?: Array<{ name: string; value: number; payload: BrandData }>;
+  total?: number;
 }) => {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
+  const denom = total && total > 0 ? total : 1;
   return (
     <div className="rounded-lg border border-border bg-card shadow-lg px-3 py-2 text-sm">
       <p className="font-semibold" style={{ color: d.color }}>
         {d.name}
       </p>
       <p className="text-muted-foreground">
-        {d.value} mantenimientos &nbsp;
+        {d.value} proyecciones &nbsp;
         <span className="font-medium text-foreground">
-          ({((d.value / BRAND_DATA.reduce((a, b) => a + b.value, 0)) * 100).toFixed(1)}%)
+          ({((d.value / denom) * 100).toFixed(1)}%)
         </span>
       </p>
     </div>
@@ -1003,64 +1013,81 @@ const CustomBrandTooltip = ({
 };
 
 function BrandsChart() {
+  const { data: equipos = [] } = useTelemetriaEquipos();
+  const brandData = useMemo(() => aggregateMarcasPie(equipos), [equipos]);
+  const total = brandData.reduce((a, b) => a + b.value, 0);
+
   return (
     <Card className="border-border shadow-sm">
       <CardHeader className="pb-2">
-        <CardTitle className="text-base font-semibold">Mantenimientos por Marca</CardTitle>
+        <CardTitle className="text-base font-semibold">Proyecciones por Marca</CardTitle>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={220}>
-          <PieChart>
-            <Pie
-              data={BRAND_DATA}
-              cx="50%"
-              cy="50%"
-              innerRadius={55}
-              outerRadius={85}
-              paddingAngle={3}
-              dataKey="value"
-            >
-              {BRAND_DATA.map((entry, i) => (
-                <Cell key={i} fill={entry.color} stroke="transparent" />
-              ))}
-            </Pie>
-            <RechartsTooltip content={<CustomBrandTooltip />} />
-            <Legend
-              iconType="circle"
-              iconSize={8}
-              wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
-            />
-          </PieChart>
-        </ResponsiveContainer>
+        {brandData.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-10">
+            Sin datos de telemetrÃ­a cargados.
+          </p>
+        ) : (
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart>
+              <Pie
+                data={brandData}
+                cx="50%"
+                cy="50%"
+                innerRadius={55}
+                outerRadius={85}
+                paddingAngle={3}
+                dataKey="value"
+              >
+                {brandData.map((entry) => (
+                  <Cell key={entry.name} fill={entry.color} stroke="transparent" />
+                ))}
+              </Pie>
+              <RechartsTooltip content={<CustomBrandTooltip total={total} />} />
+              <Legend
+                iconType="circle"
+                iconSize={8}
+                wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        )}
       </CardContent>
     </Card>
   );
 }
 
-/** ── TAB 1: Dashboard ─────────────────────────────────────────────────────── */
+/** â”€â”€ TAB 1: Dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function DashboardTab() {
   const [reportFilters, setReportFilters] = useState<ReportFiltersState>(DEFAULT_REPORT_FILTERS);
+  const { data: equipos = [] } = useTelemetriaEquipos();
+  const opportunityRows = useMemo(
+    () => mapTelemetriaToOpportunityRows(equipos),
+    [equipos]
+  );
 
   const filterOptions = useMemo(() => {
-    const marcas = sortLocale(Array.from(new Set(OPPORTUNITY_ROWS.map((r) => r.brand))));
+    const marcas = sortLocale(Array.from(new Set(opportunityRows.map((r) => r.brand))));
     const source =
       reportFilters.marca === "all"
-        ? OPPORTUNITY_ROWS
-        : OPPORTUNITY_ROWS.filter((r) => matchesStringFilter(r.brand, reportFilters.marca));
+        ? opportunityRows
+        : opportunityRows.filter((r) => matchesStringFilter(r.brand, reportFilters.marca));
     const modelos = sortLocale(Array.from(new Set(source.map((r) => r.model))));
-    const clientes = sortLocale(Array.from(new Set(OPPORTUNITY_ROWS.map((r) => r.client))));
+    const clientes = sortLocale(Array.from(new Set(opportunityRows.map((r) => r.client))));
     const periodos = sortLocale(
       Array.from(
         new Set(
-          OPPORTUNITY_ROWS.map((r) => {
-            const d = parseFlexibleDate(r.nextDue);
-            return d ? d.getFullYear().toString() : null;
-          }).filter(Boolean) as string[]
+          opportunityRows
+            .map((r) => {
+              const d = parseFlexibleDate(r.nextDue);
+              return d ? d.getFullYear().toString() : null;
+            })
+            .filter(Boolean) as string[]
         )
       )
     );
     return { marcas, modelos, periodos, clientes };
-  }, [reportFilters.marca]);
+  }, [reportFilters.marca, opportunityRows]);
 
   return (
     <motion.div
@@ -1069,6 +1096,12 @@ function DashboardTab() {
       transition={{ duration: 0.35 }}
       className="space-y-6"
     >
+      {equipos.length === 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          No hay registros en telemetrÃ­a. Use la pestaÃ±a <strong>Importar</strong> para cargar
+          la plantilla mensual.
+        </div>
+      )}
       <ReportFiltersBar
         value={reportFilters}
         onChange={(next) => setReportFilters(next)}
@@ -1084,42 +1117,16 @@ function DashboardTab() {
         </div>
         <div className="xl:col-span-2 space-y-6">
           <ColombiaMap />
+          <BrandsChart />
         </div>
       </div>
     </motion.div>
   );
 }
 
-/** ── TAB 2: Import ────────────────────────────────────────────────────────── */
+/** â”€â”€ TAB 2: Import â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function ImportTab() {
-  const [isDragging, setIsDragging] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const [uploadFile, setUploadFile] = useState<string | null>(null);
-
-  const simulateUpload = useCallback((name: string) => {
-    setUploadFile(name);
-    setUploadProgress(0);
-    let p = 0;
-    const iv = setInterval(() => {
-      p += Math.random() * 18 + 4;
-      if (p >= 100) {
-        p = 100;
-        clearInterval(iv);
-        setTimeout(() => setUploadProgress(null), 1200);
-      }
-      setUploadProgress(Math.round(p));
-    }, 200);
-  }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      const f = e.dataTransfer.files[0];
-      if (f) simulateUpload(f.name);
-    },
-    [simulateUpload]
-  );
+  const { data: importHistory = [], isLoading } = useProyectadosImportHistory();
 
   const importStatusConfig: Record<
     ImportRecord["status"],
@@ -1139,160 +1146,68 @@ function ImportTab() {
     >
       <ProyectadosImportPanel />
 
-      {/* Upload zone legacy */}
-      <Card className="border-border shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <Upload className="h-4 w-4 text-[#cf1b22]" />
-            Importar Datos de Equipos
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {/* Drag & Drop zone */}
-          <div
-            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={handleDrop}
-            className={`
-              relative rounded-xl border-2 border-dashed transition-all duration-200
-              flex flex-col items-center justify-center gap-3 py-12 px-6 text-center
-              ${isDragging
-                ? "border-[#cf1b22] bg-[#cf1b22]/5"
-                : "border-border/70 hover:border-[#cf1b22]/50 hover:bg-muted/30"
-              }
-            `}
-          >
-            <div
-              className={`rounded-full p-4 transition-colors ${
-                isDragging ? "bg-[#cf1b22]/10" : "bg-muted"
-              }`}
-            >
-              <FileSpreadsheet
-                className={`h-8 w-8 ${
-                  isDragging ? "text-[#cf1b22]" : "text-muted-foreground"
-                }`}
-              />
-            </div>
-            <div>
-              <p className="font-semibold text-foreground">
-                {isDragging ? "Suelta tu archivo aquí" : "Arrastra y suelta tu archivo aquí"}
-              </p>
-              <p className="text-sm text-muted-foreground mt-1">
-                o haz clic para buscar en tu computadora
-              </p>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap justify-center">
-              {[".xlsx", ".xls", ".csv"].map((ext) => (
-                <Badge key={ext} variant="secondary" className="font-mono text-xs">
-                  {ext}
-                </Badge>
-              ))}
-            </div>
-            <input
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              className="absolute inset-0 opacity-0 cursor-pointer"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) simulateUpload(f.name);
-                e.target.value = "";
-              }}
-            />
-          </div>
-
-          {/* Progress */}
-          <AnimatePresence>
-            {uploadProgress !== null && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="space-y-2"
-              >
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-foreground truncate max-w-[60%]">
-                    {uploadFile}
-                  </span>
-                  <span className="text-muted-foreground">{uploadProgress}%</span>
-                </div>
-                <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-[#cf1b22] rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
-                </div>
-                {uploadProgress === 100 && (
-                  <p className="text-xs text-emerald-600 font-medium flex items-center gap-1">
-                    <CheckCheck className="h-3.5 w-3.5" /> Carga completa
-                  </p>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Actions */}
-          <div className="flex items-center gap-3">
-            <Button
-              className="bg-[#cf1b22] hover:bg-[#b01820] text-white"
-              onClick={() => simulateUpload("equipos_import.xlsx")}
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              Subir Archivo
-            </Button>
-            <Button variant="outline" className="gap-2">
-              <Download className="h-4 w-4" />
-              Descargar Plantilla
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Import history */}
       <Card className="border-border shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold">Historial de Importaciones</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead className="text-xs font-semibold pl-4">Fecha</TableHead>
-                <TableHead className="text-xs font-semibold">Nombre del Archivo</TableHead>
-                <TableHead className="text-xs font-semibold text-right">Registros</TableHead>
-                <TableHead className="text-xs font-semibold">Estado</TableHead>
-                <TableHead className="text-xs font-semibold pr-4">Usuario</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {IMPORT_HISTORY.map((row, i) => (
-                <motion.tr
-                  key={row.id}
-                  initial={{ opacity: 0, x: -6 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.06 }}
-                  className="border-b border-border/50 hover:bg-muted/30 transition-colors"
-                >
-                  <TableCell className="text-xs pl-4 py-2.5 text-muted-foreground whitespace-nowrap">
-                    {row.date}
-                  </TableCell>
-                  <TableCell className="text-xs py-2.5 font-medium font-mono">{row.fileName}</TableCell>
-                  <TableCell className="text-xs py-2.5 text-right font-semibold">{row.records}</TableCell>
-                  <TableCell className="py-2.5">
-                    <span
-                      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${importStatusConfig[row.status].className}`}
+          {isLoading ? (
+            <div className="p-4">
+              <Skeleton className="h-32 w-full" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/40 hover:bg-muted/40">
+                  <TableHead className="text-xs font-semibold pl-4">Fecha</TableHead>
+                  <TableHead className="text-xs font-semibold">Nombre del Archivo</TableHead>
+                  <TableHead className="text-xs font-semibold text-right">Registros</TableHead>
+                  <TableHead className="text-xs font-semibold">Estado</TableHead>
+                  <TableHead className="text-xs font-semibold pr-4">Usuario</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {importHistory.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-sm text-muted-foreground">
+                      AÃºn no hay importaciones de telemetrÃ­a registradas.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  importHistory.map((row: ProyectadosImportLog, i: number) => (
+                    <motion.tr
+                      key={row.id}
+                      initial={{ opacity: 0, x: -6 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.04 }}
+                      className="border-b border-border/50 hover:bg-muted/30 transition-colors"
                     >
-                      {importStatusConfig[row.status].label}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-xs py-2.5 pr-4 text-muted-foreground">{row.user}</TableCell>
-                </motion.tr>
-              ))}
-            </TableBody>
-          </Table>
+                      <TableCell className="text-xs pl-4 py-2.5 text-muted-foreground whitespace-nowrap">
+                        {row.date}
+                      </TableCell>
+                      <TableCell className="text-xs py-2.5 font-medium font-mono">{row.fileName}</TableCell>
+                      <TableCell className="text-xs py-2.5 text-right font-semibold">{row.records}</TableCell>
+                      <TableCell className="py-2.5">
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${importStatusConfig[row.status].className}`}
+                        >
+                          {importStatusConfig[row.status].label}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-xs py-2.5 pr-4 text-muted-foreground">{row.user}</TableCell>
+                    </motion.tr>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </motion.div>
   );
 }
 
-/** ── TAB 3: Automation ────────────────────────────────────────────────────── */
+/** â”€â”€ TAB 3: Automation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function AutomationTab() {
   return (
     <motion.div
@@ -1313,10 +1228,10 @@ function AutomationTab() {
             <Clock className="h-5 w-5 text-amber-600" />
           </div>
           <div>
-            <p className="font-bold text-amber-800 text-sm">Próximamente</p>
+            <p className="font-bold text-amber-800 text-sm">PrÃ³ximamente</p>
             <p className="text-xs text-amber-700 mt-0.5">
-              El módulo de automatización se encuentra actualmente en desarrollo. Las
-              funcionalidades se habilitarán progresivamente en las próximas versiones.
+              El mÃ³dulo de automatizaciÃ³n se encuentra actualmente en desarrollo. Las
+              funcionalidades se habilitarÃ¡n progresivamente en las prÃ³ximas versiones.
             </p>
           </div>
         </div>
@@ -1333,10 +1248,10 @@ function AutomationTab() {
           Flujo de Trabajo de Mantenimiento Automatizado
         </h2>
         <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-          Este módulo automatizará el ciclo de mantenimiento de extremo a extremo — desde la
-          ingestión de datos de SAP hasta la programación, notificación al cliente, generación
-          de cotizaciones y actualización del panel en tiempo real. La integración planificada
-          reduce el esfuerzo manual y garantiza que ningún equipo sea pasado por alto.
+          Este mÃ³dulo automatizarÃ¡ el ciclo de mantenimiento de extremo a extremo â€” desde la
+          ingestiÃ³n de datos de SAP hasta la programaciÃ³n, notificaciÃ³n al cliente, generaciÃ³n
+          de cotizaciones y actualizaciÃ³n del panel en tiempo real. La integraciÃ³n planificada
+          reduce el esfuerzo manual y garantiza que ningÃºn equipo sea pasado por alto.
         </p>
       </div>
 
@@ -1408,7 +1323,7 @@ function AutomationTab() {
   );
 }
 
-// ─── Page ──────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function ProjectedMaintenancePage() {
   return (
@@ -1429,7 +1344,7 @@ export default function ProjectedMaintenancePage() {
             Mantenimiento Proyectado
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Programación proactiva de mantenimiento y gestión del ciclo de vida de equipos
+            ProgramaciÃ³n proactiva de mantenimiento y gestiÃ³n del ciclo de vida de equipos
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1466,7 +1381,7 @@ export default function ProjectedMaintenancePage() {
             className="data-[state=active]:bg-[#cf1b22] data-[state=active]:text-white data-[state=active]:shadow-sm text-sm px-5"
           >
             <Zap className="h-3.5 w-3.5 mr-1.5" />
-            Automatización
+            AutomatizaciÃ³n
           </TabsTrigger>
         </TabsList>
 

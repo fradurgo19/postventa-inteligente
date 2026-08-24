@@ -2,6 +2,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   fetchTelemetriaEquipos,
   fetchProjectedKpis,
+  fetchProyectadosImportHistory,
   registerTelemetriaImport,
 } from '@/services/projected-maintenance.service';
 
@@ -18,6 +19,14 @@ export function useProjectedKpis() {
     queryKey: ['proyectados', 'kpis'],
     queryFn: fetchProjectedKpis,
     staleTime: 2 * 60 * 1000,
+  });
+}
+
+export function useProyectadosImportHistory() {
+  return useQuery({
+    queryKey: ['proyectados', 'importaciones'],
+    queryFn: fetchProyectadosImportHistory,
+    staleTime: 60 * 1000,
   });
 }
 
