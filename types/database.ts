@@ -179,6 +179,9 @@ export interface TelemetriaEquipo {
   tipo_mtto?: number | null;
   estado?: string | null;
   tipo_maquina?: string | null;
+  /** Periodo de la proyección (Power Apps MesCreado). */
+  mes_creado?: string | null;
+  anio?: number | null;
 }
 
 export interface CppCatalogItem {

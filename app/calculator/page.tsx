@@ -57,6 +57,7 @@ import {
   useCalculatePreventive,
 } from '@/hooks/use-calculadora';
 import { useTelemetriaEquipos } from '@/hooks/use-projected-maintenance';
+import { pickLatestTelemetriaPerSerie } from '@/services/projected-maintenance.service';
 import {
   getFrecuenciasPorHorometro,
   FRECUENCIA_LABELS,
@@ -122,7 +123,10 @@ export default function CalculatorPage() {
   const isAdmin = role === 'Administrator';
   const { data: marcas = [] } = useCalculadoraMarcas();
   const { data: telemetriaData } = useTelemetriaEquipos();
-  const telemetria: TelemetriaEquipo[] = telemetriaData ?? [];
+  const telemetria: TelemetriaEquipo[] = useMemo(
+    () => pickLatestTelemetriaPerSerie(telemetriaData ?? []),
+    [telemetriaData]
+  );
   const calculateMutation = useCalculatePreventive();
 
   const [result, setResult] = useState<PreventiveQuoteResult | null>(null);

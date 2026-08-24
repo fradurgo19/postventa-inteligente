@@ -150,7 +150,7 @@ export function ExcelImportPanel({
 
         const updatedLabel =
           modulo === 'proyectados'
-            ? `Actualizados (misma serie): ${duplicates}`
+            ? `Actualizados (misma serie + mes/año): ${duplicates}`
             : `Actualizados (mismo ID): ${duplicates}`;
 
         const previewLines = [

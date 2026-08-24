@@ -290,13 +290,67 @@ function mapTelemetria(row: Record<string, string>, createdBy: string) {
   const emailCliente = get('email', 'Email');
   const correo = get('Correo');
 
+  const monthAliases: Record<string, string> = {
+    january: 'January',
+    enero: 'January',
+    february: 'February',
+    febrero: 'February',
+    march: 'March',
+    marzo: 'March',
+    april: 'April',
+    abril: 'April',
+    may: 'May',
+    mayo: 'May',
+    june: 'June',
+    junio: 'June',
+    july: 'July',
+    julio: 'July',
+    august: 'August',
+    agosto: 'August',
+    september: 'September',
+    septiembre: 'September',
+    setiembre: 'September',
+    october: 'October',
+    octubre: 'October',
+    november: 'November',
+    noviembre: 'November',
+    december: 'December',
+    diciembre: 'December',
+  };
+  const months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  const mesRaw = get('MesCreado', 'Mes Creado', 'mes_creado', 'Mes').toLowerCase();
+  let mesCreado = monthAliases[mesRaw] ?? '';
+  if (!mesCreado) {
+    const n = Number(mesRaw);
+    mesCreado =
+      Number.isInteger(n) && n >= 1 && n <= 12 ? months[n - 1] : months[new Date().getMonth()];
+  }
+  const anioRaw = num(get('Año', 'Anio', 'anio'));
+  const anio =
+    anioRaw != null && anioRaw >= 2000 && anioRaw <= 2100
+      ? Math.trunc(anioRaw)
+      : new Date().getFullYear();
+
   return {
     titulo: get('Nombre del cliente', 'Nombre del Cliente', 'Título', 'Titulo', 'titulo') || null,
     email: emailCliente.includes('@') ? emailCliente : null,
     nit: get('Nit', 'nit') || null,
     telefono: get('Telefono', 'Teléfono', 'telefono') || null,
     serie,
-    modelo: get('Modelo', 'modelo'),
+    modelo: get('Modelo', 'modelo') || 'SIN MODELO',
     horometro: num(get('Horometro', 'horometro')) ?? 0,
     promedio_h: num(get('Promedio_h', 'promedio_h')),
     ciudad: get('Ciudad', 'ciudad') || null,
@@ -325,7 +379,7 @@ function mapTelemetria(row: Record<string, string>, createdBy: string) {
     sede: get('Sede', 'sede') || null,
     asesor_email: (asesor.includes('@') ? asesor : asesor2.includes('@') ? asesor2 : '') || null,
     asesor_secundario_email: asesor2.includes('@') ? asesor2 : null,
-    marca: get('Marca', 'marca'),
+    marca: get('Marca', 'marca') || 'SIN MARCA',
     tipo_mtto: num(get('Tipo Mtto', 'tipo_mtto')),
     numero_serie: get('N° serie', 'Nº serie', 'numero_serie') || serie || null,
     tipo_oportunidad: get('Tipo Cliente', 'tipo_oportunidad') || null,
@@ -336,9 +390,9 @@ function mapTelemetria(row: Record<string, string>, createdBy: string) {
     reenviar_correo: ['true', '1', 'si', 'sí', 'verdadero'].includes(
       get('Reenviar Correo', 'reenviar_correo').toLowerCase()
     ),
-    mes_creado: get('MesCreado', 'Mes Creado', 'mes_creado') || null,
+    mes_creado: mesCreado,
     correo_enviado: correo || null,
-    anio: num(get('Año', 'Anio', 'anio')),
+    anio,
     tipo_maquina: get('TipoDeMaquina', 'Tipo de Maquina', 'tipo_maquina') || null,
     created_by: createdBy,
   };
@@ -474,8 +528,8 @@ Deno.serve(async (req) => {
           }
         } else if (body.modulo === 'proyectados') {
           const mapped = mapTelemetria(row, createdBy);
-          if (!mapped.serie || !mapped.modelo || !mapped.marca) {
-            throw new Error('Serie, Modelo y Marca son obligatorios');
+          if (!mapped.serie) {
+            throw new Error('Serie es obligatoria');
           }
           batchInsert.push(mapped);
         } else {

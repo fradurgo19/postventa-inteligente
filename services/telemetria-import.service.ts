@@ -1,6 +1,7 @@
 import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/client';
 import {
   parseTelemetriaFile,
+  telemetriaPeriodKey,
   type TelemetriaMappedRow,
 } from '@/lib/proyectados/telemetria-import';
 import type { ImportExcelResponse } from '@/services/import.service';
@@ -63,13 +64,21 @@ function clienteKey(row: Pick<TelemetriaMappedRow, 'nit' | 'titulo' | 'email'>):
   return null;
 }
 
-/** Conserva la última fila por serie (archivo mensual). */
-function dedupeBySerie(rows: TelemetriaMappedRow[]): TelemetriaMappedRow[] {
+/** Conserva la última fila por serie + mes + año (misma proyección en el archivo). */
+function dedupeBySeriePeriodo(rows: TelemetriaMappedRow[]): TelemetriaMappedRow[] {
   const map = new Map<string, TelemetriaMappedRow>();
   for (const row of rows) {
-    map.set(row.serie, row);
+    map.set(telemetriaPeriodKey(row), row);
   }
   return Array.from(map.values());
+}
+
+function periodKeyFromDb(row: {
+  serie: unknown;
+  mes_creado: unknown;
+  anio: unknown;
+}): string {
+  return `${String(row.serie)}|${String(row.mes_creado ?? '').toLowerCase()}|${Number(row.anio ?? 0)}`;
 }
 
 function stripOptionalFks(body: Record<string, unknown>): Record<string, unknown> {
@@ -450,10 +459,10 @@ async function batchUpsertTelemetria(
     const series = batch.map((r) => r.serie);
     const { data: existingRows } = await supabase
       .from('telemetria_equipos')
-      .select('serie')
+      .select('serie, mes_creado, anio')
       .in('serie', series);
 
-    const existingSet = new Set((existingRows ?? []).map((r) => String(r.serie)));
+    const existingSet = new Set((existingRows ?? []).map((r) => periodKeyFromDb(r)));
 
     const payloads = batch.map((row) => {
       const ck = clienteKey(row);
@@ -468,24 +477,43 @@ async function batchUpsertTelemetria(
       });
     });
 
+    const conflictCols = 'serie,mes_creado,anio';
+
     let { error } = await supabase.from('telemetria_equipos').upsert(payloads, {
-      onConflict: 'serie',
+      onConflict: conflictCols,
       ignoreDuplicates: false,
     });
 
-    // Sin UNIQUE serie o sin columnas FK: reintentar sin FKs opcionales
-    if (error && /sede_id|maquina_id|on conflict|unique|serie/i.test(error.message)) {
+    // Sin UNIQUE de periodo o sin columnas FK: reintentar sin FKs opcionales
+    if (error && /sede_id|maquina_id|on conflict|unique|serie|mes_creado|anio/i.test(error.message)) {
       const stripped = payloads.map(stripOptionalFks);
       ({ error } = await supabase.from('telemetria_equipos').upsert(stripped, {
-        onConflict: 'serie',
+        onConflict: conflictCols,
         ignoreDuplicates: false,
       }));
     }
 
     if (error) {
-      // Fallback: update existentes + insert nuevos por sublotes
-      const toUpdate = payloads.filter((p) => existingSet.has(String(p.serie)));
-      const toInsert = payloads.filter((p) => !existingSet.has(String(p.serie)));
+      // Fallback: update mismo periodo + insert nuevo mes/año por sublotes
+      const toUpdate = payloads.filter((p) =>
+        existingSet.has(
+          periodKeyFromDb({
+            serie: p.serie,
+            mes_creado: p.mes_creado,
+            anio: p.anio,
+          })
+        )
+      );
+      const toInsert = payloads.filter(
+        (p) =>
+          !existingSet.has(
+            periodKeyFromDb({
+              serie: p.serie,
+              mes_creado: p.mes_creado,
+              anio: p.anio,
+            })
+          )
+      );
 
       for (const sub of chunkArray(toUpdate, 25)) {
         for (const payload of sub) {
@@ -493,7 +521,9 @@ async function batchUpsertTelemetria(
           const { error: upErr } = await supabase
             .from('telemetria_equipos')
             .update(body)
-            .eq('serie', String(payload.serie));
+            .eq('serie', String(payload.serie))
+            .eq('mes_creado', String(payload.mes_creado))
+            .eq('anio', Number(payload.anio));
           if (upErr) {
             errors.push({ row: 0, message: upErr.message });
           } else {
@@ -514,7 +544,10 @@ async function batchUpsertTelemetria(
               .from('telemetria_equipos')
               .insert(stripOptionalFks(payload));
             if (rowErr) {
-              errors.push({ row: 0, message: rowErr.message });
+              const msg = /idx_telemetria_serie_unique|telemetria_serie_unique/i.test(rowErr.message)
+                ? 'Ejecute en Supabase el script 21_telemetria_periodo_unique.sql (proyecciones por mes/año).'
+                : rowErr.message;
+              errors.push({ row: 0, message: msg });
             } else {
               ok += 1;
             }
@@ -526,7 +559,7 @@ async function batchUpsertTelemetria(
         }
       }
     } else {
-      const batchUpdated = batch.filter((r) => existingSet.has(r.serie)).length;
+      const batchUpdated = batch.filter((r) => existingSet.has(telemetriaPeriodKey(r))).length;
       ok += batch.length;
       updated += batchUpdated;
       processed += batch.length;
@@ -540,8 +573,9 @@ async function batchUpsertTelemetria(
 }
 
 /**
- * Carga masiva mensual (~5k filas): parse → relaciones por lotes → telemetría upsert por serie.
- * Mismo patrón de lotes/pausa/refresh que temparios (calculadora).
+ * Carga masiva mensual (~5k filas):
+ * - clientes / asesores / sedes / máquinas → upsert únicos (sin duplicar flota)
+ * - telemetria_equipos → proyección por serie + mes + año (historial de próximos mtto)
  */
 export async function importTelemetriaFromFile(
   file: File,
@@ -564,7 +598,7 @@ export async function importTelemetriaFromFile(
   });
 
   const parsed = await parseTelemetriaFile(file);
-  const deduped = dedupeBySerie(
+  const deduped = dedupeBySeriePeriodo(
     parsed.rows.map((r) => ({ ...r, created_by: createdBy || r.created_by }))
   );
   const parseErrors = [...parsed.errors];

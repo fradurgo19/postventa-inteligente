@@ -98,9 +98,9 @@ export interface TelemetriaMappedRow {
   detalle: string | null;
   observaciones: string | null;
   reenviar_correo: boolean;
-  mes_creado: string | null;
+  mes_creado: string;
   correo_enviado: string | null;
-  anio: number | null;
+  anio: number;
   tipo_maquina: string | null;
   created_by: string;
 }
@@ -335,6 +335,69 @@ function isValidEmail(value: string | null): value is string {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+const ENGLISH_MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+] as const;
+
+const MONTH_ALIAS_TO_ENGLISH: Record<string, (typeof ENGLISH_MONTHS)[number]> = {
+  january: 'January',
+  febrero: 'February',
+  february: 'February',
+  marzo: 'March',
+  march: 'March',
+  abril: 'April',
+  april: 'April',
+  mayo: 'May',
+  may: 'May',
+  junio: 'June',
+  june: 'June',
+  julio: 'July',
+  july: 'July',
+  agosto: 'August',
+  august: 'August',
+  septiembre: 'September',
+  setiembre: 'September',
+  september: 'September',
+  octubre: 'October',
+  october: 'October',
+  noviembre: 'November',
+  november: 'November',
+  diciembre: 'December',
+  december: 'December',
+  enero: 'January',
+};
+
+/** Normaliza MesCreado (EN/ES/número) al formato Power Apps en inglés. */
+export function resolveMesCreado(raw: string | null | undefined): string {
+  const v = cleanCell(raw);
+  if (v) {
+    const compact = v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    if (MONTH_ALIAS_TO_ENGLISH[compact]) return MONTH_ALIAS_TO_ENGLISH[compact];
+    const asNum = Number(compact);
+    if (Number.isInteger(asNum) && asNum >= 1 && asNum <= 12) {
+      return ENGLISH_MONTHS[asNum - 1];
+    }
+  }
+  return ENGLISH_MONTHS[new Date().getMonth()];
+}
+
+export function resolveAnio(raw: string | null | undefined): number {
+  const n = toNumberOrNull(raw ?? '');
+  if (n != null && n >= 2000 && n <= 2100) return Math.trunc(n);
+  return new Date().getFullYear();
+}
+
 export function mapTelemetriaSheetRow(
   row: Record<string, string>,
   createdBy: string
@@ -425,12 +488,19 @@ export function mapTelemetriaSheetRow(
     detalle: cleanCell(getField(row, 'Detalle', 'detalle')),
     observaciones: cleanCell(getField(row, 'Observaciones', 'observaciones')),
     reenviar_correo: parseBool(getField(row, 'Reenviar Correo', 'reenviar_correo')),
-    mes_creado: cleanCell(getField(row, 'MesCreado', 'Mes Creado', 'mes_creado')),
+      mes_creado: resolveMesCreado(
+      getField(row, 'MesCreado', 'Mes Creado', 'mes_creado', 'Mes')
+    ),
     correo_enviado: correoFlag,
-    anio: toNumberOrNull(getField(row, 'Año', 'Anio', 'anio')),
+    anio: resolveAnio(getField(row, 'Año', 'Anio', 'anio', 'Year')),
     tipo_maquina: cleanCell(getField(row, 'TipoDeMaquina', 'Tipo de Maquina', 'tipo_maquina')),
     created_by: createdBy,
   };
+}
+
+/** Clave de proyección mensual: misma máquina en otro mes/año = otro servicio proyectado. */
+export function telemetriaPeriodKey(row: Pick<TelemetriaMappedRow, 'serie' | 'mes_creado' | 'anio'>): string {
+  return `${row.serie}|${(row.mes_creado ?? '').toLowerCase()}|${row.anio ?? 0}`;
 }
 
 export async function parseTelemetriaFile(file: File): Promise<TelemetriaParseResult> {

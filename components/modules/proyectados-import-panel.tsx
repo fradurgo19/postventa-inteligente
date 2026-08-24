@@ -14,7 +14,7 @@ export function ProyectadosImportPanel() {
   return (
     <ExcelImportPanel
       title="Importar Telemetría Mensual"
-      description="Carga masiva mensual (~5.000 filas): plantilla desde Nombre del cliente → upsert por lotes en clientes, asesores, sedes, máquinas y telemetría (por serie), sin saturar la red."
+      description="Carga masiva mensual: identifica clientes, asesores, sedes y máquinas (únicos) y guarda proyecciones de telemetría por serie + mes + año (historial de próximos mtto, sin tratar meses distintos como duplicados)."
       expectedColumns={TELEMETRIA_EXCEL_COLUMNS}
       modulo="proyectados"
       onDownloadTemplate={downloadTelemetriaExcelTemplate}
@@ -27,7 +27,9 @@ export function ProyectadosImportPanel() {
           toast.success('Telemetría cargada', {
             description:
               `${result.recordsOk} OK` +
-              (result.duplicates ? ` · ${result.duplicates} actualizados por serie` : '') +
+              (result.duplicates
+                ? ` · ${result.duplicates} actualizados (mismo mes/año por serie)`
+                : '') +
               (result.recordsError ? ` · ${result.recordsError} con error` : ''),
             duration: 12_000,
           });

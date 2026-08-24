@@ -23,7 +23,59 @@ function mapTelemetriaRow(row: Record<string, unknown>): TelemetriaEquipo {
     tipo_mtto: row.tipo_mtto as number | null,
     estado: row.estado as string | null,
     tipo_maquina: row.tipo_maquina as string | null,
+    mes_creado: (row.mes_creado as string | null) ?? null,
+    anio: row.anio == null ? null : Number(row.anio),
   };
+}
+
+const MONTH_RANK: Record<string, number> = {
+  january: 1,
+  february: 2,
+  march: 3,
+  april: 4,
+  may: 5,
+  june: 6,
+  july: 7,
+  august: 8,
+  september: 9,
+  october: 10,
+  november: 11,
+  december: 12,
+  enero: 1,
+  febrero: 2,
+  marzo: 3,
+  abril: 4,
+  mayo: 5,
+  junio: 6,
+  julio: 7,
+  agosto: 8,
+  septiembre: 9,
+  setiembre: 9,
+  octubre: 10,
+  noviembre: 11,
+  diciembre: 12,
+};
+
+function telemetriaPeriodRank(row: Pick<TelemetriaEquipo, 'mes_creado' | 'anio'>): number {
+  const year = Number(row.anio ?? 0);
+  const monthKey = String(row.mes_creado ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  const month = MONTH_RANK[monthKey] ?? 0;
+  return year * 100 + month;
+}
+
+/** Flota única: conserva la proyección más reciente por número de serie. */
+export function pickLatestTelemetriaPerSerie(equipos: TelemetriaEquipo[]): TelemetriaEquipo[] {
+  const bySerie = new Map<string, TelemetriaEquipo>();
+  for (const equipo of equipos) {
+    const prev = bySerie.get(equipo.serie);
+    if (!prev || telemetriaPeriodRank(equipo) >= telemetriaPeriodRank(prev)) {
+      bySerie.set(equipo.serie, equipo);
+    }
+  }
+  return Array.from(bySerie.values());
 }
 
 const MOCK_TELEMETRIA: TelemetriaEquipo[] = [
@@ -94,6 +146,7 @@ export async function fetchTelemetriaEquipos(): Promise<TelemetriaEquipo[]> {
   const { data, error } = await supabase
     .from('telemetria_equipos')
     .select('*')
+    .order('anio', { ascending: false })
     .order('fecha_primer_mtto', { ascending: true });
 
   if (error || !data?.length) {

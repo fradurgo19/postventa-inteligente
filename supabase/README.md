@@ -26,8 +26,9 @@ La aplicación **no crea** las tablas automáticamente.
 | 16 | `schema/16_modelo2_tipo_observacion.sql` | CHECK tipo_item incluye Observacion (Modelo2) |
 | 17 | `schema/17_truncate_temparios_reimport.sql` | Vaciar temparios antes de reimportar Excel |
 | 18 | `schema/18_rename_tipo_item_to_modelo2.sql` | tipo_item = Excel Modelo2 (revierte rename si aplica) |
-| 19 | `schema/19_telemetria_normalize_relations.sql` | Sedes + máquinas + FKs + UNIQUE serie + RLS clientes/asesores |
+| 19 | `schema/19_telemetria_normalize_relations.sql` | Sedes + máquinas + FKs + RLS clientes/asesores |
 | 20 | `schema/20_admin_module.sql` | Configuración sistema + RLS admin perfiles/auditoría |
+| 21 | `schema/21_telemetria_periodo_unique.sql` | Telemetría UNIQUE (serie, mes, año): historial mensual sin duplicar flota |
 
 ## Dónde ejecutar `supabase functions deploy`
 
