@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          'Creación de usuarios no disponible. Configure SUPABASE_SERVICE_ROLE_KEY en el servidor.',
+          'Creación de usuarios no disponible en Vercel. Use la Edge Function create-admin-user en Supabase.',
       },
       { status: 503 }
     );

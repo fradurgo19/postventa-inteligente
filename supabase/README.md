@@ -58,12 +58,13 @@ supabase link --project-ref obhgdgnozeaneljprudd
 
 ```powershell
 supabase functions deploy import-excel
+supabase functions deploy create-admin-user
 supabase functions deploy send-maintenance-alerts
 ```
 
 ### 4. Verificar
 
-Dashboard → **Edge Functions** → deben aparecer `import-excel` y `send-maintenance-alerts`.
+Dashboard → **Edge Functions** → deben aparecer `import-excel`, `create-admin-user` y `send-maintenance-alerts`.
 
 ### Cron de alertas
 

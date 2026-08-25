@@ -634,25 +634,46 @@ export async function createAdminUser(input: CreateAdminUserInput): Promise<{ id
     throw new Error('Sesión no válida. Inicie sesión nuevamente.');
   }
 
+  const body = {
+    email: input.email.trim(),
+    password: input.password,
+    nombre: input.nombre.trim(),
+    rol: input.rol,
+    sede: input.sede?.trim() || null,
+  };
+
+  const { data, error } = await supabase.functions.invoke('create-admin-user', { body });
+
+  if (!error) {
+    const payload = data as { error?: string; id?: string };
+    if (payload.error) {
+      throw new Error(payload.error);
+    }
+    if (payload.id) {
+      return { id: payload.id };
+    }
+  }
+
   const response = await fetch('/api/admin/users', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({
-      email: input.email.trim(),
-      password: input.password,
-      nombre: input.nombre.trim(),
-      rol: input.rol,
-      sede: input.sede?.trim() || null,
-    }),
+    body: JSON.stringify(body),
   });
 
   const payload = (await response.json().catch(() => ({}))) as { error?: string; id?: string };
 
   if (!response.ok) {
-    throw new Error(payload.error ?? 'No se pudo crear el usuario.');
+    const edgeMessage = error?.message;
+    const apiMessage = payload.error ?? 'No se pudo crear el usuario.';
+    if (edgeMessage && response.status === 503) {
+      throw new Error(
+        `${apiMessage} Despliegue la Edge Function create-admin-user en Supabase (supabase functions deploy create-admin-user).`
+      );
+    }
+    throw new Error(apiMessage);
   }
 
   return { id: payload.id ?? '' };

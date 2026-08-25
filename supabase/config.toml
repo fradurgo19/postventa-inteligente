@@ -18,5 +18,8 @@ enabled = true
 [functions.import-excel]
 verify_jwt = true
 
+[functions.create-admin-user]
+verify_jwt = true
+
 [functions.send-maintenance-alerts]
 verify_jwt = false
