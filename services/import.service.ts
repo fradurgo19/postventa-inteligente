@@ -9,6 +9,8 @@ export interface ImportExcelResponse {
   duplicates: number;
   total?: number;
   skipped?: number;
+  /** Filas del Excel consolidadas por misma serie + mes + año. */
+  deduplicated?: number;
   errors?: Array<{ row: number; message: string }>;
   error?: string;
 }

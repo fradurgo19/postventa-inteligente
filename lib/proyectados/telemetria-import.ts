@@ -269,6 +269,11 @@ export function cleanCell(value: string | null | undefined): string | null {
   return v;
 }
 
+/** Límites alineados a NUMERIC(18, *) en BD (script 22). */
+const MAX_ABS_GENERAL = 1e12;
+const MAX_ABS_COORD = 180;
+const MAX_ABS_HOROMETRO = 1e12;
+
 function toNumber(raw: string, fallback = 0): number {
   if (!raw) return fallback;
   const cleaned = raw.replace(/\s/g, '').replace(',', '.');
@@ -276,11 +281,41 @@ function toNumber(raw: string, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function toNumberOrNull(raw: string): number | null {
+/**
+ * Parsea número y lo deja dentro del rango PostgreSQL NUMERIC.
+ * Valores extremos / basura de Excel → null (no aborta la fila).
+ */
+function toBoundedNumberOrNull(
+  raw: string,
+  maxAbs: number,
+  decimals?: number
+): number | null {
   const v = cleanCell(raw);
   if (v == null) return null;
   const n = toNumber(v, Number.NaN);
-  return Number.isFinite(n) ? n : null;
+  if (!Number.isFinite(n) || Math.abs(n) > maxAbs) return null;
+  if (decimals == null) return n;
+  const factor = 10 ** decimals;
+  return Math.round(n * factor) / factor;
+}
+
+function toNumberOrNull(raw: string): number | null {
+  return toBoundedNumberOrNull(raw, MAX_ABS_GENERAL, 6);
+}
+
+function toHorometro(raw: string): number {
+  const n = toBoundedNumberOrNull(raw, MAX_ABS_HOROMETRO, 3);
+  return n != null && n >= 0 ? n : 0;
+}
+
+function toCoordOrNull(raw: string): number | null {
+  return toBoundedNumberOrNull(raw, MAX_ABS_COORD, 10);
+}
+
+function toTipoMttoOrNull(raw: string): number | null {
+  const n = toBoundedNumberOrNull(raw, 2_147_483_647, 0);
+  if (n == null) return null;
+  return Math.trunc(n);
 }
 
 function parseBool(raw: string): boolean {
@@ -393,9 +428,24 @@ export function resolveMesCreado(raw: string | null | undefined): string {
 }
 
 export function resolveAnio(raw: string | null | undefined): number {
-  const n = toNumberOrNull(raw ?? '');
+  const n = toBoundedNumberOrNull(raw ?? '', 2100, 0);
   if (n != null && n >= 2000 && n <= 2100) return Math.trunc(n);
   return new Date().getFullYear();
+}
+
+/** Si MesCreado/Año vienen vacíos, intenta derivarlos de la columna Creado. */
+function resolvePeriodFromCreado(raw: string | null | undefined): {
+  mes: string | null;
+  anio: number | null;
+} {
+  const dateOnly = parseDateOnly(raw ?? '');
+  if (!dateOnly) return { mes: null, anio: null };
+  const dt = new Date(`${dateOnly}T12:00:00.000Z`);
+  if (Number.isNaN(dt.getTime())) return { mes: null, anio: null };
+  return {
+    mes: ENGLISH_MONTHS[dt.getUTCMonth()],
+    anio: dt.getUTCFullYear(),
+  };
 }
 
 export function mapTelemetriaSheetRow(
@@ -427,6 +477,19 @@ export function mapTelemetriaSheetRow(
   const numeroSerie =
     cleanCell(getField(row, 'N° serie', 'Nº serie', 'numero_serie')) ?? serie;
 
+  const mesRaw = cleanCell(getField(row, 'MesCreado', 'Mes Creado', 'mes_creado', 'Mes'));
+  const anioRaw = cleanCell(getField(row, 'Año', 'Anio', 'anio', 'Year'));
+  const creadoRaw = cleanCell(getField(row, 'Creado', 'creado', 'Created'));
+  const fromCreado = resolvePeriodFromCreado(creadoRaw);
+
+  const mes_creado = mesRaw
+    ? resolveMesCreado(mesRaw)
+    : fromCreado.mes ?? resolveMesCreado(null);
+  const anio =
+    anioRaw && toBoundedNumberOrNull(anioRaw, 2100, 0) != null
+      ? resolveAnio(anioRaw)
+      : fromCreado.anio ?? resolveAnio(null);
+
   return {
     titulo: cleanCell(
       getField(row, 'Nombre del cliente', 'Nombre del Cliente', 'Título', 'Titulo', 'titulo')
@@ -436,7 +499,7 @@ export function mapTelemetriaSheetRow(
     telefono: cleanCell(getField(row, 'Telefono', 'Teléfono', 'telefono')),
     serie,
     modelo,
-    horometro: toNumber(getField(row, 'Horometro', 'Horómetro', 'horometro'), 0),
+    horometro: toHorometro(getField(row, 'Horometro', 'Horómetro', 'horometro')),
     promedio_h: toNumberOrNull(getField(row, 'Promedio_h', 'Promedio h', 'promedio_h')),
     ciudad: cleanCell(getField(row, 'Ciudad', 'ciudad')),
     ultima_fecha_comunicacion: parseDateTime(
@@ -448,8 +511,8 @@ export function mapTelemetriaSheetRow(
         'ultima_fecha_comunicacion'
       )
     ),
-    latitud: toNumberOrNull(getField(row, 'Latitud', 'latitud')),
-    longitud: toNumberOrNull(getField(row, 'Longitud', 'longitud')),
+    latitud: toCoordOrNull(getField(row, 'Latitud', 'latitud')),
+    longitud: toCoordOrNull(getField(row, 'Longitud', 'longitud')),
     dias_primer_mtto: toNumberOrNull(getField(row, 'Dias Primer Mtto', 'dias_primer_mtto')),
     proximo_primer_mtto: toNumberOrNull(
       getField(row, 'Proximo Primer Mtto', 'Próximo Primer Mtto', 'proximo_primer_mtto')
@@ -480,7 +543,7 @@ export function mapTelemetriaSheetRow(
     asesor_email: asesorEmail,
     asesor_secundario_email: asesorSecundario,
     marca,
-    tipo_mtto: toNumberOrNull(getField(row, 'Tipo Mtto', 'tipo_mtto')),
+    tipo_mtto: toTipoMttoOrNull(getField(row, 'Tipo Mtto', 'tipo_mtto')),
     numero_serie: numeroSerie,
     tipo_oportunidad: cleanCell(getField(row, 'Tipo Cliente', 'tipo_oportunidad', 'Tipo Oportunidad')),
     estado: cleanCell(getField(row, 'Estado', 'estado')) ?? 'Pendiente',
@@ -488,11 +551,9 @@ export function mapTelemetriaSheetRow(
     detalle: cleanCell(getField(row, 'Detalle', 'detalle')),
     observaciones: cleanCell(getField(row, 'Observaciones', 'observaciones')),
     reenviar_correo: parseBool(getField(row, 'Reenviar Correo', 'reenviar_correo')),
-      mes_creado: resolveMesCreado(
-      getField(row, 'MesCreado', 'Mes Creado', 'mes_creado', 'Mes')
-    ),
+    mes_creado,
     correo_enviado: correoFlag,
-    anio: resolveAnio(getField(row, 'Año', 'Anio', 'anio', 'Year')),
+    anio,
     tipo_maquina: cleanCell(getField(row, 'TipoDeMaquina', 'Tipo de Maquina', 'tipo_maquina')),
     created_by: createdBy,
   };

@@ -525,7 +525,10 @@ async function batchUpsertTelemetria(
             .eq('mes_creado', String(payload.mes_creado))
             .eq('anio', Number(payload.anio));
           if (upErr) {
-            errors.push({ row: 0, message: upErr.message });
+            errors.push({
+              row: 0,
+              message: `Serie ${String(payload.serie)} (${payload.mes_creado}/${payload.anio}): ${upErr.message}`,
+            });
           } else {
             ok += 1;
             updated += 1;
@@ -546,7 +549,9 @@ async function batchUpsertTelemetria(
             if (rowErr) {
               const msg = /idx_telemetria_serie_unique|telemetria_serie_unique/i.test(rowErr.message)
                 ? 'Ejecute en Supabase el script 21_telemetria_periodo_unique.sql (proyecciones por mes/año).'
-                : rowErr.message;
+                : /numeric field overflow/i.test(rowErr.message)
+                  ? `Serie ${String(payload.serie)}: valor numérico fuera de rango (ejecute script 22_telemetria_widen_numerics.sql y reimporte).`
+                  : `Serie ${String(payload.serie)}: ${rowErr.message}`;
               errors.push({ row: 0, message: msg });
             } else {
               ok += 1;
@@ -598,9 +603,11 @@ export async function importTelemetriaFromFile(
   });
 
   const parsed = await parseTelemetriaFile(file);
+  const beforeDedupe = parsed.rows.length;
   const deduped = dedupeBySeriePeriodo(
     parsed.rows.map((r) => ({ ...r, created_by: createdBy || r.created_by }))
   );
+  const deduplicatedCount = Math.max(0, beforeDedupe - deduped.length);
   const parseErrors = [...parsed.errors];
 
   if (deduped.length === 0) {
@@ -610,6 +617,7 @@ export async function importTelemetriaFromFile(
       duplicates: 0,
       total: parsed.rawTotal,
       skipped: parsed.skipped,
+      deduplicated: deduplicatedCount,
       errors: parseErrors.slice(0, MAX_ERROR_SAMPLES),
       error: parseErrors[0]?.message ?? 'El archivo no contiene filas de datos',
     };
@@ -695,6 +703,7 @@ export async function importTelemetriaFromFile(
     duplicates: result.updated,
     total: parsed.rawTotal,
     skipped: parsed.skipped,
+    deduplicated: deduplicatedCount,
     errors: allErrors,
   };
 }
