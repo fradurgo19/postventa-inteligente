@@ -56,7 +56,9 @@ export function ReportFiltersBar({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas las marcas</SelectItem>
-              {options.marcas.map((m) => (
+              {options.marcas
+                .filter((m) => m.trim().length > 0)
+                .map((m) => (
                 <SelectItem key={m} value={m}>
                   {m}
                 </SelectItem>
@@ -70,7 +72,9 @@ export function ReportFiltersBar({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos los modelos</SelectItem>
-              {options.modelos.map((m) => (
+              {options.modelos
+                .filter((m) => m.trim().length > 0)
+                .map((m) => (
                 <SelectItem key={m} value={m}>
                   {m}
                 </SelectItem>
@@ -84,7 +88,9 @@ export function ReportFiltersBar({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos los periodos</SelectItem>
-              {options.periodos.map((y) => (
+              {options.periodos
+                .filter((y) => y.trim().length > 0)
+                .map((y) => (
                 <SelectItem key={y} value={y}>
                   {y}
                 </SelectItem>
@@ -98,7 +104,9 @@ export function ReportFiltersBar({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos los clientes</SelectItem>
-              {options.clientes.map((c) => (
+              {options.clientes
+                .filter((c) => c.trim().length > 0)
+                .map((c) => (
                 <SelectItem key={c} value={c}>
                   {c}
                 </SelectItem>

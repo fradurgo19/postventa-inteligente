@@ -63,12 +63,10 @@ import {
 import { KPICard } from "@/components/ui/kpi-card";
 import { AppShell } from "@/components/layout/app-shell";
 import {
-  useProjectedKpis,
   useTelemetriaEquipos,
   useProyectadosImportHistory,
 } from "@/hooks/use-projected-maintenance";
 import type { ProyectadosImportLog } from "@/services/projected-maintenance.service";
-import { formatCOP } from "@/lib/mock-data";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ReportFiltersBar,
@@ -77,8 +75,7 @@ import {
 import {
   sortLocale,
   matchesStringFilter,
-  matchesDateFilters,
-  parseFlexibleDate,
+  matchesTelemetriaReportFilters,
   type ReportFiltersState,
 } from "@/lib/report-filters";
 import {
@@ -90,6 +87,7 @@ import {
   type TelemetriaOpportunityRow,
   type TelemetriaCalendarEvent,
 } from "@/lib/proyectados/map-telemetria-ui";
+import type { TelemetriaEquipo } from "@/types/database";
 
 // â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -201,43 +199,29 @@ function getFirstDayOfWeek(year: number, month: number): number {
 
 // â”€â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-/** KPI Row — datos desde v_kpi_* / telemetr a */
-function KPIRow() {
-  const { data: kpis, isLoading } = useProjectedKpis();
-
-  if (isLoading || !kpis) {
-    return (
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[1, 2, 3, 4].map((i) => (
-          <Skeleton key={i} className="h-28 rounded-xl" />
-        ))}
-      </div>
-    );
-  }
-
-  const vencidos = kpis.oportunidadesPorMes.reduce(
-    (s: number, m: { pendientes: number }) => s + m.pendientes,
-    0
-  );
-  const enviadas = kpis.oportunidadesPorMes.reduce(
-    (s: number, m: { enviadas: number }) => s + m.enviadas,
-    0
-  );
+/** KPI Row — calculados desde telemetría filtrada */
+function KPIRow({ rows }: Readonly<{ rows: TelemetriaOpportunityRow[] }>) {
+  const totalProyecciones = rows.length;
+  const totalMaquinas = new Set(rows.map((r) => r.serie)).size;
+  const totalClientes = new Set(rows.map((r) => r.client)).size;
+  const vencidos = rows.filter((r) => r.status === "Overdue").length;
+  const enCurso = rows.filter((r) => r.status === "In Progress").length;
+  const programados = rows.filter((r) => r.status === "Scheduled").length;
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <KPICard
-        title="Equipos Totales"
-        value={kpis.totalMaquinas}
+        title="Proyecciones"
+        value={totalProyecciones}
         change={0}
         changeType="up"
         icon={Wrench}
         variant="default"
-        description="Telemetría registrada"
+        description={`${totalMaquinas} máquinas únicas`}
       />
       <KPICard
         title="Clientes"
-        value={kpis.totalClientes}
+        value={totalClientes}
         change={0}
         changeType="up"
         icon={Calendar}
@@ -245,22 +229,22 @@ function KPIRow() {
         description="Con oportunidades"
       />
       <KPICard
-        title="Oportunidades del Mes"
-        value={kpis.oportunidadesMes}
+        title="Programados / En curso"
+        value={programados + enCurso}
         change={0}
         changeType="up"
         icon={AlertTriangle}
         variant="danger"
-        description="Próximos mantenimientos"
+        description={`${programados} programados · ${enCurso} en curso`}
       />
       <KPICard
-        title="Alertas Enviadas"
-        value={enviadas}
-        change={vencidos}
+        title="Vencidos"
+        value={vencidos}
+        change={0}
         changeType="down"
         icon={CheckCircle2}
         variant="success"
-        description={`${vencidos} pendientes en el periodo`}
+        description="Según filtros del informe"
       />
     </div>
   );
@@ -268,36 +252,97 @@ function KPIRow() {
 
 const CHART_COLORS = ["#cf1b22", "#50504f", "#2563eb", "#16a34a", "#d97706", "#7c3aed", "#0891b2"];
 
-function KpiChartsSection() {
-  const { data: kpis, isLoading } = useProjectedKpis();
+function KpiChartsSection({ rows }: Readonly<{ rows: TelemetriaOpportunityRow[] }>) {
+  const byMes = useMemo(() => {
+    const map = new Map<string, { mes: string; total: number; vencidos: number }>();
+    for (const r of rows) {
+      const key = r.mesCreado && r.mesCreado !== "—" ? r.mesCreado : "Sin mes";
+      const prev = map.get(key) ?? { mes: key, total: 0, vencidos: 0 };
+      prev.total += 1;
+      if (r.status === "Overdue") prev.vencidos += 1;
+      map.set(key, prev);
+    }
+    return Array.from(map.values()).sort((a, b) => a.mes.localeCompare(b.mes, "es"));
+  }, [rows]);
 
-  if (isLoading || !kpis) {
-    return <Skeleton className="h-64 w-full rounded-xl" />;
-  }
+  const bySede = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of rows) {
+      const sede = r.sede && r.sede !== "—" ? r.sede : "Sin sede";
+      map.set(sede, (map.get(sede) ?? 0) + 1);
+    }
+    return Array.from(map.entries())
+      .map(([sede, total]) => ({ sede, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10);
+  }, [rows]);
 
-  const marcaData = kpis.oportunidadesPorMarca.map(
-    (m: { marca: string; total: number }, i: number) => ({
-      name: m.marca,
-      value: m.total,
+  const marcaData = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of rows) {
+      map.set(r.brand, (map.get(r.brand) ?? 0) + 1);
+    }
+    return Array.from(map.entries())
+      .map(([name, value], i) => ({
+        name,
+        value,
+        color: CHART_COLORS[i % CHART_COLORS.length],
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [rows]);
+
+  const topClientes = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of rows) {
+      map.set(r.client, (map.get(r.client) ?? 0) + 1);
+    }
+    return Array.from(map.entries())
+      .map(([cliente, total]) => ({ cliente, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 6);
+  }, [rows]);
+
+  const byStatus = useMemo(() => {
+    const labels: Record<MaintenanceStatusUi, string> = {
+      Scheduled: "Programado",
+      Overdue: "Vencido",
+      "In Progress": "En curso",
+      Completed: "Completado",
+    };
+    const map = new Map<MaintenanceStatusUi, number>();
+    for (const r of rows) {
+      map.set(r.status, (map.get(r.status) ?? 0) + 1);
+    }
+    return (Object.keys(labels) as MaintenanceStatusUi[]).map((status, i) => ({
+      tipo: labels[status],
+      total: map.get(status) ?? 0,
       color: CHART_COLORS[i % CHART_COLORS.length],
-    })
-  );
+    }));
+  }, [rows]);
+
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
+        Sin proyecciones para los filtros seleccionados.
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <Card className="border-border shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold">Oportunidades por Mes</CardTitle>
+          <CardTitle className="text-sm font-semibold">Oportunidades por Mes (carga)</CardTitle>
         </CardHeader>
         <CardContent className="h-56">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={kpis.oportunidadesPorMes}>
+            <BarChart data={byMes}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} />
               <RechartsTooltip />
               <Bar dataKey="total" name="Total" fill="#cf1b22" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="enviadas" name="Enviadas" fill="#16a34a" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="vencidos" name="Vencidos" fill="#d97706" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
@@ -309,7 +354,7 @@ function KpiChartsSection() {
         </CardHeader>
         <CardContent className="h-56">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={kpis.oportunidadesPorSede} layout="vertical" margin={{ left: 24 }}>
+            <BarChart data={bySede} layout="vertical" margin={{ left: 24 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis type="number" tick={{ fontSize: 11 }} />
               <YAxis type="category" dataKey="sede" width={90} tick={{ fontSize: 11 }} />
@@ -337,7 +382,7 @@ function KpiChartsSection() {
                 outerRadius={75}
                 paddingAngle={2}
               >
-                {marcaData.map((entry: { name: string; color: string }) => (
+                {marcaData.map((entry) => (
                   <Cell key={entry.name} fill={entry.color} />
                 ))}
               </Pie>
@@ -350,21 +395,16 @@ function KpiChartsSection() {
 
       <Card className="border-border shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold">
-            Insumos Proyectados — {formatCOP(kpis.insumosProyectadosTotal)}
-          </CardTitle>
+          <CardTitle className="text-sm font-semibold">Estado de proyecciones</CardTitle>
         </CardHeader>
         <CardContent className="h-56">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={kpis.insumosPorTipo}>
+            <BarChart data={byStatus}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis dataKey="tipo" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} />
-              <RechartsTooltip
-                formatter={(value: number) => formatCOP(value)}
-              />
-              <Bar dataKey="total" name="Valor" fill="#cf1b22" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="cantidad" name="Cantidad" fill="#2563eb" radius={[4, 4, 0, 0]} />
+              <RechartsTooltip />
+              <Bar dataKey="total" name="Total" fill="#2563eb" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
@@ -376,7 +416,7 @@ function KpiChartsSection() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {kpis.oportunidadesPorCliente.slice(0, 6).map((c: { cliente: string; total: number }) => (
+            {topClientes.map((c) => (
               <div
                 key={c.cliente}
                 className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
@@ -394,13 +434,14 @@ function KpiChartsSection() {
   );
 }
 
-/** Monthly Maintenance Calendar — fechas reales de telemetr a */
-function MaintenanceCalendar() {
+/** Monthly Maintenance Calendar — fechas reales de telemetría filtrada */
+function MaintenanceCalendar({
+  equipos,
+}: Readonly<{ equipos: TelemetriaEquipo[] }>) {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [hoveredEvent, setHoveredEvent] = useState<MaintenanceEvent | null>(null);
-  const { data: equipos = [] } = useTelemetriaEquipos();
 
   const daysInMonth = getDaysInMonth(viewYear, viewMonth);
   const firstDay = getFirstDayOfWeek(viewYear, viewMonth);
@@ -566,20 +607,14 @@ function StatusBadge({ status }: { status: MaintenanceStatus }) {
 
 /** Opportunities Table */
 function OpportunitiesTable({
-  reportFilters,
-}: Readonly<{ reportFilters: ReportFiltersState }>) {
+  rows,
+}: Readonly<{ rows: TelemetriaOpportunityRow[] }>) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
   const rowsPerPage = 10;
-  const { data: equipos = [], isLoading } = useTelemetriaEquipos();
 
-  const opportunityRows = useMemo(
-    () => mapTelemetriaToOpportunityRows(equipos),
-    [equipos]
-  );
-
-  const filtered = opportunityRows.filter((r) => {
+  const filtered = rows.filter((r) => {
     const matchSearch =
       r.equipment.toLowerCase().includes(search.toLowerCase()) ||
       r.brand.toLowerCase().includes(search.toLowerCase()) ||
@@ -587,20 +622,11 @@ function OpportunitiesTable({
       r.client.toLowerCase().includes(search.toLowerCase()) ||
       r.serie.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === "all" || r.status === statusFilter;
-    const matchReport =
-      matchesStringFilter(r.brand, reportFilters.marca) &&
-      matchesStringFilter(r.model, reportFilters.modelo) &&
-      matchesStringFilter(r.client, reportFilters.cliente) &&
-      matchesDateFilters(r.nextDue, reportFilters);
-    return matchSearch && matchStatus && matchReport;
+    return matchSearch && matchStatus;
   });
 
   const totalRows = filtered.length;
   const pageRows = filtered.slice((page - 1) * rowsPerPage, page * rowsPerPage);
-
-  if (isLoading) {
-    return <Skeleton className="h-64 w-full rounded-xl" />;
-  }
 
   return (
     <Card className="border-border shadow-sm">
@@ -734,9 +760,8 @@ function OpportunitiesTable({
 }
 
 /** Colombia SVG Map — sedes/ciudades desde telemetr a */
-function ColombiaMap() {
+function ColombiaMap({ equipos }: Readonly<{ equipos: TelemetriaEquipo[] }>) {
   const [tooltip, setTooltip] = useState<CityDot | null>(null);
-  const { data: equipos = [] } = useTelemetriaEquipos();
 
   const cityDots: CityDot[] = useMemo(() => {
     return aggregateCiudadesFromTelemetria(equipos).map((c, i) => {
@@ -1012,8 +1037,7 @@ const CustomBrandTooltip = ({
   );
 };
 
-function BrandsChart() {
-  const { data: equipos = [] } = useTelemetriaEquipos();
+function BrandsChart({ equipos }: Readonly<{ equipos: TelemetriaEquipo[] }>) {
   const brandData = useMemo(() => aggregateMarcasPie(equipos), [equipos]);
   const total = brandData.reduce((a, b) => a + b.value, 0);
 
@@ -1060,32 +1084,46 @@ function BrandsChart() {
 /** --- TAB 1: Dashboard --- */
 function DashboardTab() {
   const [reportFilters, setReportFilters] = useState<ReportFiltersState>(DEFAULT_REPORT_FILTERS);
-  const { data: equipos = [] } = useTelemetriaEquipos();
+  const { data: equipos = [], isLoading } = useTelemetriaEquipos();
   const opportunityRows = useMemo(
     () => mapTelemetriaToOpportunityRows(equipos),
     [equipos]
   );
 
+  const filteredRows = useMemo(
+    () => opportunityRows.filter((r) => matchesTelemetriaReportFilters(r, reportFilters)),
+    [opportunityRows, reportFilters]
+  );
+
+  const filteredEquipos = useMemo(() => {
+    const ids = new Set(filteredRows.map((r) => r.id));
+    return equipos.filter((e: TelemetriaEquipo) => ids.has(e.id));
+  }, [equipos, filteredRows]);
+
   const filterOptions = useMemo(() => {
-    const marcas = sortLocale(Array.from(new Set(opportunityRows.map((r) => r.brand))));
+    const usable = (v: string) => Boolean(v?.trim()) && v !== "—";
+    const marcas = sortLocale(
+      Array.from(new Set(opportunityRows.map((r) => r.brand).filter(usable)))
+    );
     const source =
       reportFilters.marca === "all"
         ? opportunityRows
         : opportunityRows.filter((r) => matchesStringFilter(r.brand, reportFilters.marca));
-    const modelos = sortLocale(Array.from(new Set(source.map((r) => r.model))));
-    const clientes = sortLocale(Array.from(new Set(opportunityRows.map((r) => r.client))));
-    const periodos = sortLocale(
-      Array.from(
-        new Set(
-          opportunityRows
-            .map((r) => {
-              const d = parseFlexibleDate(r.nextDue);
-              return d ? d.getFullYear().toString() : null;
-            })
-            .filter(Boolean) as string[]
-        )
-      )
+    const modelos = sortLocale(
+      Array.from(new Set(source.map((r) => r.model).filter(usable)))
     );
+    const clientes = sortLocale(
+      Array.from(new Set(opportunityRows.map((r) => r.client).filter(usable)))
+    );
+    const yearSet = new Set<string>();
+    for (const r of opportunityRows) {
+      if (r.anio != null && r.anio > 0) yearSet.add(String(r.anio));
+      else if (r.fechaIso) {
+        const y = new Date(r.fechaIso).getFullYear();
+        if (!Number.isNaN(y)) yearSet.add(String(y));
+      }
+    }
+    const periodos = sortLocale(Array.from(yearSet));
     return { marcas, modelos, periodos, clientes };
   }, [reportFilters.marca, opportunityRows]);
 
@@ -1096,7 +1134,7 @@ function DashboardTab() {
       transition={{ duration: 0.35 }}
       className="space-y-6"
     >
-      {equipos.length === 0 && (
+      {equipos.length === 0 && !isLoading && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           No hay registros en telemetría. Use la pestaña <strong>Importar</strong> para cargar
           la plantilla mensual.
@@ -1107,19 +1145,27 @@ function DashboardTab() {
         onChange={(next) => setReportFilters(next)}
         options={filterOptions}
       />
-      <KPIRow />
-      <KpiChartsSection />
-
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-        <div className="xl:col-span-3 space-y-6">
-          <MaintenanceCalendar />
-          <OpportunitiesTable reportFilters={reportFilters} />
+      {isLoading ? (
+        <div className="space-y-4">
+          <Skeleton className="h-28 w-full rounded-xl" />
+          <Skeleton className="h-64 w-full rounded-xl" />
         </div>
-        <div className="xl:col-span-2 space-y-6">
-          <ColombiaMap />
-          <BrandsChart />
-        </div>
-      </div>
+      ) : (
+        <>
+          <KPIRow rows={filteredRows} />
+          <KpiChartsSection rows={filteredRows} />
+          <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
+            <div className="xl:col-span-3 space-y-6">
+              <MaintenanceCalendar equipos={filteredEquipos} />
+              <OpportunitiesTable rows={filteredRows} />
+            </div>
+            <div className="xl:col-span-2 space-y-6">
+              <ColombiaMap equipos={filteredEquipos} />
+              <BrandsChart equipos={filteredEquipos} />
+            </div>
+          </div>
+        </>
+      )}
     </motion.div>
   );
 }

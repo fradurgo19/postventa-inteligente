@@ -34,8 +34,7 @@ import {
 import {
   sortLocale,
   matchesStringFilter,
-  matchesDateFilters,
-  parseFlexibleDate,
+  matchesTelemetriaReportFilters,
   type ReportFiltersState,
 } from '@/lib/report-filters';
 import {
@@ -95,35 +94,27 @@ export default function ExecutiveDashboardPage() {
   const rows = useMemo(() => mapTelemetriaToOpportunityRows(equipos), [equipos]);
 
   const filteredRows = useMemo(() => {
-    return rows.filter(
-      (r) =>
-        matchesStringFilter(r.brand, reportFilters.marca) &&
-        matchesStringFilter(r.model, reportFilters.modelo) &&
-        matchesStringFilter(r.client, reportFilters.cliente) &&
-        matchesDateFilters(r.nextDue, reportFilters)
-    );
+    return rows.filter((r) => matchesTelemetriaReportFilters(r, reportFilters));
   }, [rows, reportFilters]);
 
   const filterOptions = useMemo(() => {
-    const marcas = sortLocale(Array.from(new Set(rows.map((r) => r.brand))));
+    const usable = (v: string) => Boolean(v?.trim()) && v !== '—';
+    const marcas = sortLocale(Array.from(new Set(rows.map((r) => r.brand).filter(usable))));
     const source =
       reportFilters.marca === 'all'
         ? rows
         : rows.filter((r) => matchesStringFilter(r.brand, reportFilters.marca));
-    const modelos = sortLocale(Array.from(new Set(source.map((r) => r.model))));
-    const clientes = sortLocale(Array.from(new Set(rows.map((r) => r.client))));
-    const periodos = sortLocale(
-      Array.from(
-        new Set(
-          rows
-            .map((r) => {
-              const d = parseFlexibleDate(r.nextDue);
-              return d ? d.getFullYear().toString() : null;
-            })
-            .filter(Boolean) as string[]
-        )
-      )
-    );
+    const modelos = sortLocale(Array.from(new Set(source.map((r) => r.model).filter(usable))));
+    const clientes = sortLocale(Array.from(new Set(rows.map((r) => r.client).filter(usable))));
+    const yearSet = new Set<string>();
+    for (const r of rows) {
+      if (r.anio != null && r.anio > 0) yearSet.add(String(r.anio));
+      else if (r.fechaIso) {
+        const y = new Date(r.fechaIso).getFullYear();
+        if (!Number.isNaN(y)) yearSet.add(String(y));
+      }
+    }
+    const periodos = sortLocale(Array.from(yearSet));
     return { marcas, modelos, periodos, clientes };
   }, [rows, reportFilters.marca]);
 
