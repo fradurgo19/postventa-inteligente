@@ -674,7 +674,7 @@ function OpportunitiesTable({
       </CardHeader>
       <CardContent className="p-0">
         <DualScrollContainer>
-          <Table className="min-w-[900px]">
+          <Table noScrollWrapper className="min-w-[900px]">
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
                 <TableHead className="text-xs font-semibold pl-4">Equipo</TableHead>

@@ -34,23 +34,33 @@ export function DualScrollContainer({
     const table = bottom?.querySelector('table');
     if (!bottom || !table) return;
 
-    const scrollWidth = table.scrollWidth;
+    const scrollWidth = Math.max(table.scrollWidth, bottom.scrollWidth);
     setContentWidth(scrollWidth);
     setShowTopScroll(scrollWidth > bottom.clientWidth + 1);
   }, []);
 
   useEffect(() => {
-    measureContent();
+    const raf = requestAnimationFrame(measureContent);
 
     const bottom = bottomRef.current;
-    if (!bottom) return;
+    if (!bottom) {
+      return () => cancelAnimationFrame(raf);
+    }
 
-    const observer = new ResizeObserver(measureContent);
+    const observer = new ResizeObserver(() => {
+      requestAnimationFrame(measureContent);
+    });
     observer.observe(bottom);
     const table = bottom.querySelector('table');
     if (table) observer.observe(table);
 
-    return () => observer.disconnect();
+    window.addEventListener('resize', measureContent);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      observer.disconnect();
+      window.removeEventListener('resize', measureContent);
+    };
   }, [children, measureContent]);
 
   const handleTopScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
@@ -80,12 +90,12 @@ export function DualScrollContainer({
           ref={topRef}
           onScroll={handleTopScroll}
           className={cn(
-            'overflow-x-auto overflow-y-hidden h-3 border-b border-border bg-muted/30 scrollbar-thin',
+            'overflow-x-auto overflow-y-hidden min-h-[10px] h-[10px] border-b border-border bg-muted/30 scrollbar-thin',
             topScrollClassName
           )}
           aria-label="Desplazamiento horizontal superior de la tabla"
         >
-          <div style={{ width: contentWidth, height: 1 }} aria-hidden="true" />
+          <div className="h-full" style={{ width: contentWidth }} aria-hidden="true" />
         </div>
       ) : null}
       <div
