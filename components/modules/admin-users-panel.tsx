@@ -22,12 +22,11 @@ import {
 } from '@/components/ui/select';
 import { isSupabaseConfigured } from '@/lib/supabase/client';
 import {
-  useAdminAsesores,
   useAdminUsers,
   useTogglePerfilActivo,
   useUpdatePerfil,
 } from '@/hooks/use-administration';
-import type { AdminAsesorRow, AdminUserRow } from '@/services/administration.service';
+import type { AdminUserRow } from '@/services/administration.service';
 import { toast } from 'sonner';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -94,7 +93,6 @@ export function AdminUsersPanel() {
   const [editRole, setEditRole] = useState<UserRole>('Viewer');
   const [editSede, setEditSede] = useState('');
   const { data: adminUsers = [] as AdminUserRow[], isLoading: loadingUsers, refetch } = useAdminUsers();
-  const { data: asesores = [] as AdminAsesorRow[], isLoading: loadingAsesores } = useAdminAsesores();
   const toggleActivo = useTogglePerfilActivo();
   const updatePerfil = useUpdatePerfil();
 
@@ -136,8 +134,7 @@ export function AdminUsersPanel() {
               Gestión de Usuarios (Auth / perfiles)
             </h2>
             <p className="text-xs text-muted-foreground">
-              {adminUsers.length} usuarios · Asesores comerciales se relacionan con clientes/equipos
-              vía telemetría
+              {adminUsers.length} usuarios · Perfiles Auth / Supabase (roles de aplicación)
             </p>
           </div>
           <div className="flex gap-2">
@@ -270,61 +267,6 @@ export function AdminUsersPanel() {
                           </Button>
                         </div>
                       </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05 }}
-        className="bg-white rounded-xl border border-border shadow-sm"
-      >
-        <div className="px-5 py-4 border-b border-border">
-          <h2 className="text-sm font-semibold text-foreground">Asesores (telemetría)</h2>
-          <p className="text-xs text-muted-foreground">
-            Tabla <code className="text-[11px]">asesores</code> del Excel mensual · clientes/equipos
-            vía <code className="text-[11px]">telemetria_equipos</code>
-          </p>
-        </div>
-        <div className="overflow-x-auto">
-          {loadingAsesores ? (
-            <div className="p-5">
-              <Skeleton className="h-24 w-full" />
-            </div>
-          ) : (
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-border bg-muted/30 text-muted-foreground font-semibold">
-                  <th className="px-5 py-3 text-left">Nombre</th>
-                  <th className="px-5 py-3 text-left">Email</th>
-                  <th className="px-5 py-3 text-left">Sede</th>
-                  <th className="px-5 py-3 text-right">Clientes</th>
-                  <th className="px-5 py-3 text-right">Equipos</th>
-                  <th className="px-5 py-3 text-right">Oportunidades</th>
-                </tr>
-              </thead>
-              <tbody>
-                {asesores.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-5 py-6 text-center text-muted-foreground">
-                      Sin asesores. Importe telemetría (Cronograma) para poblar esta tabla.
-                    </td>
-                  </tr>
-                ) : (
-                  asesores.map((a: AdminAsesorRow) => (
-                    <tr key={a.id} className="border-b border-border/50 hover:bg-muted/20">
-                      <td className="px-5 py-2.5 font-medium">{a.nombre}</td>
-                      <td className="px-5 py-2.5 text-muted-foreground">{a.email}</td>
-                      <td className="px-5 py-2.5">{a.sede || '—'}</td>
-                      <td className="px-5 py-2.5 text-right tabular-nums">{a.clientes}</td>
-                      <td className="px-5 py-2.5 text-right tabular-nums">{a.equipos}</td>
-                      <td className="px-5 py-2.5 text-right tabular-nums">{a.oportunidades}</td>
                     </tr>
                   ))
                 )}

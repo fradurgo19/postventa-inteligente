@@ -7,29 +7,22 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { ProyectadosImportPanel } from '@/components/modules/proyectados-import-panel';
-import {
-  useAdminClientes,
-  useAdminImportaciones,
-  useAdminMaquinas,
-} from '@/hooks/use-administration';
-import type {
-  AdminClienteRow,
-  AdminImportRow,
-  AdminMaquinaRow,
-} from '@/services/administration.service';
+import { AdminDomainImportTables } from '@/components/modules/admin-domain-import-tables';
+import { useAdminImportaciones } from '@/hooks/use-administration';
+import type { AdminImportRow } from '@/services/administration.service';
 import { useQueryClient } from '@tanstack/react-query';
+import { useUserStore } from '@/store';
 
 const IMPORT_TYPES = [
   'Cronograma / Telemetría',
+  'Asesores',
   'Equipos',
   'Clientes',
-  'Asesores',
-  'Repuestos',
 ] as const;
 
 type ImportTypeOption = (typeof IMPORT_TYPES)[number];
 
-function ImportStatusBadge({ status }: { status: string }) {
+function ImportStatusBadge({ status }: Readonly<{ status: string }>) {
   const map: Record<string, string> = {
     success: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     error: 'bg-red-50 text-red-700 border-red-200',
@@ -55,18 +48,23 @@ function ImportStatusBadge({ status }: { status: string }) {
 }
 
 export function AdminImportsPanel() {
+  const { role } = useUserStore();
+  const isAdmin = role === 'Administrator';
   const [importType, setImportType] = useState<ImportTypeOption>(IMPORT_TYPES[0]);
   const queryClient = useQueryClient();
   const { data: importaciones = [] as AdminImportRow[], isLoading: loadingImports, refetch } =
     useAdminImportaciones();
-  const { data: clientes = [] as AdminClienteRow[], isLoading: loadingClientes } = useAdminClientes();
-  const { data: maquinas = [] as AdminMaquinaRow[], isLoading: loadingMaquinas } = useAdminMaquinas();
 
   const invalidateDomain = async () => {
     await queryClient.invalidateQueries({ queryKey: ['admin'] });
     await queryClient.invalidateQueries({ queryKey: ['proyectados'] });
     await refetch();
   };
+
+  const domainKind =
+    importType === 'Asesores' || importType === 'Equipos' || importType === 'Clientes'
+      ? importType
+      : null;
 
   return (
     <div className="space-y-4">
@@ -77,9 +75,10 @@ export function AdminImportsPanel() {
       >
         <h2 className="text-sm font-semibold text-foreground mb-2">Importar Datos</h2>
         <p className="text-xs text-muted-foreground mb-4">
-          El Excel de telemetría alimenta <strong>clientes</strong>, <strong>asesores</strong>,{' '}
-          <strong>máquinas</strong> y el <strong>cronograma</strong> (
-          <code className="text-[11px]">telemetria_equipos</code>).
+          El Excel de telemetría alimenta <strong>asesores</strong>, <strong>clientes</strong>,{' '}
+          <strong>equipos</strong> y el <strong>cronograma</strong> (
+          <code className="text-[11px]">telemetria_equipos</code>). Los maestros también se
+          gestionan en las pestañas inferiores.
         </p>
 
         <div className="mb-5">
@@ -106,10 +105,7 @@ export function AdminImportsPanel() {
         </div>
 
         {importType === 'Cronograma / Telemetría' ? (
-          <div
-            onFocusCapture={() => undefined}
-            onBlurCapture={() => undefined}
-          >
+          <div>
             <ProyectadosImportPanel />
             <div className="mt-3 flex justify-end">
               <Button
@@ -126,113 +122,8 @@ export function AdminImportsPanel() {
           </div>
         ) : null}
 
-        {importType === 'Equipos' ? (
-          <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">
-              Los equipos de flota viven en <code>maquinas</code> (serie única) y se cargan con el
-              Excel de telemetría. Relación: máquina → cliente → sede.
-            </p>
-            {loadingMaquinas ? (
-              <Skeleton className="h-32 w-full" />
-            ) : (
-              <div className="overflow-x-auto border rounded-lg">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="bg-muted/30 text-muted-foreground font-semibold border-b">
-                      <th className="px-3 py-2 text-left">Serie</th>
-                      <th className="px-3 py-2 text-left">Marca</th>
-                      <th className="px-3 py-2 text-left">Modelo</th>
-                      <th className="px-3 py-2 text-left">Cliente</th>
-                      <th className="px-3 py-2 text-left">Sede</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {maquinas.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">
-                          Sin equipos. Importe Cronograma / Telemetría.
-                        </td>
-                      </tr>
-                    ) : (
-                      maquinas.map((m: AdminMaquinaRow) => (
-                        <tr key={m.id} className="border-b border-border/50">
-                          <td className="px-3 py-2 font-mono">{m.serie}</td>
-                          <td className="px-3 py-2">{m.marca}</td>
-                          <td className="px-3 py-2">{m.modelo}</td>
-                          <td className="px-3 py-2">{m.cliente || '—'}</td>
-                          <td className="px-3 py-2">{m.sede || '—'}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        ) : null}
-
-        {importType === 'Clientes' ? (
-          <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">
-              Clientes en <code>clientes</code>, poblados por el Excel de telemetría (Nombre del
-              cliente, Nit, email, teléfono). Cada cliente se vincula a sus equipos.
-            </p>
-            {loadingClientes ? (
-              <Skeleton className="h-32 w-full" />
-            ) : (
-              <div className="overflow-x-auto border rounded-lg">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="bg-muted/30 text-muted-foreground font-semibold border-b">
-                      <th className="px-3 py-2 text-left">Cliente</th>
-                      <th className="px-3 py-2 text-left">NIT</th>
-                      <th className="px-3 py-2 text-left">Email</th>
-                      <th className="px-3 py-2 text-left">Ciudad</th>
-                      <th className="px-3 py-2 text-right">Equipos</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {clientes.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">
-                          Sin clientes. Importe Cronograma / Telemetría.
-                        </td>
-                      </tr>
-                    ) : (
-                      clientes.map((c: AdminClienteRow) => (
-                        <tr key={c.id} className="border-b border-border/50">
-                          <td className="px-3 py-2 font-medium">{c.titulo}</td>
-                          <td className="px-3 py-2">{c.nit || '—'}</td>
-                          <td className="px-3 py-2">{c.email || '—'}</td>
-                          <td className="px-3 py-2 max-w-[12rem] truncate" title={c.ciudad ?? ''}>
-                            {c.ciudad || '—'}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums">{c.equipos}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        ) : null}
-
-        {importType === 'Asesores' ? (
-          <p className="text-xs text-muted-foreground">
-            Los asesores se gestionan en la pestaña <strong>Usuarios</strong> (tabla{' '}
-            <code>asesores</code>) y se cargan desde la columna <strong>Asesor2 / ASESOR 2</strong>{' '}
-            del Excel de telemetría (correo del asesor de servicio). Use{' '}
-            <strong>Cronograma / Telemetría</strong> para importarlos.
-          </p>
-        ) : null}
-
-        {importType === 'Repuestos' ? (
-          <p className="text-xs text-muted-foreground">
-            La carga de repuestos CPP y temparios está en los módulos{' '}
-            <strong>Repuestos CPP</strong> y <strong>Calculadora</strong> (Administración de
-            temparios).
-          </p>
+        {domainKind ? (
+          <AdminDomainImportTables kind={domainKind} canManage={isAdmin} />
         ) : null}
       </motion.div>
 

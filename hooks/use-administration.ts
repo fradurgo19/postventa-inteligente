@@ -1,19 +1,29 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  createAsesor,
+  createCliente,
+  createMaquina,
   fetchAdminAsesores,
   fetchAdminClientes,
   fetchAdminDomainSummary,
   fetchAdminImportaciones,
   fetchAdminMaquinas,
   fetchAdminRoleSummaries,
+  fetchAdminSedes,
   fetchAdminUsers,
   fetchAuditoria,
   fetchSystemConfig,
   saveSystemConfig,
   setPerfilActivo,
+  updateAsesor,
+  updateCliente,
+  updateMaquina,
   updatePerfil,
   type AdminPerfilUpdate,
+  type AsesorInput,
   type AuditQuery,
+  type ClienteInput,
+  type MaquinaInput,
   type SystemConfig,
 } from '@/services/administration.service';
 
@@ -106,6 +116,79 @@ export function useUpdatePerfil() {
       updatePerfil(id, patch),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['admin'] });
+    },
+  });
+}
+
+export function useAdminSedes() {
+  return useQuery({
+    queryKey: ['admin', 'sedes'],
+    queryFn: fetchAdminSedes,
+    staleTime: 60_000,
+  });
+}
+
+export function useCreateAsesor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AsesorInput) => createAsesor(input),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['admin'] });
+    },
+  });
+}
+
+export function useUpdateAsesor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: Partial<AsesorInput> }) =>
+      updateAsesor(id, input),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['admin'] });
+    },
+  });
+}
+
+export function useCreateCliente() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ClienteInput) => createCliente(input),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['admin'] });
+    },
+  });
+}
+
+export function useUpdateCliente() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: Partial<ClienteInput> }) =>
+      updateCliente(id, input),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['admin'] });
+    },
+  });
+}
+
+export function useCreateMaquina() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: MaquinaInput) => createMaquina(input),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['admin'] });
+      await qc.invalidateQueries({ queryKey: ['proyectados'] });
+    },
+  });
+}
+
+export function useUpdateMaquina() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: Partial<MaquinaInput> }) =>
+      updateMaquina(id, input),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['admin'] });
+      await qc.invalidateQueries({ queryKey: ['proyectados'] });
     },
   });
 }

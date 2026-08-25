@@ -35,7 +35,40 @@ export interface AdminMaquinaRow {
   modelo: string;
   tipo_maquina: string | null;
   cliente: string | null;
+  cliente_id: string | null;
   sede: string | null;
+  sede_id: string | null;
+  activo: boolean;
+}
+
+export interface AdminSedeOption {
+  id: string;
+  nombre: string;
+}
+
+export interface AsesorInput {
+  nombre: string;
+  email: string;
+  sede?: string | null;
+  activo?: boolean;
+}
+
+export interface ClienteInput {
+  titulo: string;
+  nit?: string | null;
+  email?: string | null;
+  telefono?: string | null;
+  ciudad?: string | null;
+}
+
+export interface MaquinaInput {
+  serie: string;
+  marca: string;
+  modelo: string;
+  tipo_maquina?: string | null;
+  cliente_id?: string | null;
+  sede_id?: string | null;
+  activo?: boolean;
 }
 
 export interface AdminAsesorRow {
@@ -303,7 +336,7 @@ export async function fetchAdminMaquinas(limit = 50): Promise<AdminMaquinaRow[]>
 
   const { data, error } = await supabase
     .from('maquinas')
-    .select('id, serie, marca, modelo, tipo_maquina, cliente_id, sede_id, clientes(titulo), sedes(nombre)')
+    .select('id, serie, marca, modelo, tipo_maquina, cliente_id, sede_id, activo, clientes(titulo), sedes(nombre)')
     .order('updated_at', { ascending: false })
     .limit(limit);
 
@@ -311,7 +344,7 @@ export async function fetchAdminMaquinas(limit = 50): Promise<AdminMaquinaRow[]>
     // Join puede fallar si no existe tabla; fallback simple
     const { data: plain, error: plainErr } = await supabase
       .from('maquinas')
-      .select('id, serie, marca, modelo, tipo_maquina, cliente_id')
+      .select('id, serie, marca, modelo, tipo_maquina, cliente_id, sede_id, activo')
       .order('updated_at', { ascending: false })
       .limit(limit);
     if (plainErr) throw new Error(plainErr.message);
@@ -335,7 +368,10 @@ export async function fetchAdminMaquinas(limit = 50): Promise<AdminMaquinaRow[]>
       modelo: String(m.modelo),
       tipo_maquina: (m.tipo_maquina as string) ?? null,
       cliente: m.cliente_id ? tituloById.get(m.cliente_id as string) ?? null : null,
+      cliente_id: (m.cliente_id as string) ?? null,
       sede: null,
+      sede_id: null,
+      activo: m.activo !== false,
     }));
   }
 
@@ -354,8 +390,160 @@ export async function fetchAdminMaquinas(limit = 50): Promise<AdminMaquinaRow[]>
       modelo: String(m.modelo),
       tipo_maquina: (m.tipo_maquina as string) ?? null,
       cliente: clienteTitulo ?? null,
+      cliente_id: (m.cliente_id as string) ?? null,
       sede: sedeNombre ?? null,
+      sede_id: (m.sede_id as string) ?? null,
+      activo: m.activo !== false,
     };
+  });
+}
+
+export async function fetchAdminSedes(): Promise<AdminSedeOption[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.from('sedes').select('id, nombre').order('nombre');
+  if (error) {
+    if (/sedes|relation|does not exist/i.test(error.message)) return [];
+    throw new Error(error.message);
+  }
+  return (data ?? []).map((s) => ({ id: s.id as string, nombre: String(s.nombre) }));
+}
+
+export async function createAsesor(input: AsesorInput): Promise<string> {
+  const supabase = getSupabaseClient();
+  const email = input.email.trim().toLowerCase();
+  const { data, error } = await supabase
+    .from('asesores')
+    .insert({
+      nombre: input.nombre.trim(),
+      email,
+      sede: input.sede?.trim() || null,
+      activo: input.activo !== false,
+    })
+    .select('id')
+    .single();
+  if (error) throw new Error(error.message);
+  const id = data.id as string;
+  await writeAudit({
+    modulo: 'Importaciones',
+    accion: 'Created',
+    entidad: 'asesores',
+    entidadId: id,
+    detalle: { email },
+  });
+  return id;
+}
+
+export async function updateAsesor(id: string, input: Partial<AsesorInput>): Promise<void> {
+  const supabase = getSupabaseClient();
+  const payload: Record<string, unknown> = {};
+  if (input.nombre != null) payload.nombre = input.nombre.trim();
+  if (input.email != null) payload.email = input.email.trim().toLowerCase();
+  if (input.sede !== undefined) payload.sede = input.sede?.trim() || null;
+  if (input.activo != null) payload.activo = input.activo;
+
+  const { error } = await supabase.from('asesores').update(payload).eq('id', id);
+  if (error) throw new Error(error.message);
+  await writeAudit({
+    modulo: 'Importaciones',
+    accion: 'Updated',
+    entidad: 'asesores',
+    entidadId: id,
+    detalle: payload,
+  });
+}
+
+export async function createCliente(input: ClienteInput): Promise<string> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('clientes')
+    .insert({
+      titulo: input.titulo.trim(),
+      nit: input.nit?.trim() || null,
+      email: input.email?.trim() || null,
+      telefono: input.telefono?.trim() || null,
+      ciudad: input.ciudad?.trim() || null,
+    })
+    .select('id')
+    .single();
+  if (error) throw new Error(error.message);
+  const id = data.id as string;
+  await writeAudit({
+    modulo: 'Importaciones',
+    accion: 'Created',
+    entidad: 'clientes',
+    entidadId: id,
+    detalle: { titulo: input.titulo },
+  });
+  return id;
+}
+
+export async function updateCliente(id: string, input: Partial<ClienteInput>): Promise<void> {
+  const supabase = getSupabaseClient();
+  const payload: Record<string, unknown> = {};
+  if (input.titulo != null) payload.titulo = input.titulo.trim();
+  if (input.nit !== undefined) payload.nit = input.nit?.trim() || null;
+  if (input.email !== undefined) payload.email = input.email?.trim() || null;
+  if (input.telefono !== undefined) payload.telefono = input.telefono?.trim() || null;
+  if (input.ciudad !== undefined) payload.ciudad = input.ciudad?.trim() || null;
+
+  const { error } = await supabase.from('clientes').update(payload).eq('id', id);
+  if (error) throw new Error(error.message);
+  await writeAudit({
+    modulo: 'Importaciones',
+    accion: 'Updated',
+    entidad: 'clientes',
+    entidadId: id,
+    detalle: payload,
+  });
+}
+
+export async function createMaquina(input: MaquinaInput): Promise<string> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('maquinas')
+    .insert({
+      serie: input.serie.trim(),
+      marca: input.marca.trim(),
+      modelo: input.modelo.trim(),
+      tipo_maquina: input.tipo_maquina?.trim() || null,
+      cliente_id: input.cliente_id || null,
+      sede_id: input.sede_id || null,
+      activo: input.activo !== false,
+    })
+    .select('id')
+    .single();
+  if (error) throw new Error(error.message);
+  const id = data.id as string;
+  await writeAudit({
+    modulo: 'Importaciones',
+    accion: 'Created',
+    entidad: 'maquinas',
+    entidadId: id,
+    detalle: { serie: input.serie },
+  });
+  return id;
+}
+
+export async function updateMaquina(id: string, input: Partial<MaquinaInput>): Promise<void> {
+  const supabase = getSupabaseClient();
+  const payload: Record<string, unknown> = {};
+  if (input.serie != null) payload.serie = input.serie.trim();
+  if (input.marca != null) payload.marca = input.marca.trim();
+  if (input.modelo != null) payload.modelo = input.modelo.trim();
+  if (input.tipo_maquina !== undefined) payload.tipo_maquina = input.tipo_maquina?.trim() || null;
+  if (input.cliente_id !== undefined) payload.cliente_id = input.cliente_id || null;
+  if (input.sede_id !== undefined) payload.sede_id = input.sede_id || null;
+  if (input.activo != null) payload.activo = input.activo;
+
+  const { error } = await supabase.from('maquinas').update(payload).eq('id', id);
+  if (error) throw new Error(error.message);
+  await writeAudit({
+    modulo: 'Importaciones',
+    accion: 'Updated',
+    entidad: 'maquinas',
+    entidadId: id,
+    detalle: payload,
   });
 }
 
