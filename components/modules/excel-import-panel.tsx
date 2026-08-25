@@ -152,7 +152,7 @@ export function ExcelImportPanel({
 
         const updatedLabel =
           modulo === 'proyectados'
-            ? `Actualizados (misma serie + mes/año): ${duplicates}`
+            ? `Insertados como servicios proyectados (varios MTTOs/mes permitidos)`
             : `Actualizados (mismo ID): ${duplicates}`;
 
         const accounted = recordsOk + recordsError + skipped + deduplicated;
@@ -162,7 +162,7 @@ export function ExcelImportPanel({
           ...(skipped > 0 ? [`Filas omitidas (vacías / sin serie): ${skipped}`] : []),
           ...(deduplicated > 0
             ? [
-                `Filas consolidadas (misma serie + mes/año en el archivo → 1 registro): ${deduplicated}`,
+                `Filas consolidadas (duplicado exacto en archivo): ${deduplicated}`,
               ]
             : []),
           `Registros cargados OK: ${recordsOk}`,

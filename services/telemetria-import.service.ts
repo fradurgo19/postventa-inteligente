@@ -1,7 +1,6 @@
 import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/client';
 import {
   parseTelemetriaFile,
-  telemetriaPeriodKey,
   type TelemetriaMappedRow,
 } from '@/lib/proyectados/telemetria-import';
 import type { ImportExcelResponse } from '@/services/import.service';
@@ -62,23 +61,6 @@ function clienteKey(row: Pick<TelemetriaMappedRow, 'nit' | 'titulo' | 'email'>):
   if (row.titulo?.trim()) return `titulo:${row.titulo.trim().toLowerCase()}`;
   if (row.email) return `email:${row.email.toLowerCase()}`;
   return null;
-}
-
-/** Conserva la última fila por serie + mes + año (misma proyección en el archivo). */
-function dedupeBySeriePeriodo(rows: TelemetriaMappedRow[]): TelemetriaMappedRow[] {
-  const map = new Map<string, TelemetriaMappedRow>();
-  for (const row of rows) {
-    map.set(telemetriaPeriodKey(row), row);
-  }
-  return Array.from(map.values());
-}
-
-function periodKeyFromDb(row: {
-  serie: unknown;
-  mes_creado: unknown;
-  anio: unknown;
-}): string {
-  return `${String(row.serie)}|${String(row.mes_creado ?? '').toLowerCase()}|${Number(row.anio ?? 0)}`;
 }
 
 function stripOptionalFks(body: Record<string, unknown>): Record<string, unknown> {
@@ -424,7 +406,7 @@ async function batchUpsertMaquinas(
   return idBySerie;
 }
 
-async function batchUpsertTelemetria(
+async function batchInsertTelemetria(
   rows: TelemetriaMappedRow[],
   maps: {
     clienteIds: Map<string, string>;
@@ -437,7 +419,6 @@ async function batchUpsertTelemetria(
 ): Promise<{ ok: number; updated: number; errors: Array<{ row: number; message: string }> }> {
   const supabase = getSupabaseClient();
   let ok = 0;
-  let updated = 0;
   let processed = 0;
   const errors: Array<{ row: number; message: string }> = [];
   const total = rows.length;
@@ -448,21 +429,23 @@ async function batchUpsertTelemetria(
       processed,
       total,
       ok,
-      updated,
+      updated: 0,
       errors: errors.length,
     });
   };
 
+  const formatInsertError = (payload: Record<string, unknown>, message: string): string => {
+    if (/telemetria_serie_mes_anio_uid|idx_telemetria_serie_unique|telemetria_serie_unique/i.test(message)) {
+      return 'Ejecute en Supabase el script 24_telemetria_allow_multi_mtto_mes.sql (varios MTTOs por máquina/mes).';
+    }
+    if (/numeric field overflow/i.test(message)) {
+      return `Serie ${String(payload.serie)}: valor numérico fuera de rango (script 22_telemetria_widen_numerics.sql).`;
+    }
+    return `Serie ${String(payload.serie)} (${payload.mes_creado}/${payload.anio}, tipo ${payload.tipo_mtto ?? '—'}): ${message}`;
+  };
+
   for (const batch of chunkArray(rows, BATCH_SIZE)) {
     await refreshSessionIfNeeded();
-
-    const series = batch.map((r) => r.serie);
-    const { data: existingRows } = await supabase
-      .from('telemetria_equipos')
-      .select('serie, mes_creado, anio')
-      .in('serie', series);
-
-    const existingSet = new Set((existingRows ?? []).map((r) => periodKeyFromDb(r)));
 
     const payloads = batch.map((row) => {
       const ck = clienteKey(row);
@@ -477,96 +460,26 @@ async function batchUpsertTelemetria(
       });
     });
 
-    const conflictCols = 'serie,mes_creado,anio';
+    let { error } = await supabase.from('telemetria_equipos').insert(payloads);
 
-    let { error } = await supabase.from('telemetria_equipos').upsert(payloads, {
-      onConflict: conflictCols,
-      ignoreDuplicates: false,
-    });
-
-    // Sin UNIQUE de periodo o sin columnas FK: reintentar sin FKs opcionales
-    if (error && /sede_id|maquina_id|on conflict|unique|serie|mes_creado|anio/i.test(error.message)) {
-      const stripped = payloads.map(stripOptionalFks);
-      ({ error } = await supabase.from('telemetria_equipos').upsert(stripped, {
-        onConflict: conflictCols,
-        ignoreDuplicates: false,
-      }));
+    if (error && /sede_id|maquina_id|column/i.test(error.message)) {
+      ({ error } = await supabase.from('telemetria_equipos').insert(payloads.map(stripOptionalFks)));
     }
 
     if (error) {
-      // Fallback: update mismo periodo + insert nuevo mes/año por sublotes
-      const toUpdate = payloads.filter((p) =>
-        existingSet.has(
-          periodKeyFromDb({
-            serie: p.serie,
-            mes_creado: p.mes_creado,
-            anio: p.anio,
-          })
-        )
-      );
-      const toInsert = payloads.filter(
-        (p) =>
-          !existingSet.has(
-            periodKeyFromDb({
-              serie: p.serie,
-              mes_creado: p.mes_creado,
-              anio: p.anio,
-            })
-          )
-      );
-
-      for (const sub of chunkArray(toUpdate, 25)) {
-        for (const payload of sub) {
-          const body = stripOptionalFks(payload);
-          const { error: upErr } = await supabase
-            .from('telemetria_equipos')
-            .update(body)
-            .eq('serie', String(payload.serie))
-            .eq('mes_creado', String(payload.mes_creado))
-            .eq('anio', Number(payload.anio));
-          if (upErr) {
-            errors.push({
-              row: 0,
-              message: `Serie ${String(payload.serie)} (${payload.mes_creado}/${payload.anio}): ${upErr.message}`,
-            });
-          } else {
-            ok += 1;
-            updated += 1;
-          }
-          processed += 1;
-        }
-      }
-
-      for (const sub of chunkArray(toInsert, 25)) {
-        const { error: insErr } = await supabase
+      for (const payload of payloads) {
+        const { error: rowErr } = await supabase
           .from('telemetria_equipos')
-          .insert(sub.map(stripOptionalFks));
-        if (insErr) {
-          for (const payload of sub) {
-            const { error: rowErr } = await supabase
-              .from('telemetria_equipos')
-              .insert(stripOptionalFks(payload));
-            if (rowErr) {
-              const msg = /idx_telemetria_serie_unique|telemetria_serie_unique/i.test(rowErr.message)
-                ? 'Ejecute en Supabase el script 21_telemetria_periodo_unique.sql (proyecciones por mes/año).'
-                : /numeric field overflow/i.test(rowErr.message)
-                  ? `Serie ${String(payload.serie)}: valor numérico fuera de rango (ejecute script 22_telemetria_widen_numerics.sql y reimporte).`
-                  : `Serie ${String(payload.serie)}: ${rowErr.message}`;
-              errors.push({ row: 0, message: msg });
-            } else {
-              ok += 1;
-            }
-            processed += 1;
-          }
+          .insert(stripOptionalFks(payload));
+        if (rowErr) {
+          errors.push({ row: 0, message: formatInsertError(payload, rowErr.message) });
         } else {
-          ok += sub.length;
-          processed += sub.length;
+          ok += 1;
         }
+        processed += 1;
       }
     } else {
-      const batchUpdated = batch.filter((r) => existingSet.has(telemetriaPeriodKey(r))).length;
       ok += batch.length;
-      updated += batchUpdated;
       processed += batch.length;
     }
 
@@ -574,13 +487,14 @@ async function batchUpsertTelemetria(
     await sleep(BATCH_PAUSE_MS);
   }
 
-  return { ok, updated, errors };
+  return { ok, updated: 0, errors };
 }
 
 /**
  * Carga masiva mensual (~5k filas):
  * - clientes / asesores / sedes / máquinas → upsert únicos (sin duplicar flota)
- * - telemetria_equipos → proyección por serie + mes + año (historial de próximos mtto)
+ * - telemetria_equipos → inserta todas las filas (varios MTTOs por máquina en el mismo mes)
+ * Reimportar limpio: ejecutar 23_truncate_telemetria_reimport.sql antes.
  */
 export async function importTelemetriaFromFile(
   file: File,
@@ -603,21 +517,17 @@ export async function importTelemetriaFromFile(
   });
 
   const parsed = await parseTelemetriaFile(file);
-  const beforeDedupe = parsed.rows.length;
-  const deduped = dedupeBySeriePeriodo(
-    parsed.rows.map((r) => ({ ...r, created_by: createdBy || r.created_by }))
-  );
-  const deduplicatedCount = Math.max(0, beforeDedupe - deduped.length);
+  const rows = parsed.rows.map((r) => ({ ...r, created_by: createdBy || r.created_by }));
   const parseErrors = [...parsed.errors];
 
-  if (deduped.length === 0) {
+  if (rows.length === 0) {
     return {
       recordsOk: 0,
       recordsError: parseErrors.length,
       duplicates: 0,
       total: parsed.rawTotal,
       skipped: parsed.skipped,
-      deduplicated: deduplicatedCount,
+      deduplicated: 0,
       errors: parseErrors.slice(0, MAX_ERROR_SAMPLES),
       error: parseErrors[0]?.message ?? 'El archivo no contiene filas de datos',
     };
@@ -647,28 +557,28 @@ export async function importTelemetriaFromFile(
   onProgress?.({
     phase: 'relations',
     processed: 0,
-    total: deduped.length,
+    total: rows.length,
     ok: 0,
     updated: 0,
     errors: parseErrors.length,
   });
 
-  const asesorIds = await batchUpsertAsesores(deduped);
-  const sedeIds = await batchUpsertSedes(deduped);
-  const clienteIds = await batchResolveClientes(deduped);
-  const maquinaIds = await batchUpsertMaquinas(deduped, clienteIds, sedeIds);
+  const asesorIds = await batchUpsertAsesores(rows);
+  const sedeIds = await batchUpsertSedes(rows);
+  const clienteIds = await batchResolveClientes(rows);
+  const maquinaIds = await batchUpsertMaquinas(rows, clienteIds, sedeIds);
 
   onProgress?.({
     phase: 'upload',
     processed: 0,
-    total: deduped.length,
+    total: rows.length,
     ok: 0,
     updated: 0,
     errors: parseErrors.length,
   });
 
-  const result = await batchUpsertTelemetria(
-    deduped,
+  const result = await batchInsertTelemetria(
+    rows,
     { clienteIds, asesorIds, sedeIds, maquinaIds, importBatchId },
     onProgress
   );
@@ -690,20 +600,20 @@ export async function importTelemetriaFromFile(
 
   onProgress?.({
     phase: 'done',
-    processed: deduped.length,
-    total: deduped.length,
+    processed: rows.length,
+    total: rows.length,
     ok: recordsOk,
-    updated: result.updated,
+    updated: 0,
     errors: recordsError,
   });
 
   return {
     recordsOk,
     recordsError,
-    duplicates: result.updated,
+    duplicates: 0,
     total: parsed.rawTotal,
     skipped: parsed.skipped,
-    deduplicated: deduplicatedCount,
+    deduplicated: 0,
     errors: allErrors,
   };
 }

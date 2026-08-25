@@ -2,8 +2,9 @@
 -- Vaciar telemetría + maestros relacionados y dejar listo para reimportar Excel
 -- Orden recomendado:
 --   1) 22_telemetria_widen_numerics.sql   (si aún no se ejecutó)
---   2) ESTE script
---   3) Cargar Telemetria.xlsx desde la app (pestaña Importar)
+--   2) 24_telemetria_allow_multi_mtto_mes.sql  (quita UNIQUE serie+mes+año)
+--   3) ESTE script
+--   4) Cargar Telemetria.xlsx desde la app (pestaña Importar)
 --
 -- CASCADE limpia alertas_mantenimiento (FK a telemetria_equipos).
 -- No borra importaciones (historial de cargas) ni usuarios.

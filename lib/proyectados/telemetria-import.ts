@@ -559,7 +559,7 @@ export function mapTelemetriaSheetRow(
   };
 }
 
-/** Clave de proyección mensual: misma máquina en otro mes/año = otro servicio proyectado. */
+/** Clave de periodo (consultas / ranking). Ya no es unique en BD. */
 export function telemetriaPeriodKey(row: Pick<TelemetriaMappedRow, 'serie' | 'mes_creado' | 'anio'>): string {
   return `${row.serie}|${(row.mes_creado ?? '').toLowerCase()}|${row.anio ?? 0}`;
 }
