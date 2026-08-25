@@ -170,16 +170,37 @@ export interface CiudadAgg {
   name: string;
   count: number;
   status: 'active' | 'warning' | 'critical';
+  marcas: string[];
+  modelos: string[];
+  series: string[];
 }
 
 /** Agrega por ciudad/sede para el mapa (estado por Fecha Primer Mtto). */
 export function aggregateCiudadesFromTelemetria(equipos: TelemetriaEquipo[]): CiudadAgg[] {
-  const map = new Map<string, { count: number; overdue: number }>();
+  const map = new Map<
+    string,
+    {
+      count: number;
+      overdue: number;
+      marcas: Set<string>;
+      modelos: Set<string>;
+      series: Set<string>;
+    }
+  >();
 
   for (const e of equipos) {
     const raw = (e.sede || e.ciudad || 'Sin ubicación').split(',')[0]?.trim() || 'Sin ubicación';
-    const prev = map.get(raw) ?? { count: 0, overdue: 0 };
+    const prev = map.get(raw) ?? {
+      count: 0,
+      overdue: 0,
+      marcas: new Set<string>(),
+      modelos: new Set<string>(),
+      series: new Set<string>(),
+    };
     prev.count += 1;
+    if (e.marca?.trim()) prev.marcas.add(e.marca.trim());
+    if (e.modelo?.trim()) prev.modelos.add(e.modelo.trim());
+    if (e.serie?.trim()) prev.series.add(e.serie.trim());
     const primer = pickFechaPrimerMtto(e);
     if (statusFromFechaPrimerMtto(primer) === 'Overdue') prev.overdue += 1;
     map.set(raw, prev);
@@ -190,10 +211,16 @@ export function aggregateCiudadesFromTelemetria(equipos: TelemetriaEquipo[]): Ci
       let status: CiudadAgg['status'] = 'active';
       if (v.overdue / v.count > 0.35) status = 'critical';
       else if (v.overdue > 0) status = 'warning';
-      return { name, count: v.count, status };
+      return {
+        name,
+        count: v.count,
+        status,
+        marcas: Array.from(v.marcas).sort((a, b) => a.localeCompare(b, 'es')),
+        modelos: Array.from(v.modelos).sort((a, b) => a.localeCompare(b, 'es')),
+        series: Array.from(v.series).sort((a, b) => a.localeCompare(b, 'es')),
+      };
     })
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 12);
+    .sort((a, b) => b.count - a.count);
 }
 
 export interface BrandPieSlice {

@@ -68,6 +68,7 @@ import {
 } from "@/hooks/use-projected-maintenance";
 import type { ProyectadosImportLog } from "@/services/projected-maintenance.service";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DualScrollContainer } from "@/components/ui/dual-scroll-container";
 import {
   ReportFiltersBar,
   DEFAULT_REPORT_FILTERS,
@@ -133,6 +134,9 @@ interface CityDot {
   status: "active" | "warning" | "critical";
   cx: number;
   cy: number;
+  marcas: string[];
+  modelos: string[];
+  series: string[];
 }
 
 // Roadmap de producto (no es data de prueba de negocio)
@@ -145,27 +149,97 @@ const AUTOMATION_STEPS: AutomationStep[] = [
   { number: 6, icon: Zap,        title: "Actualización del Panel",      description: "Recálculo de KPIs en tiempo real y actualización del panel después de cada ciclo de flujo de trabajo. Seguimiento de tasas de cumplimiento, tendencias de vencimiento y métricas de desempeño de asesores.", status: "In Development"  },
 ];
 
-/** Posiciones aproximadas en el SVG de Colombia (claves sin tildes; cityCoords normaliza). */
+/**
+ * Posiciones en viewBox 340×440 del mapa SVG (claves sin tildes).
+ * Alineadas a costa Caribe, Andes y Pacífico.
+ */
 const CITY_COORDS: Record<string, { cx: number; cy: number }> = {
-  bogota: { cx: 178, cy: 245 },
-  medellin: { cx: 155, cy: 190 },
-  cali: { cx: 138, cy: 280 },
-  barranquilla: { cx: 172, cy: 98 },
-  bucaramanga: { cx: 192, cy: 175 },
-  pereira: { cx: 147, cy: 225 },
-  manizales: { cx: 152, cy: 210 },
-  monteria: { cx: 160, cy: 120 },
-  ibague: { cx: 165, cy: 250 },
-  istmina: { cx: 120, cy: 230 },
+  barranquilla: { cx: 178, cy: 78 },
+  cartagena: { cx: 158, cy: 88 },
+  santamarta: { cx: 205, cy: 72 },
+  valledupar: { cx: 198, cy: 108 },
+  sincelejo: { cx: 162, cy: 118 },
+  monteria: { cx: 152, cy: 132 },
+  cucuta: { cx: 222, cy: 148 },
+  bucaramanga: { cx: 198, cy: 168 },
+  medellin: { cx: 152, cy: 188 },
+  manizales: { cx: 155, cy: 212 },
+  pereira: { cx: 148, cy: 222 },
+  armenia: { cx: 152, cy: 230 },
+  bogota: { cx: 185, cy: 235 },
+  tunja: { cx: 190, cy: 205 },
+  villavicencio: { cx: 210, cy: 245 },
+  yopal: { cx: 218, cy: 215 },
+  ibague: { cx: 168, cy: 248 },
+  neiva: { cx: 172, cy: 288 },
+  cali: { cx: 138, cy: 278 },
+  popayan: { cx: 140, cy: 308 },
+  pasto: { cx: 138, cy: 345 },
+  quibdo: { cx: 118, cy: 200 },
+  istmina: { cx: 122, cy: 228 },
+  buenaventura: { cx: 118, cy: 265 },
 };
 
-function cityCoords(name: string, index: number): { cx: number; cy: number } {
-  const key = name
+function normalizeCityKey(name: string): string {
+  return name
     .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+function cityCoords(name: string, index: number): { cx: number; cy: number } {
+  const key = normalizeCityKey(name);
   if (CITY_COORDS[key]) return CITY_COORDS[key];
-  return { cx: 140 + (index % 5) * 18, cy: 140 + Math.floor(index / 5) * 28 };
+
+  const aliases: Array<[string, string]> = [
+    ["bogota", "bogota"],
+    ["medellin", "medellin"],
+    ["barranquilla", "barranquilla"],
+    ["monteria", "monteria"],
+    ["bucaramanga", "bucaramanga"],
+    ["ibague", "ibague"],
+    ["istmina", "istmina"],
+    ["cali", "cali"],
+    ["cartagena", "cartagena"],
+    ["cucuta", "cucuta"],
+    ["pereira", "pereira"],
+    ["manizales", "manizales"],
+    ["armenia", "armenia"],
+    ["neiva", "neiva"],
+    ["pasto", "pasto"],
+    ["popayan", "popayan"],
+    ["villavicencio", "villavicencio"],
+    ["santamarta", "santamarta"],
+    ["valledupar", "valledupar"],
+    ["sincelejo", "sincelejo"],
+    ["quibdo", "quibdo"],
+    ["buenaventura", "buenaventura"],
+    ["yopal", "yopal"],
+    ["tunja", "tunja"],
+  ];
+
+  for (const [needle, coordKey] of aliases) {
+    if (key.includes(needle)) {
+      return CITY_COORDS[coordKey];
+    }
+  }
+
+  // Fallback: dispersión controlada dentro del continente
+  const ring = Math.floor(index / 6);
+  const slot = index % 6;
+  return {
+    cx: 135 + slot * 16 + (ring % 2) * 8,
+    cy: 160 + ring * 28,
+  };
+}
+
+function formatTooltipList(items: string[], max = 6): string {
+  if (items.length === 0) return "—";
+  if (items.length <= max) return items.join(", ");
+  return `${items.slice(0, max).join(", ")} +${items.length - max} más`;
 }
 
 // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -682,8 +756,8 @@ function OpportunitiesTable({
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <Table>
+        <DualScrollContainer>
+          <Table className="min-w-[900px]">
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
                 <TableHead className="text-xs font-semibold pl-4">Equipo</TableHead>
@@ -725,7 +799,7 @@ function OpportunitiesTable({
               )}
             </TableBody>
           </Table>
-        </div>
+        </DualScrollContainer>
 
         {/* Pagination */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-border">
@@ -773,7 +847,7 @@ function OpportunitiesTable({
   );
 }
 
-/** Colombia SVG Map — sedes/ciudades desde telemetr a */
+/** Colombia SVG Map — sedes ubicadas + tooltip con equipos/marcas/modelos/series */
 function ColombiaMap({ equipos }: Readonly<{ equipos: TelemetriaEquipo[] }>) {
   const [tooltip, setTooltip] = useState<CityDot | null>(null);
 
@@ -787,9 +861,24 @@ function ColombiaMap({ equipos }: Readonly<{ equipos: TelemetriaEquipo[] }>) {
         status: c.status,
         cx: coords.cx,
         cy: coords.cy,
+        marcas: c.marcas,
+        modelos: c.modelos,
+        series: c.series,
       };
     });
   }, [equipos]);
+
+  const tooltipStyle = useMemo(() => {
+    if (!tooltip) return undefined;
+    const leftPct = (tooltip.cx / 340) * 100;
+    const topPct = (tooltip.cy / 440) * 100;
+    const preferLeft = leftPct > 55;
+    return {
+      left: preferLeft ? undefined : `${Math.min(leftPct + 3, 62)}%`,
+      right: preferLeft ? `${Math.min(100 - leftPct + 3, 62)}%` : undefined,
+      top: `${Math.max(4, Math.min(topPct - 8, 68))}%`,
+    } as const;
+  }, [tooltip]);
 
   return (
     <Card className="border-border shadow-sm">
@@ -807,13 +896,15 @@ function ColombiaMap({ equipos }: Readonly<{ equipos: TelemetriaEquipo[] }>) {
             Sin datos de telemetría. Importe la carga masiva para ver la distribución.
           </p>
         ) : null}
-        <div className={`relative w-full ${cityDots.length === 0 ? "opacity-40" : ""}`} style={{ paddingBottom: "90%" }}>
+        <div
+          className={`relative w-full ${cityDots.length === 0 ? "opacity-40" : ""}`}
+          style={{ paddingBottom: "90%" }}
+        >
           <svg
             viewBox="0 0 340 440"
             className="absolute inset-0 w-full h-full"
             xmlns="http://www.w3.org/2000/svg"
           >
-            {/* â”€â”€ Colombia outline (simplified, recognizable shape) â”€â”€ */}
             <defs>
               <linearGradient id="colMap" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stopColor="#f8fafc" />
@@ -824,7 +915,6 @@ function ColombiaMap({ equipos }: Readonly<{ equipos: TelemetriaEquipo[] }>) {
               </filter>
             </defs>
 
-            {/* Colombia mainland */}
             <path
               d="
                 M 130 60
@@ -883,23 +973,18 @@ function ColombiaMap({ equipos }: Readonly<{ equipos: TelemetriaEquipo[] }>) {
               filter="url(#shadow)"
             />
 
-            {/* Pacific coast notch */}
             <path
               d="M 95 190 C 80 200 70 225 75 250 C 80 270 90 280 100 290 L 108 265 L 105 235 L 100 220 Z"
               fill="#e2e8f0"
               stroke="#cbd5e1"
               strokeWidth="1"
             />
-
-            {/* Caribbean coast extension (northern) */}
             <path
               d="M 130 60 L 145 52 L 165 50 L 195 58 L 210 70 C 225 68 240 72 250 80 C 242 85 230 88 220 85 L 210 70 Z"
               fill="#dbeafe"
               stroke="#bfdbfe"
               strokeWidth="1"
             />
-
-            {/* Rivers (decorative) */}
             <path
               d="M 155 180 Q 168 220 172 260 Q 175 300 178 340"
               fill="none"
@@ -917,7 +1002,6 @@ function ColombiaMap({ equipos }: Readonly<{ equipos: TelemetriaEquipo[] }>) {
               opacity="0.6"
             />
 
-            {/* Grid lines (subtle) */}
             {[120, 160, 200, 240, 280, 320, 360].map((y) => (
               <line key={`gy-${y}`} x1="90" y1={y} x2="260" y2={y} stroke="#e2e8f0" strokeWidth="0.5" />
             ))}
@@ -925,87 +1009,92 @@ function ColombiaMap({ equipos }: Readonly<{ equipos: TelemetriaEquipo[] }>) {
               <line key={`gx-${x}`} x1={x} y1="50" x2={x} y2="390" stroke="#e2e8f0" strokeWidth="0.5" />
             ))}
 
-            {/* City dots */}
             {cityDots.map((city) => (
-              <g key={city.id}>
-                {/* Pulse ring */}
+              <g
+                key={city.id}
+                className="cursor-pointer"
+                onMouseEnter={() => setTooltip(city)}
+                onMouseLeave={() => setTooltip(null)}
+                onFocus={() => setTooltip(city)}
+                onBlur={() => setTooltip(null)}
+                tabIndex={0}
+                role="img"
+                aria-label={`${city.name}: ${city.count} equipos`}
+              >
                 <circle
                   cx={city.cx}
                   cy={city.cy}
-                  r="10"
+                  r="12"
                   fill={CITY_STATUS_COLORS[city.status]}
-                  opacity="0.15"
-                  className="animate-ping"
-                  style={{ animationDuration: "2.5s" }}
+                  opacity="0.12"
                 />
-                {/* Dot */}
                 <circle
                   cx={city.cx}
                   cy={city.cy}
-                  r="6"
+                  r="7"
                   fill={CITY_STATUS_COLORS[city.status]}
                   stroke="white"
                   strokeWidth="2"
-                  className="cursor-pointer"
-                  onMouseEnter={() => setTooltip(city)}
-                  onMouseLeave={() => setTooltip(null)}
                   style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,.25))" }}
                 />
-                {/* Count badge */}
                 <text
-                  x={city.cx + 9}
-                  y={city.cy - 7}
-                  fontSize="8"
-                  fontWeight="600"
-                  fill={CITY_STATUS_COLORS[city.status]}
+                  x={city.cx}
+                  y={city.cy + 3}
+                  textAnchor="middle"
+                  fontSize="7"
+                  fontWeight="700"
+                  fill="white"
+                  style={{ pointerEvents: "none" }}
                 >
-                  {city.count}
+                  {city.count > 99 ? "99+" : city.count}
+                </text>
+                <text
+                  x={city.cx}
+                  y={city.cy + 18}
+                  textAnchor="middle"
+                  fontSize="7.5"
+                  fontWeight="600"
+                  fill="#334155"
+                  style={{ pointerEvents: "none" }}
+                >
+                  {city.name.length > 14 ? `${city.name.slice(0, 12)}…` : city.name}
                 </text>
               </g>
             ))}
-
-            {/* Tooltip box */}
-            {tooltip && (
-              <g>
-                <rect
-                  x={Math.min(tooltip.cx + 12, 215)}
-                  y={tooltip.cy - 22}
-                  width="90"
-                  height="36"
-                  rx="5"
-                  fill="white"
-                  stroke="#e2e8f0"
-                  strokeWidth="1"
-                  style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,.15))" }}
-                />
-                <text
-                  x={Math.min(tooltip.cx + 17, 220)}
-                  y={tooltip.cy - 8}
-                  fontSize="9"
-                  fontWeight="700"
-                  fill="#1e293b"
-                >
-                  {tooltip.name}
-                </text>
-                <text
-                  x={Math.min(tooltip.cx + 17, 220)}
-                  y={tooltip.cy + 6}
-                  fontSize="8"
-                  fill="#64748b"
-                >
-                  {tooltip.count} equipos
-                </text>
-              </g>
-            )}
           </svg>
+
+          {tooltip ? (
+            <div
+              className="pointer-events-none absolute z-20 w-[min(100%,220px)] rounded-lg border border-border bg-white p-3 shadow-lg"
+              style={tooltipStyle}
+            >
+              <p className="text-sm font-bold text-foreground truncate">{tooltip.name}</p>
+              <p className="text-xs text-[#cf1b22] font-semibold mt-0.5">
+                {tooltip.count} equipos · {tooltip.series.length} series
+              </p>
+              <div className="mt-2 space-y-1.5 text-[11px] leading-snug text-muted-foreground">
+                <p>
+                  <span className="font-semibold text-foreground">Marcas: </span>
+                  {formatTooltipList(tooltip.marcas)}
+                </p>
+                <p>
+                  <span className="font-semibold text-foreground">Modelos: </span>
+                  {formatTooltipList(tooltip.modelos)}
+                </p>
+                <p>
+                  <span className="font-semibold text-foreground">Series: </span>
+                  {formatTooltipList(tooltip.series, 8)}
+                </p>
+              </div>
+            </div>
+          ) : null}
         </div>
 
-        {/* Legend */}
         <div className="mt-3 flex flex-wrap gap-3">
           {(
             [
-              { label: "Activo",   status: "active"   },
-              { label: "Advertencia",  status: "warning"  },
+              { label: "Activo", status: "active" },
+              { label: "Advertencia", status: "warning" },
               { label: "Crítico", status: "critical" },
             ] as { label: string; status: CityDot["status"] }[]
           ).map(({ label, status }) => (
