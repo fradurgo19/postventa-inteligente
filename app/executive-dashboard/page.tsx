@@ -4,7 +4,6 @@ import { useMemo, useState } from 'react';
 import { motion, type Variants } from 'framer-motion';
 import {
   Wrench,
-  CheckCircle2,
   Users,
   Building2,
   AlertTriangle,
@@ -37,15 +36,15 @@ import {
   matchesTelemetriaReportFilters,
   type ReportFiltersState,
 } from '@/lib/report-filters';
-import {
-  useProjectedKpis,
-  useTelemetriaEquipos,
-} from '@/hooks/use-projected-maintenance';
+import { useTelemetriaEquipos } from '@/hooks/use-projected-maintenance';
 import {
   mapTelemetriaToOpportunityRows,
   aggregateMarcasPie,
+  sortOportunidadesProximas,
   type MaintenanceStatusUi,
+  type TelemetriaOpportunityRow,
 } from '@/lib/proyectados/map-telemetria-ui';
+import type { TelemetriaEquipo } from '@/types/database';
 
 const CHART_COLORS = ['#cf1b22', '#50504f', '#2563eb', '#16a34a', '#d97706', '#7c3aed'];
 
@@ -86,16 +85,66 @@ function StatusBadge({ status }: Readonly<{ status: MaintenanceStatusUi }>) {
   );
 }
 
+function mesPeriodoLabel(r: TelemetriaOpportunityRow): string {
+  if (r.mesCreado && r.mesCreado !== '—') {
+    return r.anio ? `${r.mesCreado} ${r.anio}` : r.mesCreado;
+  }
+  if (r.createdAt) {
+    return new Date(r.createdAt).toLocaleDateString('es-CO', {
+      month: 'short',
+      year: 'numeric',
+    });
+  }
+  return 'Sin periodo';
+}
+
+function buildMesChartFromRows(rows: TelemetriaOpportunityRow[], equiposById: Map<string, TelemetriaEquipo>) {
+  const map = new Map<string, { mes: string; total: number; enviadas: number; pendientes: number }>();
+  for (const r of rows) {
+    const mes = mesPeriodoLabel(r);
+    const prev = map.get(mes) ?? { mes, total: 0, enviadas: 0, pendientes: 0 };
+    prev.total += 1;
+    const estado = (equiposById.get(r.id)?.estado ?? '').toLowerCase();
+    if (estado.includes('enviad')) prev.enviadas += 1;
+    else if (estado.includes('pend') || !estado) prev.pendientes += 1;
+    map.set(mes, prev);
+  }
+  return Array.from(map.values()).sort((a, b) => a.mes.localeCompare(b.mes, 'es'));
+}
+
+function buildSedeChartFromRows(rows: TelemetriaOpportunityRow[]) {
+  const map = new Map<string, number>();
+  for (const r of rows) {
+    const sede = r.sede && r.sede !== '—' ? r.sede : 'Sin sede';
+    map.set(sede, (map.get(sede) ?? 0) + 1);
+  }
+  return Array.from(map.entries())
+    .map(([sede, total]) => ({ sede, total }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 12);
+}
+
 export default function ExecutiveDashboardPage() {
   const [reportFilters, setReportFilters] = useState<ReportFiltersState>(DEFAULT_REPORT_FILTERS);
-  const { data: kpis, isLoading: loadingKpis } = useProjectedKpis();
-  const { data: equipos = [], isLoading: loadingEquipos } = useTelemetriaEquipos();
+  const { data: equiposData, isLoading: loadingEquipos } = useTelemetriaEquipos();
+  const equipos: TelemetriaEquipo[] = equiposData ?? [];
 
   const rows = useMemo(() => mapTelemetriaToOpportunityRows(equipos), [equipos]);
+  const equiposById = useMemo(() => {
+    const map = new Map<string, TelemetriaEquipo>();
+    for (const e of equipos) map.set(e.id, e);
+    return map;
+  }, [equipos]);
 
   const filteredRows = useMemo(() => {
     return rows.filter((r) => matchesTelemetriaReportFilters(r, reportFilters));
   }, [rows, reportFilters]);
+
+  /** Flota y próximos: programados (cercano→lejano), luego vencidos. */
+  const sortedRows = useMemo(
+    () => sortOportunidadesProximas(filteredRows),
+    [filteredRows]
+  );
 
   const filterOptions = useMemo(() => {
     const usable = (v: string) => Boolean(v?.trim()) && v !== '—';
@@ -130,6 +179,13 @@ export default function ExecutiveDashboardPage() {
     }));
   }, [filteredRows]);
 
+  const mesChart = useMemo(
+    () => buildMesChartFromRows(filteredRows, equiposById),
+    [filteredRows, equiposById]
+  );
+
+  const sedeChart = useMemo(() => buildSedeChartFromRows(filteredRows), [filteredRows]);
+
   const topClientes = useMemo(() => {
     const map = new Map<string, number>();
     for (const r of filteredRows) {
@@ -155,15 +211,14 @@ export default function ExecutiveDashboardPage() {
 
   const marcasPie = useMemo(() => {
     const ids = new Set(filteredRows.map((r) => r.id));
-    return aggregateMarcasPie(equipos.filter((e: { id: string }) => ids.has(e.id)));
+    return aggregateMarcasPie(equipos.filter((e) => ids.has(e.id)));
   }, [equipos, filteredRows]);
 
   const upcoming = useMemo(() => {
-    return [...filteredRows]
-      .filter((r) => r.fechaIso)
-      .sort((a, b) => String(a.fechaIso).localeCompare(String(b.fechaIso)))
-      .slice(0, 10);
+    return sortOportunidadesProximas(filteredRows.filter((r) => Boolean(r.fechaIso))).slice(0, 10);
   }, [filteredRows]);
+
+  const fleetRows = useMemo(() => sortedRows.slice(0, 50), [sortedRows]);
 
   const programados = filteredRows.filter((r) => r.status === 'Scheduled').length;
   const vencidos = filteredRows.length - programados;
@@ -171,7 +226,7 @@ export default function ExecutiveDashboardPage() {
   const sedesUnicas = new Set(filteredRows.map((r) => r.sede).filter((s) => s && s !== '—')).size;
   const maquinasUnicas = new Set(filteredRows.map((r) => r.serie)).size;
 
-  const loading = loadingKpis || loadingEquipos;
+  const loading = loadingEquipos;
 
   return (
       <div className="space-y-6 p-6">
@@ -219,10 +274,10 @@ export default function ExecutiveDashboardPage() {
               },
               {
                 title: 'Clientes',
-                value: String(clientesUnicos || kpis?.totalClientes || 0),
+                value: String(clientesUnicos),
                 icon: Users,
                 variant: 'default' as const,
-                description: 'Desde telemetría / clientes',
+                description: 'Clientes en telemetría filtrada',
               },
               {
                 title: 'Sedes',
@@ -288,7 +343,7 @@ export default function ExecutiveDashboardPage() {
           <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
             <h3 className="text-sm font-semibold mb-3">Proyecciones por periodo</h3>
             <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={kpis?.oportunidadesPorMes ?? []}>
+              <BarChart data={mesChart}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
@@ -395,7 +450,7 @@ export default function ExecutiveDashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRows.slice(0, 50).map((r) => (
+                  {fleetRows.map((r) => (
                     <tr key={r.id} className="border-t border-border/50 hover:bg-muted/20">
                       <td className="px-3 py-2 font-mono">{r.serie}</td>
                       <td className="px-3 py-2">{r.equipment}</td>
@@ -408,7 +463,7 @@ export default function ExecutiveDashboardPage() {
                       </td>
                     </tr>
                   ))}
-                  {filteredRows.length === 0 && (
+                  {fleetRows.length === 0 && (
                     <tr>
                       <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
                         Sin registros para los filtros seleccionados
@@ -451,7 +506,7 @@ export default function ExecutiveDashboardPage() {
           <h3 className="text-sm font-semibold mb-3">Oportunidades por sede</h3>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart
-              data={kpis?.oportunidadesPorSede ?? []}
+              data={sedeChart}
               layout="vertical"
               margin={{ left: 40 }}
             >
