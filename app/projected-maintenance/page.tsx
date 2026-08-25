@@ -138,12 +138,12 @@ interface CityDot {
 
 // Roadmap de producto (no es data de prueba de negocio)
 const AUTOMATION_STEPS: AutomationStep[] = [
-  { number: 1, icon: Cpu,        title: "IntegraciÃ³n SAP",       description: "Extrae diariamente a las 6 AM los datos de equipos directamente del mÃ³dulo SAP PM. Sincroniza horÃ³metros, Ã³rdenes de trabajo y maestros de equipos automÃ¡ticamente.", status: "Planned"         },
-  { number: 2, icon: RefreshCw,  title: "AnÃ¡lisis de HorÃ³metro",   description: "Compara las lecturas actuales del horÃ³metro con los umbrales de mantenimiento definidos por modelo. Marca los equipos que se acercan a los intervalos de servicio con ventanas de tolerancia configurables.", status: "Planned"         },
-  { number: 3, icon: Calendar,   title: "ProgramaciÃ³n AutomÃ¡tica",  description: "Crea Ã³rdenes de trabajo en borrador con 30 dÃ­as de anticipaciÃ³n segÃºn las horas de operaciÃ³n proyectadas y los planes de mantenimiento. Asigna automÃ¡ticamente a los asesores de servicio disponibles.", status: "In Development"  },
-  { number: 4, icon: Bell,       title: "Motor de Notificaciones",   description: "EnvÃ­a alertas automÃ¡ticas por correo y SMS a los asesores de servicio y clientes finales cuando el mantenimiento estÃ¡ prÃ³ximo. Recordatorios configurables a 30, 15 y 7 dÃ­as.", status: "Planned"         },
-  { number: 5, icon: FileText,   title: "GeneraciÃ³n de PDF",        description: "Genera automÃ¡ticamente cotizaciones de mantenimiento personalizadas con precios de repuestos actuales, estimaciones de mano de obra e historial de servicio. Se adjuntan a las Ã³rdenes de trabajo y se envÃ­an por correo.", status: "Planned"         },
-  { number: 6, icon: Zap,        title: "Actualizacion del Panel",      description: "Recalculo de KPIs en tiempo real y actualizacion del panel despues de cada ciclo de flujo de trabajo. Seguimiento de tasas de cumplimiento, tendencias de vencimiento y metricas de desempeno de asesores.", status: "In Development"  },
+  { number: 1, icon: Cpu,        title: "Integración SAP",       description: "Extrae diariamente a las 6 AM los datos de equipos directamente del módulo SAP PM. Sincroniza horómetros, órdenes de trabajo y maestros de equipos automáticamente.", status: "Planned"         },
+  { number: 2, icon: RefreshCw,  title: "Análisis de Horómetro",   description: "Compara las lecturas actuales del horómetro con los umbrales de mantenimiento definidos por modelo. Marca los equipos que se acercan a los intervalos de servicio con ventanas de tolerancia configurables.", status: "Planned"         },
+  { number: 3, icon: Calendar,   title: "Programación Automática",  description: "Crea órdenes de trabajo en borrador con 30 días de anticipación según las horas de operación proyectadas y los planes de mantenimiento. Asigna automáticamente a los asesores de servicio disponibles.", status: "In Development"  },
+  { number: 4, icon: Bell,       title: "Motor de Notificaciones",   description: "Envía alertas automáticas por correo y SMS a los asesores de servicio y clientes finales cuando el mantenimiento está próximo. Recordatorios configurables a 30, 15 y 7 días.", status: "Planned"         },
+  { number: 5, icon: FileText,   title: "Generación de PDF",        description: "Genera automáticamente cotizaciones de mantenimiento personalizadas con precios de repuestos actuales, estimaciones de mano de obra e historial de servicio. Se adjuntan a las órdenes de trabajo y se envían por correo.", status: "Planned"         },
+  { number: 6, icon: Zap,        title: "Actualización del Panel",      description: "Recálculo de KPIs en tiempo real y actualización del panel después de cada ciclo de flujo de trabajo. Seguimiento de tasas de cumplimiento, tendencias de vencimiento y métricas de desempeño de asesores.", status: "In Development"  },
 ];
 
 /** Posiciones aproximadas en el SVG de Colombia (claves sin tildes; cityCoords normaliza). */
@@ -201,7 +201,7 @@ function getFirstDayOfWeek(year: number, month: number): number {
 
 // â”€â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-/** KPI Row â€” datos desde v_kpi_* / telemetrÃ­a */
+/** KPI Row — datos desde v_kpi_* / telemetr a */
 function KPIRow() {
   const { data: kpis, isLoading } = useProjectedKpis();
 
@@ -233,7 +233,7 @@ function KPIRow() {
         changeType="up"
         icon={Wrench}
         variant="default"
-        description="TelemetrÃ­a registrada"
+        description="Telemetría registrada"
       />
       <KPICard
         title="Clientes"
@@ -251,7 +251,7 @@ function KPIRow() {
         changeType="up"
         icon={AlertTriangle}
         variant="danger"
-        description="PrÃ³ximos mantenimientos"
+        description="Próximos mantenimientos"
       />
       <KPICard
         title="Alertas Enviadas"
@@ -351,7 +351,7 @@ function KpiChartsSection() {
       <Card className="border-border shadow-sm">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold">
-            Insumos Proyectados â€” {formatCOP(kpis.insumosProyectadosTotal)}
+            Insumos Proyectados — {formatCOP(kpis.insumosProyectadosTotal)}
           </CardTitle>
         </CardHeader>
         <CardContent className="h-56">
@@ -394,7 +394,7 @@ function KpiChartsSection() {
   );
 }
 
-/** Monthly Maintenance Calendar â€” fechas reales de telemetrÃ­a */
+/** Monthly Maintenance Calendar — fechas reales de telemetr a */
 function MaintenanceCalendar() {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
@@ -457,7 +457,7 @@ function MaintenanceCalendar() {
       <CardContent className="pt-0">
         {/* Day headers */}
         <div className="grid grid-cols-7 mb-1">
-          {["Dom", "Lun", "Mar", "MiÃ©", "Jue", "Vie", "SÃ¡b"].map((d) => (
+          {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map((d) => (
             <div key={d} className="text-center text-[10px] font-semibold text-muted-foreground py-1">
               {d}
             </div>
@@ -499,12 +499,12 @@ function MaintenanceCalendar() {
                           onMouseEnter={() => setHoveredEvent(ev)}
                           onMouseLeave={() => setHoveredEvent(null)}
                         >
-                          {ev.title.split("â€“")[0].trim()}
+                          {ev.title.split("–")[0].trim()}
                         </div>
                       ))}
                       {events.length > 2 && (
                         <span className="text-[9px] text-muted-foreground pl-0.5">
-                          +{events.length - 2} mÃ¡s
+                          +{events.length - 2} más
                         </span>
                       )}
                     </div>
@@ -526,7 +526,7 @@ function MaintenanceCalendar() {
             >
               <p className="font-semibold">{hoveredEvent.title}</p>
               <p className="text-muted-foreground text-xs">
-                DÃ­a {hoveredEvent.day} Â·{" "}
+                Día {hoveredEvent.day} ·{" "}
                 <span
                   className={`font-medium ${
                     hoveredEvent.status === "Overdue" ? "text-[#cf1b22]" : ""
@@ -606,12 +606,12 @@ function OpportunitiesTable({
     <Card className="border-border shadow-sm">
       <CardHeader className="pb-3">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <CardTitle className="text-base font-semibold">Oportunidades PrÃ³ximas</CardTitle>
+          <CardTitle className="text-base font-semibold">Oportunidades Próximas</CardTitle>
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <div className="relative flex-1 sm:w-52">
               <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input
-                placeholder="Buscar equipoâ€¦"
+                placeholder="Buscar equipo…"
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 className="pl-8 h-8 text-sm"
@@ -650,8 +650,8 @@ function OpportunitiesTable({
                 <TableHead className="text-xs font-semibold">Marca</TableHead>
                 <TableHead className="text-xs font-semibold">Modelo</TableHead>
                 <TableHead className="text-xs font-semibold text-right">Horas</TableHead>
-                <TableHead className="text-xs font-semibold">Ãšltimo Mant.</TableHead>
-                <TableHead className="text-xs font-semibold">PrÃ³ximo Venc.</TableHead>
+                <TableHead className="text-xs font-semibold">Último Mant.</TableHead>
+                <TableHead className="text-xs font-semibold">Próximo Venc.</TableHead>
                 <TableHead className="text-xs font-semibold">Estado</TableHead>
                 <TableHead className="text-xs font-semibold pr-4">Asesor</TableHead>
               </TableRow>
@@ -692,7 +692,7 @@ function OpportunitiesTable({
           <span className="text-xs text-muted-foreground">
             {totalRows === 0
               ? "Sin resultados"
-              : `Mostrando ${(page - 1) * rowsPerPage + 1}â€“${Math.min(page * rowsPerPage, totalRows)} de ${totalRows} resultados`}
+              : `Mostrando ${(page - 1) * rowsPerPage + 1}–${Math.min(page * rowsPerPage, totalRows)} de ${totalRows} resultados`}
           </span>
           <div className="flex items-center gap-1">
             <Button
@@ -733,7 +733,7 @@ function OpportunitiesTable({
   );
 }
 
-/** Colombia SVG Map â€” sedes/ciudades desde telemetrÃ­a */
+/** Colombia SVG Map — sedes/ciudades desde telemetr a */
 function ColombiaMap() {
   const [tooltip, setTooltip] = useState<CityDot | null>(null);
   const { data: equipos = [] } = useTelemetriaEquipos();
@@ -758,14 +758,14 @@ function ColombiaMap() {
         <div className="flex items-center justify-between">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <MapPin className="h-4 w-4 text-[#cf1b22]" />
-            DistribuciÃ³n de Equipos por Ciudad/Sede
+            Distribución de Equipos por Ciudad/Sede
           </CardTitle>
         </div>
       </CardHeader>
       <CardContent>
         {cityDots.length === 0 ? (
           <p className="text-sm text-muted-foreground py-8 text-center">
-            Sin datos de telemetrÃ­a. Importe la carga masiva para ver la distribuciÃ³n.
+            Sin datos de telemetría. Importe la carga masiva para ver la distribución.
           </p>
         ) : null}
         <div className={`relative w-full ${cityDots.length === 0 ? "opacity-40" : ""}`} style={{ paddingBottom: "90%" }}>
@@ -967,7 +967,7 @@ function ColombiaMap() {
             [
               { label: "Activo",   status: "active"   },
               { label: "Advertencia",  status: "warning"  },
-              { label: "CrÃ­tico", status: "critical" },
+              { label: "Crítico", status: "critical" },
             ] as { label: string; status: CityDot["status"] }[]
           ).map(({ label, status }) => (
             <div key={status} className="flex items-center gap-1.5">
@@ -1025,7 +1025,7 @@ function BrandsChart() {
       <CardContent>
         {brandData.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-10">
-            Sin datos de telemetrÃ­a cargados.
+            Sin datos de telemetría cargados.
           </p>
         ) : (
           <ResponsiveContainer width="100%" height={220}>
@@ -1057,7 +1057,7 @@ function BrandsChart() {
   );
 }
 
-/** â”€â”€ TAB 1: Dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/** --- TAB 1: Dashboard --- */
 function DashboardTab() {
   const [reportFilters, setReportFilters] = useState<ReportFiltersState>(DEFAULT_REPORT_FILTERS);
   const { data: equipos = [] } = useTelemetriaEquipos();
@@ -1098,7 +1098,7 @@ function DashboardTab() {
     >
       {equipos.length === 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          No hay registros en telemetrÃ­a. Use la pestaÃ±a <strong>Importar</strong> para cargar
+          No hay registros en telemetría. Use la pestaña <strong>Importar</strong> para cargar
           la plantilla mensual.
         </div>
       )}
@@ -1124,7 +1124,7 @@ function DashboardTab() {
   );
 }
 
-/** â”€â”€ TAB 2: Import â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/** --- TAB 2: Import --- */
 function ImportTab() {
   const { data: importHistory = [], isLoading } = useProyectadosImportHistory();
 
@@ -1170,7 +1170,7 @@ function ImportTab() {
                 {importHistory.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-8 text-sm text-muted-foreground">
-                      AÃºn no hay importaciones de telemetrÃ­a registradas.
+                      Aún no hay importaciones de telemetría registradas.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -1207,7 +1207,7 @@ function ImportTab() {
   );
 }
 
-/** â”€â”€ TAB 3: Automation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/** --- TAB 3: Automation --- */
 function AutomationTab() {
   return (
     <motion.div
@@ -1228,10 +1228,10 @@ function AutomationTab() {
             <Clock className="h-5 w-5 text-amber-600" />
           </div>
           <div>
-            <p className="font-bold text-amber-800 text-sm">PrÃ³ximamente</p>
+            <p className="font-bold text-amber-800 text-sm">Próximamente</p>
             <p className="text-xs text-amber-700 mt-0.5">
-              El mÃ³dulo de automatizaciÃ³n se encuentra actualmente en desarrollo. Las
-              funcionalidades se habilitarÃ¡n progresivamente en las prÃ³ximas versiones.
+              El módulo de automatización se encuentra actualmente en desarrollo. Las
+              funcionalidades se habilitarán progresivamente en las próximas versiones.
             </p>
           </div>
         </div>
@@ -1248,10 +1248,10 @@ function AutomationTab() {
           Flujo de Trabajo de Mantenimiento Automatizado
         </h2>
         <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-          Este mÃ³dulo automatizarÃ¡ el ciclo de mantenimiento de extremo a extremo â€” desde la
-          ingestiÃ³n de datos de SAP hasta la programaciÃ³n, notificaciÃ³n al cliente, generaciÃ³n
-          de cotizaciones y actualizaciÃ³n del panel en tiempo real. La integraciÃ³n planificada
-          reduce el esfuerzo manual y garantiza que ningÃºn equipo sea pasado por alto.
+          Este módulo automatizará el ciclo de mantenimiento de extremo a extremo — desde la
+          ingestión de datos de SAP hasta la programación, notificación al cliente, generación
+          de cotizaciones y actualización del panel en tiempo real. La integración planificada
+          reduce el esfuerzo manual y garantiza que ningún equipo sea pasado por alto.
         </p>
       </div>
 
@@ -1344,7 +1344,7 @@ export default function ProjectedMaintenancePage() {
             Mantenimiento Proyectado
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            ProgramaciÃ³n proactiva de mantenimiento y gestiÃ³n del ciclo de vida de equipos
+            Programación proactiva de mantenimiento y gestión del ciclo de vida de equipos
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1381,7 +1381,7 @@ export default function ProjectedMaintenancePage() {
             className="data-[state=active]:bg-[#cf1b22] data-[state=active]:text-white data-[state=active]:shadow-sm text-sm px-5"
           >
             <Zap className="h-3.5 w-3.5 mr-1.5" />
-            AutomatizaciÃ³n
+            Automatización
           </TabsTrigger>
         </TabsList>
 
