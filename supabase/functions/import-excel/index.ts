@@ -285,8 +285,9 @@ function mapTelemetria(row: Record<string, string>, createdBy: string) {
   };
 
   const serie = get('Serie.', 'Serie', 'serie', 'N° serie', 'numero_serie');
-  const asesor2 = get('Asesor2', 'ASESOR 2', 'Asesor 2');
-  const asesor = get('ASESOR', 'Asesor', 'asesor_email');
+  // Correo del asesor de servicio = Asesor2 / ASESOR 2 (no la columna ASESOR)
+  const asesor2 = get('Asesor2', 'ASESOR 2', 'Asesor 2', 'ASESOR2');
+  const asesorCol = get('ASESOR', 'Asesor');
   const emailCliente = get('email', 'Email');
   const correo = get('Correo');
 
@@ -377,8 +378,11 @@ function mapTelemetria(row: Record<string, string>, createdBy: string) {
     distancia_istmina: num(get('Distancia Istmina')),
     distancia_minima: num(get('Distacia Minima', 'Distancia Minima', 'Distancia Mínima')),
     sede: get('Sede', 'sede') || null,
-    asesor_email: (asesor.includes('@') ? asesor : asesor2.includes('@') ? asesor2 : '') || null,
-    asesor_secundario_email: asesor2.includes('@') ? asesor2 : null,
+    asesor_email: asesor2.includes('@') ? asesor2 : null,
+    asesor_secundario_email:
+      asesorCol.includes('@') && asesorCol.toLowerCase() !== asesor2.toLowerCase()
+        ? asesorCol
+        : null,
     marca: get('Marca', 'marca') || 'SIN MARCA',
     tipo_mtto: num(get('Tipo Mtto', 'tipo_mtto')),
     numero_serie: get('N° serie', 'Nº serie', 'numero_serie') || serie || null,

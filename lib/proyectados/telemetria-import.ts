@@ -88,6 +88,7 @@ export interface TelemetriaMappedRow {
   distancia_minima: number | null;
   sede: string | null;
   asesor_email: string | null;
+  /** Valor de columna Excel ASESOR (si es email distinto de Asesor2). */
   asesor_secundario_email: string | null;
   marca: string;
   tipo_mtto: number | null;
@@ -464,15 +465,19 @@ export function mapTelemetriaSheetRow(
 
   const emailCliente = cleanCell(getField(row, 'email', 'Email', 'E-mail'));
   const correoFlag = cleanCell(getField(row, 'Correo', 'correo_enviado'));
-  const asesorRaw = cleanCell(getField(row, 'ASESOR', 'Asesor', 'asesor_email'));
-  const asesor2Raw = cleanCell(getField(row, 'Asesor2', 'ASESOR 2', 'Asesor 2', 'asesor_secundario'));
+  // Correo real del asesor de servicio = columna Excel "Asesor2" / "ASESOR 2"
+  // (la columna "ASESOR" no es el email operativo; se guarda solo como secundario si es email).
+  const asesor2Raw = cleanCell(
+    getField(row, 'Asesor2', 'ASESOR 2', 'Asesor 2', 'ASESOR2', 'asesor2')
+  );
+  const asesorColRaw = cleanCell(getField(row, 'ASESOR', 'Asesor'));
 
-  const asesorEmail = isValidEmail(asesorRaw)
-    ? asesorRaw
-    : isValidEmail(asesor2Raw)
-      ? asesor2Raw
+  const asesorEmail = isValidEmail(asesor2Raw) ? asesor2Raw : null;
+  const asesorSecundario =
+    isValidEmail(asesorColRaw) &&
+    asesorColRaw.toLowerCase() !== (asesorEmail ?? '').toLowerCase()
+      ? asesorColRaw
       : null;
-  const asesorSecundario = isValidEmail(asesor2Raw) ? asesor2Raw : null;
 
   const numeroSerie =
     cleanCell(getField(row, 'N° serie', 'Nº serie', 'numero_serie')) ?? serie;

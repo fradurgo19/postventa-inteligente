@@ -221,8 +221,9 @@ export function AdminImportsPanel() {
         {importType === 'Asesores' ? (
           <p className="text-xs text-muted-foreground">
             Los asesores se gestionan en la pestaña <strong>Usuarios</strong> (tabla{' '}
-            <code>asesores</code>) y se cargan desde columnas ASESOR / Asesor2 del Excel de
-            telemetría. Use <strong>Cronograma / Telemetría</strong> para importarlos.
+            <code>asesores</code>) y se cargan desde la columna <strong>Asesor2 / ASESOR 2</strong>{' '}
+            del Excel de telemetría (correo del asesor de servicio). Use{' '}
+            <strong>Cronograma / Telemetría</strong> para importarlos.
           </p>
         ) : null}
 

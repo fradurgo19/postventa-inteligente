@@ -144,15 +144,10 @@ async function batchUpsertAsesores(
   const byEmail = new Map<string, { email: string; sede: string | null }>();
 
   for (const row of rows) {
+    // Solo Asesor2 (asesor_email) alimenta la tabla asesores / FK asesor_id
     if (row.asesor_email) {
       byEmail.set(row.asesor_email.toLowerCase(), {
         email: row.asesor_email,
-        sede: row.sede,
-      });
-    }
-    if (row.asesor_secundario_email) {
-      byEmail.set(row.asesor_secundario_email.toLowerCase(), {
-        email: row.asesor_secundario_email,
         sede: row.sede,
       });
     }
