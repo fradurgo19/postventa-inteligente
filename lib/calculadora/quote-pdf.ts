@@ -60,7 +60,11 @@ async function fetchImageDataUrl(url: string): Promise<string | null> {
     const blob = await response.blob();
     return await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
+      reader.onload = () => {
+        const data = reader.result;
+        if (typeof data === 'string') resolve(data);
+        else reject(new Error('Formato de logo no válido'));
+      };
       reader.onerror = () => reject(new Error('No se pudo leer el logo'));
       reader.readAsDataURL(blob);
     });
@@ -70,8 +74,8 @@ async function fetchImageDataUrl(url: string): Promise<string | null> {
 }
 
 function nextY(doc: JsPdfWithAutoTable, fallback: number, gap = 8): number {
-  const y = doc.lastAutoTable?.finalY;
-  return (y != null ? y : fallback) + gap;
+  const y = doc.lastAutoTable?.finalY ?? fallback;
+  return y + gap;
 }
 
 function ensurePage(doc: JsPdfWithAutoTable, y: number, needed = 24): number {
