@@ -14,6 +14,7 @@ function mapTelemetriaRow(row: Record<string, unknown>): TelemetriaEquipo {
     ciudad: row.ciudad as string | null,
     latitud: row.latitud as number | null,
     longitud: row.longitud as number | null,
+    ultima_fecha_comunicacion: row.ultima_fecha_comunicacion as string | null,
     fecha_primer_mtto: row.fecha_primer_mtto as string | null,
     fecha_segundo_mtto: row.fecha_segundo_mtto as string | null,
     fecha_tercer_mtto: row.fecha_tercer_mtto as string | null,
@@ -25,6 +26,7 @@ function mapTelemetriaRow(row: Record<string, unknown>): TelemetriaEquipo {
     tipo_maquina: row.tipo_maquina as string | null,
     mes_creado: (row.mes_creado as string | null) ?? null,
     anio: row.anio == null ? null : Number(row.anio),
+    created_at: (row.created_at as string | null) ?? null,
   };
 }
 
@@ -78,18 +80,37 @@ export function pickLatestTelemetriaPerSerie(equipos: TelemetriaEquipo[]): Telem
   return Array.from(bySerie.values());
 }
 
+/** Carga completa (Supabase limita ~1000 por request; se pagina). */
 export async function fetchTelemetriaEquipos(): Promise<TelemetriaEquipo[]> {
   if (!isSupabaseConfigured()) return [];
 
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from('telemetria_equipos')
-    .select('*')
-    .order('anio', { ascending: false })
-    .order('fecha_primer_mtto', { ascending: true });
+  const pageSize = 1000;
+  const all: TelemetriaEquipo[] = [];
+  let from = 0;
 
-  if (error || !data?.length) return [];
-  return data.map(mapTelemetriaRow);
+  for (;;) {
+    const { data, error } = await supabase
+      .from('telemetria_equipos')
+      .select('*')
+      .order('anio', { ascending: false })
+      .order('fecha_primer_mtto', { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) {
+      if (all.length > 0) break;
+      return [];
+    }
+    if (!data?.length) break;
+
+    for (const row of data) {
+      all.push(mapTelemetriaRow(row as Record<string, unknown>));
+    }
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return all;
 }
 
 function formatMesLabel(value: unknown): string {
@@ -129,9 +150,11 @@ function buildKpisFromEquipos(
     const periodo =
       e.mes_creado && e.anio
         ? `${e.mes_creado} ${e.anio}`
-        : e.fecha_primer_mtto
-          ? formatMesLabel(e.fecha_primer_mtto)
-          : 'Sin periodo';
+        : e.mes_creado
+          ? e.mes_creado
+          : e.created_at
+            ? formatMesLabel(e.created_at)
+            : 'Sin periodo';
     const prev = mesMap.get(periodo) ?? { total: 0, enviadas: 0, pendientes: 0 };
     prev.total += 1;
     const estado = (e.estado ?? '').toLowerCase();
@@ -140,11 +163,8 @@ function buildKpisFromEquipos(
     mesMap.set(periodo, prev);
   }
 
-  const oportunidadesMes = equipos.filter(
-    (e) =>
-      isFechaInCurrentMonth(e.fecha_primer_mtto) ||
-      isFechaInCurrentMonth(e.fecha_segundo_mtto) ||
-      isFechaInCurrentMonth(e.fecha_tercer_mtto)
+  const oportunidadesMes = equipos.filter((e) =>
+    isFechaInCurrentMonth(e.fecha_primer_mtto)
   ).length;
 
   return {

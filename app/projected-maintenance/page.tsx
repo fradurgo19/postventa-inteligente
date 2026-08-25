@@ -199,14 +199,13 @@ function getFirstDayOfWeek(year: number, month: number): number {
 
 // â”€â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-/** KPI Row — calculados desde telemetría filtrada */
+/** KPI Row — totales sobre Fecha Primer Mtto (proyecciones = todos los registros). */
 function KPIRow({ rows }: Readonly<{ rows: TelemetriaOpportunityRow[] }>) {
   const totalProyecciones = rows.length;
   const totalMaquinas = new Set(rows.map((r) => r.serie)).size;
   const totalClientes = new Set(rows.map((r) => r.client)).size;
-  const vencidos = rows.filter((r) => r.status === "Overdue").length;
-  const enCurso = rows.filter((r) => r.status === "In Progress").length;
   const programados = rows.filter((r) => r.status === "Scheduled").length;
+  const vencidos = totalProyecciones - programados;
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -217,7 +216,7 @@ function KPIRow({ rows }: Readonly<{ rows: TelemetriaOpportunityRow[] }>) {
         changeType="up"
         icon={Wrench}
         variant="default"
-        description={`${totalMaquinas} máquinas únicas`}
+        description={`${totalMaquinas} máquinas únicas · total registros`}
       />
       <KPICard
         title="Clientes"
@@ -229,13 +228,13 @@ function KPIRow({ rows }: Readonly<{ rows: TelemetriaOpportunityRow[] }>) {
         description="Con oportunidades"
       />
       <KPICard
-        title="Programados / En curso"
-        value={programados + enCurso}
+        title="Programados"
+        value={programados}
         change={0}
         changeType="up"
         icon={AlertTriangle}
         variant="danger"
-        description={`${programados} programados · ${enCurso} en curso`}
+        description="Fecha Primer Mtto vigente (≥ hoy)"
       />
       <KPICard
         title="Vencidos"
@@ -244,7 +243,7 @@ function KPIRow({ rows }: Readonly<{ rows: TelemetriaOpportunityRow[] }>) {
         changeType="down"
         icon={CheckCircle2}
         variant="success"
-        description="Según filtros del informe"
+        description="Total − programados (1er mtto)"
       />
     </div>
   );
@@ -256,11 +255,22 @@ function KpiChartsSection({ rows }: Readonly<{ rows: TelemetriaOpportunityRow[] 
   const byMes = useMemo(() => {
     const map = new Map<string, { mes: string; total: number; vencidos: number }>();
     for (const r of rows) {
-      const key = r.mesCreado && r.mesCreado !== "—" ? r.mesCreado : "Sin mes";
-      const prev = map.get(key) ?? { mes: key, total: 0, vencidos: 0 };
+      // Indicador por MesCreado (+ Año) / Creado del Excel de telemetría
+      const mesLabel =
+        r.mesCreado && r.mesCreado !== "—"
+          ? r.anio
+            ? `${r.mesCreado} ${r.anio}`
+            : r.mesCreado
+          : r.createdAt
+            ? new Date(r.createdAt).toLocaleDateString("es-CO", {
+                month: "short",
+                year: "numeric",
+              })
+            : "Sin mes";
+      const prev = map.get(mesLabel) ?? { mes: mesLabel, total: 0, vencidos: 0 };
       prev.total += 1;
       if (r.status === "Overdue") prev.vencidos += 1;
-      map.set(key, prev);
+      map.set(mesLabel, prev);
     }
     return Array.from(map.values()).sort((a, b) => a.mes.localeCompare(b.mes, "es"));
   }, [rows]);
@@ -332,7 +342,7 @@ function KpiChartsSection({ rows }: Readonly<{ rows: TelemetriaOpportunityRow[] 
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <Card className="border-border shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold">Oportunidades por Mes (carga)</CardTitle>
+          <CardTitle className="text-sm font-semibold">Oportunidades por Mes (Creado / MesCreado)</CardTitle>
         </CardHeader>
         <CardContent className="h-56">
           <ResponsiveContainer width="100%" height="100%">
@@ -676,8 +686,8 @@ function OpportunitiesTable({
                 <TableHead className="text-xs font-semibold">Marca</TableHead>
                 <TableHead className="text-xs font-semibold">Modelo</TableHead>
                 <TableHead className="text-xs font-semibold text-right">Horas</TableHead>
-                <TableHead className="text-xs font-semibold">Último Mant.</TableHead>
-                <TableHead className="text-xs font-semibold">Próximo Venc.</TableHead>
+                <TableHead className="text-xs font-semibold">Descarga telemetría</TableHead>
+                <TableHead className="text-xs font-semibold">Fecha 1er Mtto</TableHead>
                 <TableHead className="text-xs font-semibold">Estado</TableHead>
                 <TableHead className="text-xs font-semibold pr-4">Asesor</TableHead>
               </TableRow>

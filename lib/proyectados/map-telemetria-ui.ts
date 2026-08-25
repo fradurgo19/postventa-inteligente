@@ -9,7 +9,9 @@ export interface TelemetriaOpportunityRow {
   model: string;
   client: string;
   hours: number;
+  /** Última fecha/hora de común = descarga desde app de telemetría. */
   lastMaintenance: string;
+  /** Solo Fecha Primer Mtto (proyección vigente). */
   nextDue: string;
   status: MaintenanceStatusUi;
   advisor: string;
@@ -18,7 +20,9 @@ export interface TelemetriaOpportunityRow {
   ciudad: string;
   mesCreado: string;
   anio: number | null;
+  /** ISO de Fecha Primer Mtto. */
   fechaIso: string | null;
+  createdAt: string | null;
 }
 
 export interface TelemetriaCalendarEvent {
@@ -37,40 +41,46 @@ function formatDateEs(iso: string | null | undefined): string {
   return d.toLocaleDateString('es-CO');
 }
 
-function mapEstadoToUi(estado: string | null | undefined, nextDueIso: string | null): MaintenanceStatusUi {
-  const e = (estado ?? '').toLowerCase().trim();
-  if (e.includes('complet') || e.includes('cerrad')) return 'Completed';
-  if (e.includes('progreso') || e.includes('proceso') || e.includes('curso')) return 'In Progress';
-  if (e.includes('vencid') || e.includes('overdue')) return 'Overdue';
-
-  if (nextDueIso) {
-    const due = new Date(nextDueIso);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (!Number.isNaN(due.getTime()) && due < today && !e.includes('enviad')) {
-      return 'Overdue';
-    }
-  }
-
-  if (e.includes('enviad')) return 'In Progress';
-  return 'Scheduled';
+function startOfLocalDay(value: Date): Date {
+  const d = new Date(value);
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
-function pickNextDue(row: TelemetriaEquipo): string | null {
-  const dates = [row.fecha_primer_mtto, row.fecha_segundo_mtto, row.fecha_tercer_mtto]
-    .filter((d): d is string => Boolean(d))
-    .sort();
-  const today = new Date().toISOString().slice(0, 10);
-  const upcoming = dates.find((d) => d >= today);
-  return upcoming ?? dates[0] ?? null;
+/** Solo Fecha Primer Mtto define la proyección de mantenimiento. */
+export function pickFechaPrimerMtto(row: TelemetriaEquipo): string | null {
+  const raw = row.fecha_primer_mtto;
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return null;
+  return raw.slice(0, 10);
 }
 
-/** Filas de oportunidades desde telemetría (carga masiva). */
+/**
+ * Programado: Fecha Primer Mtto >= hoy.
+ * Vencido: sin fecha o Fecha Primer Mtto < hoy.
+ * (vencidos = total − programados)
+ */
+export function statusFromFechaPrimerMtto(
+  fechaPrimerIso: string | null
+): MaintenanceStatusUi {
+  if (!fechaPrimerIso) return 'Overdue';
+  const due = startOfLocalDay(new Date(fechaPrimerIso));
+  if (Number.isNaN(due.getTime())) return 'Overdue';
+  const today = startOfLocalDay(new Date());
+  return due >= today ? 'Scheduled' : 'Overdue';
+}
+
+export function isProgramadoPorPrimerMtto(fechaPrimerIso: string | null): boolean {
+  return statusFromFechaPrimerMtto(fechaPrimerIso) === 'Scheduled';
+}
+
+/** Filas de oportunidades: únicamente Fecha Primer Mtto. */
 export function mapTelemetriaToOpportunityRows(
   equipos: TelemetriaEquipo[]
 ): TelemetriaOpportunityRow[] {
   return equipos.map((e) => {
-    const nextDueIso = pickNextDue(e);
+    const fechaPrimer = pickFechaPrimerMtto(e);
     return {
       id: e.id,
       equipment: `${e.marca} ${e.modelo}`.trim(),
@@ -78,47 +88,40 @@ export function mapTelemetriaToOpportunityRows(
       model: e.modelo,
       client: e.titulo?.trim() || 'Sin cliente',
       hours: Math.round(Number(e.horometro) || 0),
-      lastMaintenance: '—',
-      nextDue: formatDateEs(nextDueIso),
-      status: mapEstadoToUi(e.estado, nextDueIso),
+      lastMaintenance: formatDateEs(e.ultima_fecha_comunicacion),
+      nextDue: formatDateEs(fechaPrimer),
+      status: statusFromFechaPrimerMtto(fechaPrimer),
       advisor: e.asesor_email?.trim() || 'Sin asesor',
       serie: e.serie,
       sede: e.sede?.trim() || '—',
       ciudad: e.ciudad?.trim() || '—',
       mesCreado: e.mes_creado?.trim() || '—',
       anio: e.anio ?? null,
-      fechaIso: nextDueIso,
+      fechaIso: fechaPrimer,
+      createdAt: e.created_at ?? null,
     };
   });
 }
 
-/** Eventos de calendario desde fechas de mtto en telemetría. */
+/** Calendario: solo Fecha Primer Mtto. */
 export function mapTelemetriaToCalendarEvents(
   equipos: TelemetriaEquipo[]
 ): TelemetriaCalendarEvent[] {
   const events: TelemetriaCalendarEvent[] = [];
 
   for (const e of equipos) {
-    const slots: Array<{ iso: string | null | undefined; label: string }> = [
-      { iso: e.fecha_primer_mtto, label: '1er' },
-      { iso: e.fecha_segundo_mtto, label: '2do' },
-      { iso: e.fecha_tercer_mtto, label: '3er' },
-    ];
-
-    for (const slot of slots) {
-      if (!slot.iso) continue;
-      const d = new Date(slot.iso);
-      if (Number.isNaN(d.getTime())) continue;
-      const nextDueIso = pickNextDue(e);
-      events.push({
-        id: `${e.id}-${slot.label}`,
-        day: d.getUTCDate(),
-        month: d.getUTCMonth(),
-        year: d.getUTCFullYear(),
-        title: `${e.marca} ${e.modelo} – ${slot.label} mtto`,
-        status: mapEstadoToUi(e.estado, nextDueIso),
-      });
-    }
+    const iso = pickFechaPrimerMtto(e);
+    if (!iso) continue;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) continue;
+    events.push({
+      id: `${e.id}-primer`,
+      day: d.getUTCDate(),
+      month: d.getUTCMonth(),
+      year: d.getUTCFullYear(),
+      title: `${e.marca} ${e.modelo} – 1er mtto`,
+      status: statusFromFechaPrimerMtto(iso),
+    });
   }
 
   return events;
@@ -130,7 +133,7 @@ export interface CiudadAgg {
   status: 'active' | 'warning' | 'critical';
 }
 
-/** Agrega por ciudad/sede para el mapa. */
+/** Agrega por ciudad/sede para el mapa (estado por Fecha Primer Mtto). */
 export function aggregateCiudadesFromTelemetria(equipos: TelemetriaEquipo[]): CiudadAgg[] {
   const map = new Map<string, { count: number; overdue: number }>();
 
@@ -138,8 +141,8 @@ export function aggregateCiudadesFromTelemetria(equipos: TelemetriaEquipo[]): Ci
     const raw = (e.sede || e.ciudad || 'Sin ubicación').split(',')[0]?.trim() || 'Sin ubicación';
     const prev = map.get(raw) ?? { count: 0, overdue: 0 };
     prev.count += 1;
-    const next = pickNextDue(e);
-    if (mapEstadoToUi(e.estado, next) === 'Overdue') prev.overdue += 1;
+    const primer = pickFechaPrimerMtto(e);
+    if (statusFromFechaPrimerMtto(primer) === 'Overdue') prev.overdue += 1;
     map.set(raw, prev);
   }
 

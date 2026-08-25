@@ -170,6 +170,8 @@ export interface TelemetriaEquipo {
   ciudad?: string | null;
   latitud?: number | null;
   longitud?: number | null;
+  /** Fecha de descarga desde el aplicativo de telemetría. */
+  ultima_fecha_comunicacion?: string | null;
   fecha_primer_mtto?: string | null;
   fecha_segundo_mtto?: string | null;
   fecha_tercer_mtto?: string | null;
@@ -182,6 +184,8 @@ export interface TelemetriaEquipo {
   /** Periodo de la proyección (Power Apps MesCreado). */
   mes_creado?: string | null;
   anio?: number | null;
+  /** Columna Excel Creado. */
+  created_at?: string | null;
 }
 
 export interface CppCatalogItem {

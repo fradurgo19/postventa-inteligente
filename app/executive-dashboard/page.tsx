@@ -165,12 +165,11 @@ export default function ExecutiveDashboardPage() {
       .slice(0, 10);
   }, [filteredRows]);
 
-  const vencidos = filteredRows.filter((r) => r.status === 'Overdue').length;
   const programados = filteredRows.filter((r) => r.status === 'Scheduled').length;
-  const enProgreso = filteredRows.filter((r) => r.status === 'In Progress').length;
-  const completados = filteredRows.filter((r) => r.status === 'Completed').length;
+  const vencidos = filteredRows.length - programados;
   const clientesUnicos = new Set(filteredRows.map((r) => r.client)).size;
   const sedesUnicas = new Set(filteredRows.map((r) => r.sede).filter((s) => s && s !== '—')).size;
+  const maquinasUnicas = new Set(filteredRows.map((r) => r.serie)).size;
 
   const loading = loadingKpis || loadingEquipos;
 
@@ -216,7 +215,7 @@ export default function ExecutiveDashboardPage() {
                 value: String(filteredRows.length),
                 icon: Wrench,
                 variant: 'default' as const,
-                description: `${kpis?.totalMaquinas ?? 0} máquinas únicas`,
+                description: `${maquinasUnicas} máquinas únicas · total registros`,
               },
               {
                 title: 'Clientes',
@@ -233,18 +232,18 @@ export default function ExecutiveDashboardPage() {
                 description: 'Cobertura por sede',
               },
               {
+                title: 'Programados',
+                value: String(programados),
+                icon: Calendar,
+                variant: 'default' as const,
+                description: 'Fecha Primer Mtto ≥ hoy',
+              },
+              {
                 title: 'Vencidos',
                 value: String(vencidos),
                 icon: AlertTriangle,
                 variant: 'danger' as const,
-                description: `${programados} programados · ${enProgreso} en curso`,
-              },
-              {
-                title: 'Completados',
-                value: String(completados),
-                icon: CheckCircle2,
-                variant: 'success' as const,
-                description: 'Estado en telemetría',
+                description: 'Total − programados (1er mtto)',
               },
             ].map((kpi, i) => (
               <motion.div
