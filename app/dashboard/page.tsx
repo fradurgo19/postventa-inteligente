@@ -13,15 +13,13 @@ import {
   Cpu,
   Wrench,
   LogIn,
-  FileText,
-  Eye,
   Truck,
   CheckCircle2,
   AlertTriangle,
+  Upload,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { useUserStore } from "@/store";
-import { DASHBOARD_KPIS } from "@/lib/mock-data";
 import type { UserRole } from "@/lib/mock-data";
 import { formatCOP } from "@/lib/mock-data";
 import { isFeatureEnabled } from "@/lib/feature-flags";
@@ -31,7 +29,10 @@ import {
   MODULE_PATHS,
 } from "@/lib/admin/module-access";
 import { useModuleAccessMatrix } from "@/hooks/use-administration";
+import { useDashboardData } from "@/hooks/use-dashboard";
+import type { DashboardActivityEntry, DashboardModuleBadges, DashboardQuickStats } from "@/services/dashboard.service";
 import type { ModuleAccessMatrix } from "@/lib/admin/module-access";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -63,166 +64,176 @@ interface ActivityItem {
   iconBg: string;
   iconColor: string;
   description: string;
-  timestamp: string;
   relativeTime: string;
+}
+
+function formatRelativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "—";
+  const diffMin = Math.floor((Date.now() - then) / 60_000);
+  if (diffMin < 1) return "hace un momento";
+  if (diffMin < 60) return `hace ${diffMin} min`;
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return `hace ${diffH} hora${diffH === 1 ? "" : "s"}`;
+  const diffD = Math.floor(diffH / 24);
+  if (diffD < 30) return `hace ${diffD} día${diffD === 1 ? "" : "s"}`;
+  return new Date(iso).toLocaleDateString("es-CO");
+}
+
+function activityVisual(entry: DashboardActivityEntry): Pick<ActivityItem, "icon" | "iconBg" | "iconColor"> {
+  if (entry.kind === "import") {
+    return {
+      icon: <Upload size={15} />,
+      iconBg: "#eff6ff",
+      iconColor: "#2563eb",
+    };
+  }
+  const module = entry.module.toLowerCase();
+  if (module.includes("usuario")) {
+    return {
+      icon: <LogIn size={15} />,
+      iconBg: "#f8fafc",
+      iconColor: "#475569",
+    };
+  }
+  if (entry.description.toLowerCase().includes("error") || entry.description.toLowerCase().includes("fallid")) {
+    return {
+      icon: <AlertTriangle size={15} />,
+      iconBg: "#fef2f2",
+      iconColor: "#dc2626",
+    };
+  }
+  if (module.includes("config") || module.includes("permiso")) {
+    return {
+      icon: <Settings size={15} />,
+      iconBg: "#f8fafc",
+      iconColor: "#475569",
+    };
+  }
+  return {
+    icon: <CheckCircle2 size={15} />,
+    iconBg: "#f0fdf4",
+    iconColor: "#16a34a",
+  };
+}
+
+function mapActivityEntries(entries: DashboardActivityEntry[]): ActivityItem[] {
+  return entries.map((entry) => ({
+    id: entry.id,
+    ...activityVisual(entry),
+    description: entry.description,
+    relativeTime: formatRelativeTime(entry.createdAt),
+  }));
 }
 
 // ── Module cards definition ────────────────────────────────────────────────────
 
-const MODULE_CARDS: ModuleCard[] = [
-  {
-    id: "calculator",
-    icon: <Calculator size={26} />,
-    iconColor: "#cf1b22",
-    accentColor: "#cf1b22",
-    title: "Calculadora de Mantenimiento Preventivo",
-    description:
-      "Calcula los costos de mantenimiento de equipos por horómetro y kilómetros",
-    badge: "12 Pendientes",
-    badgeBg: "#fef2f2",
-    badgeText: "#b91c1c",
-    href: "/calculator",
-  },
-  {
-    id: "projected",
-    icon: <Calendar size={26} />,
-    iconColor: "#2563eb",
-    accentColor: "#2563eb",
-    title: "Mantenimiento Proyectado",
-    description:
-      "Planifica y programa el mantenimiento preventivo con mapas interactivos y calendarios",
-    badge: "8 Programados",
-    badgeBg: "#eff6ff",
-    badgeText: "#1d4ed8",
-    href: "/projected-maintenance",
-  },
-  {
-    id: "cpp",
-    icon: <Package size={26} />,
-    iconColor: "#16a34a",
-    accentColor: "#16a34a",
-    title: "Repuestos Inteligentes CPP",
-    description:
-      "Consulta el catálogo de repuestos integrado con SAP con precios, stock y recomendaciones",
-    badge: "247 Repuestos",
-    badgeBg: "#f0fdf4",
-    badgeText: "#15803d",
-    href: "/cpp",
-  },
-  {
-    id: "executive",
-    icon: <BarChart3 size={26} />,
-    iconColor: "#d97706",
-    accentColor: "#d97706",
-    title: "Panel Ejecutivo",
-    description:
-      "KPIs en tiempo real, analítica, principales clientes y métricas de rendimiento",
-    badge: "En vivo",
-    badgeBg: "#fffbeb",
-    badgeText: "#b45309",
-    href: "/executive-dashboard",
-    allowedRoles: ["Administrator", "Coordinator"],
-  },
-  {
-    id: "administration",
-    icon: <Settings size={26} />,
-    iconColor: "#475569",
-    accentColor: "#475569",
-    title: "Administración",
-    description:
-      "Gestión de usuarios, roles, permisos, importación/exportación y configuración del sistema",
-    badge: "Admin",
-    badgeBg: "#f8fafc",
-    badgeText: "#334155",
-    href: "/administration",
-    allowedRoles: ["Administrator"],
-  },
-];
+function buildModuleCards(badges: DashboardModuleBadges): ModuleCard[] {
+  return [
+    {
+      id: "calculator",
+      icon: <Calculator size={26} />,
+      iconColor: "#cf1b22",
+      accentColor: "#cf1b22",
+      title: "Calculadora de Mantenimiento Preventivo",
+      description:
+        "Calcula los costos de mantenimiento de equipos por horómetro y kilómetros",
+      badge: `${badges.calculator.toLocaleString("es-CO")} Temparios`,
+      badgeBg: "#fef2f2",
+      badgeText: "#b91c1c",
+      href: "/calculator",
+    },
+    {
+      id: "projected",
+      icon: <Calendar size={26} />,
+      iconColor: "#2563eb",
+      accentColor: "#2563eb",
+      title: "Mantenimiento Proyectado",
+      description:
+        "Planifica y programa el mantenimiento preventivo con mapas interactivos y calendarios",
+      badge: `${badges.projected.toLocaleString("es-CO")} Activos`,
+      badgeBg: "#eff6ff",
+      badgeText: "#1d4ed8",
+      href: "/projected-maintenance",
+    },
+    {
+      id: "cpp",
+      icon: <Package size={26} />,
+      iconColor: "#16a34a",
+      accentColor: "#16a34a",
+      title: "Repuestos Inteligentes CPP",
+      description:
+        "Consulta el catálogo de repuestos integrado con SAP con precios, stock y recomendaciones",
+      badge: `${badges.cpp.toLocaleString("es-CO")} Repuestos`,
+      badgeBg: "#f0fdf4",
+      badgeText: "#15803d",
+      href: "/cpp",
+    },
+    {
+      id: "executive",
+      icon: <BarChart3 size={26} />,
+      iconColor: "#d97706",
+      accentColor: "#d97706",
+      title: "Panel Ejecutivo",
+      description:
+        "KPIs en tiempo real, analítica, principales clientes y métricas de rendimiento",
+      badge: "En vivo",
+      badgeBg: "#fffbeb",
+      badgeText: "#b45309",
+      href: "/executive-dashboard",
+      allowedRoles: ["Administrator", "Coordinator"],
+    },
+    {
+      id: "administration",
+      icon: <Settings size={26} />,
+      iconColor: "#475569",
+      accentColor: "#475569",
+      title: "Administración",
+      description:
+        "Gestión de usuarios, roles, permisos, importación/exportación y configuración del sistema",
+      badge: "Admin",
+      badgeBg: "#f8fafc",
+      badgeText: "#334155",
+      href: "/administration",
+      allowedRoles: ["Administrator"],
+    },
+  ];
+}
 
 // ── Quick stats data ────────────────────────────────────────────────────────────
 
-function buildQuickStats(kpis: typeof DASHBOARD_KPIS): QuickStat[] {
+function buildQuickStats(stats: DashboardQuickStats): QuickStat[] {
   return [
     {
       label: "Equipos Totales",
-      value: String(kpis.totalMachines),
+      value: stats.totalMachines.toLocaleString("es-CO"),
       icon: <Truck size={18} />,
       color: "#cf1b22",
       bg: "#fef2f2",
     },
     {
       label: "Mantenimientos Activos",
-      value: String(kpis.machinesInMaintenance + kpis.scheduledMaintenances),
+      value: stats.activeMaintenances.toLocaleString("es-CO"),
       icon: <Wrench size={18} />,
       color: "#2563eb",
       bg: "#eff6ff",
     },
     {
       label: "Repuestos en Stock",
-      value: kpis.totalPartsInStock.toLocaleString("es-CO"),
+      value: stats.totalPartsInStock.toLocaleString("es-CO"),
       icon: <Package size={18} />,
       color: "#16a34a",
       bg: "#f0fdf4",
     },
     {
       label: "Ingresos del Mes",
-      value: formatCOP(kpis.monthlyRevenue),
+      value: formatCOP(stats.monthlyRevenue),
       icon: <BarChart3 size={18} />,
       color: "#d97706",
       bg: "#fffbeb",
     },
   ];
 }
-
-// ── Mock activity log ──────────────────────────────────────────────────────────
-
-const MOCK_ACTIVITY: ActivityItem[] = [
-  {
-    id: "a1",
-    icon: <CheckCircle2 size={15} />,
-    iconBg: "#f0fdf4",
-    iconColor: "#16a34a",
-    description: "OT-2024-00821 completada — PM 250H Volvo EC480E (3.5 h)",
-    timestamp: "2024-12-05T10:00:00Z",
-    relativeTime: "hace 2 horas",
-  },
-  {
-    id: "a2",
-    icon: <AlertTriangle size={15} />,
-    iconBg: "#fef2f2",
-    iconColor: "#dc2626",
-    description: "Alerta crítica: Hitachi ZX350LC-6 — fuga hidráulica detectada",
-    timestamp: "2024-12-05T09:00:00Z",
-    relativeTime: "hace 3 horas",
-  },
-  {
-    id: "a3",
-    icon: <FileText size={15} />,
-    iconBg: "#fffbeb",
-    iconColor: "#d97706",
-    description: "Cotización CPP-Q-2024-0892 enviada a Mineros S.A. — $18,640,000 COP",
-    timestamp: "2024-12-04T16:00:00Z",
-    relativeTime: "hace 18 horas",
-  },
-  {
-    id: "a4",
-    icon: <Package size={15} />,
-    iconBg: "#eff6ff",
-    iconColor: "#2563eb",
-    description: "Alerta de stock bajo: Sello Hidráulico Hitachi (CPP-1006-SA) — 3 unidades restantes",
-    timestamp: "2024-12-04T14:00:00Z",
-    relativeTime: "hace 20 horas",
-  },
-  {
-    id: "a5",
-    icon: <LogIn size={15} />,
-    iconBg: "#f8fafc",
-    iconColor: "#475569",
-    description: "Inicio de sesión registrado en la plataforma",
-    timestamp: "2024-12-05T08:32:00Z",
-    relativeTime: "hace 4 horas",
-  },
-];
 
 // ── Role-based card filter ─────────────────────────────────────────────────────
 
@@ -362,7 +373,10 @@ function ModuleCardItem({ card, index }: { card: ModuleCard; index: number }) {
 
 // ── Quick Stat Chip ────────────────────────────────────────────────────────────
 
-function QuickStatChip({ stat }: { stat: QuickStat }) {
+function QuickStatChip({ stat, loading }: { stat?: QuickStat; loading?: boolean }) {
+  if (loading || !stat) {
+    return <Skeleton className="h-[58px] flex-1 min-w-[140px] rounded-xl" />;
+  }
   return (
     <motion.div
       variants={sectionVariants}
@@ -385,7 +399,37 @@ function QuickStatChip({ stat }: { stat: QuickStat }) {
 
 // ── Activity Row ───────────────────────────────────────────────────────────────
 
-function ActivityRow({ item, index }: { item: ActivityItem; index: number }) {
+function ActivityFeed({
+  loading,
+  items,
+}: Readonly<{ loading: boolean; items: ActivityItem[] }>) {
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        {["a1", "a2", "a3", "a4"].map((id) => (
+          <Skeleton key={id} className="h-10 w-full" />
+        ))}
+      </div>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground text-center py-6">
+        Sin actividad reciente. Las importaciones y cambios administrativos aparecerán aquí.
+      </p>
+    );
+  }
+
+  return (
+    <>
+      {items.map((item, i) => (
+        <ActivityRow key={item.id} item={item} index={i} />
+      ))}
+    </>
+  );
+}
+function ActivityRow({ item, index }: Readonly<{ item: ActivityItem; index: number }>) {
   return (
     <motion.div
       initial={{ opacity: 0, x: -12 }}
@@ -414,6 +458,7 @@ function ActivityRow({ item, index }: { item: ActivityItem; index: number }) {
 export default function DashboardPage() {
   const { currentUser, role } = useUserStore();
   const { data: accessMatrix } = useModuleAccessMatrix();
+  const { data: dashboardData, isLoading: loadingDashboard } = useDashboardData();
   const matrix = accessMatrix ?? cloneDefaultModuleAccess();
 
   const today = `Hoy es ${new Date().toLocaleDateString("es-CO", {
@@ -423,8 +468,12 @@ export default function DashboardPage() {
     day: "numeric",
   })}`;
 
-  const visibleCards = filterCardsForRole(MODULE_CARDS, role, matrix);
-  const quickStats = buildQuickStats(DASHBOARD_KPIS);
+  const moduleCards = buildModuleCards(
+    dashboardData?.badges ?? { calculator: 0, projected: 0, cpp: 0 }
+  );
+  const visibleCards = filterCardsForRole(moduleCards, role, matrix);
+  const quickStats = dashboardData ? buildQuickStats(dashboardData.stats) : [];
+  const activityItems = mapActivityEntries(dashboardData?.activity ?? []);
 
   return (
     <AppShell breadcrumbs={[{ label: "Panel Principal" }]}>
@@ -455,9 +504,13 @@ export default function DashboardPage() {
         {/* ── Quick stats row ──────────────────────────────────────────────── */}
         <motion.div variants={sectionVariants}>
           <div className="flex flex-wrap gap-3">
-            {quickStats.map((stat) => (
-              <QuickStatChip key={stat.label} stat={stat} />
-            ))}
+            {loadingDashboard
+              ? ["s1", "s2", "s3", "s4"].map((id) => (
+                  <QuickStatChip key={id} loading />
+                ))
+              : quickStats.map((stat) => (
+                  <QuickStatChip key={stat.label} stat={stat} />
+                ))}
           </div>
         </motion.div>
 
@@ -486,9 +539,7 @@ export default function DashboardPage() {
           </h2>
 
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            {MOCK_ACTIVITY.map((item, i) => (
-              <ActivityRow key={item.id} item={item} index={i} />
-            ))}
+            <ActivityFeed loading={loadingDashboard} items={activityItems} />
           </div>
         </motion.div>
       </motion.div>
