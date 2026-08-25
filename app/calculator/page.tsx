@@ -69,6 +69,7 @@ import {
 import { useUserStore } from '@/store';
 import { CalculadoraAdminImport } from '@/components/modules/calculadora-admin-import';
 import { SectionFrame } from '@/components/ui/section-frame';
+import { downloadPreventiveQuotePdf } from '@/lib/calculadora/quote-pdf';
 import type { TelemetriaEquipo, PreventiveQuoteResult } from '@/types/database';
 
 const HOROMETRO_OPTIONS = getHorometroOptions();
@@ -131,6 +132,7 @@ export default function CalculatorPage() {
 
   const [result, setResult] = useState<PreventiveQuoteResult | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [selectedMachine, setSelectedMachine] = useState<TelemetriaEquipo | null>(null);
   const [machineSheetOpen, setMachineSheetOpen] = useState(false);
 
@@ -155,6 +157,7 @@ export default function CalculatorPage() {
 
   const selectedBrand = watch('brand');
   const hourMeter = watch('hourMeter');
+  const travelTime = watch('travelTime');
   const { data: modelos = [] } = useCalculadoraModelos(selectedBrand);
   const frecuenciasPreview = hourMeter > 0 ? getFrecuenciasPorHorometro(hourMeter) : [];
 
@@ -196,6 +199,23 @@ export default function CalculatorPage() {
       shouldValidate: true,
     });
     setMachineSheetOpen(false);
+  };
+
+  const handleGeneratePdf = async () => {
+    if (!result || isGeneratingPdf) return;
+    setIsGeneratingPdf(true);
+    try {
+      await downloadPreventiveQuotePdf({
+        quote: result,
+        travelTimeHours: travelTime,
+        selectedMachine,
+      });
+      toast.success('PDF generado correctamente');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo generar el PDF');
+    } finally {
+      setIsGeneratingPdf(false);
+    }
   };
 
   return (
@@ -890,9 +910,14 @@ export default function CalculatorPage() {
                     </span>
                   </div>
                   <div className="space-y-2">
-                    <Button className="w-full h-9 bg-[#cf1b22] hover:bg-[#a51519] text-white">
+                    <Button
+                      type="button"
+                      className="w-full h-9 bg-[#cf1b22] hover:bg-[#a51519] text-white"
+                      disabled={isGeneratingPdf}
+                      onClick={handleGeneratePdf}
+                    >
                       <FileText className="w-4 h-4 mr-2" />
-                      Generar PDF
+                      {isGeneratingPdf ? 'Generando PDF…' : 'Generar PDF'}
                     </Button>
                     <Button
                       variant="outline"

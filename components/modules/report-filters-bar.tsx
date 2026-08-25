@@ -1,7 +1,8 @@
 'use client';
 
-import { Filter } from 'lucide-react';
+import { Filter, FilterX } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -29,6 +30,16 @@ interface ReportFiltersBarProps {
   readonly className?: string;
 }
 
+function hasActiveFilters(value: ReportFiltersState): boolean {
+  return (
+    value.marca !== DEFAULT_REPORT_FILTERS.marca ||
+    value.modelo !== DEFAULT_REPORT_FILTERS.modelo ||
+    value.periodo !== DEFAULT_REPORT_FILTERS.periodo ||
+    value.cliente !== DEFAULT_REPORT_FILTERS.cliente ||
+    value.mes !== DEFAULT_REPORT_FILTERS.mes
+  );
+}
+
 export function ReportFiltersBar({
   value,
   onChange,
@@ -39,14 +50,34 @@ export function ReportFiltersBar({
     onChange({ ...value, ...patch });
   };
 
+  const clearFilters = () => {
+    onChange({ ...DEFAULT_REPORT_FILTERS });
+  };
+
+  const filtersActive = hasActiveFilters(value);
+
   return (
     <Card className={className ?? 'border-border'}>
       <CardContent className="p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Filter className="w-4 h-4 text-[#cf1b22]" />
-          <span className="text-sm font-semibold">Filtros del informe</span>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-[#cf1b22]" />
+            <span className="text-sm font-semibold">Filtros del informe</span>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 text-xs"
+            onClick={clearFilters}
+            disabled={!filtersActive}
+            aria-label="Retirar filtros"
+          >
+            <FilterX className="h-3.5 w-3.5" />
+            Retirar filtros
+          </Button>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
           <Select
             value={value.marca}
             onValueChange={(v) => update({ marca: v, modelo: 'all' })}
@@ -59,10 +90,10 @@ export function ReportFiltersBar({
               {options.marcas
                 .filter((m) => m.trim().length > 0)
                 .map((m) => (
-                <SelectItem key={m} value={m}>
-                  {m}
-                </SelectItem>
-              ))}
+                  <SelectItem key={m} value={m}>
+                    {m}
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
 
@@ -75,10 +106,10 @@ export function ReportFiltersBar({
               {options.modelos
                 .filter((m) => m.trim().length > 0)
                 .map((m) => (
-                <SelectItem key={m} value={m}>
-                  {m}
-                </SelectItem>
-              ))}
+                  <SelectItem key={m} value={m}>
+                    {m}
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
 
@@ -91,10 +122,10 @@ export function ReportFiltersBar({
               {options.periodos
                 .filter((y) => y.trim().length > 0)
                 .map((y) => (
-                <SelectItem key={y} value={y}>
-                  {y}
-                </SelectItem>
-              ))}
+                  <SelectItem key={y} value={y}>
+                    {y}
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
 
@@ -107,10 +138,10 @@ export function ReportFiltersBar({
               {options.clientes
                 .filter((c) => c.trim().length > 0)
                 .map((c) => (
-                <SelectItem key={c} value={c}>
-                  {c}
-                </SelectItem>
-              ))}
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
 
