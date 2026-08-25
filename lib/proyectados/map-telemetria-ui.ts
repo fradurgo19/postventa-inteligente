@@ -173,6 +173,8 @@ export interface CiudadAgg {
   marcas: string[];
   modelos: string[];
   series: string[];
+  avgLat: number | null;
+  avgLng: number | null;
 }
 
 /** Agrega por ciudad/sede para el mapa (estado por Fecha Primer Mtto). */
@@ -185,6 +187,9 @@ export function aggregateCiudadesFromTelemetria(equipos: TelemetriaEquipo[]): Ci
       marcas: Set<string>;
       modelos: Set<string>;
       series: Set<string>;
+      latSum: number;
+      lngSum: number;
+      geoCount: number;
     }
   >();
 
@@ -196,11 +201,30 @@ export function aggregateCiudadesFromTelemetria(equipos: TelemetriaEquipo[]): Ci
       marcas: new Set<string>(),
       modelos: new Set<string>(),
       series: new Set<string>(),
+      latSum: 0,
+      lngSum: 0,
+      geoCount: 0,
     };
     prev.count += 1;
     if (e.marca?.trim()) prev.marcas.add(e.marca.trim());
     if (e.modelo?.trim()) prev.modelos.add(e.modelo.trim());
     if (e.serie?.trim()) prev.series.add(e.serie.trim());
+    const lat = e.latitud == null ? null : Number(e.latitud);
+    const lng = e.longitud == null ? null : Number(e.longitud);
+    if (
+      lat != null &&
+      lng != null &&
+      Number.isFinite(lat) &&
+      Number.isFinite(lng) &&
+      lat >= -5 &&
+      lat <= 14 &&
+      lng >= -80 &&
+      lng <= -66
+    ) {
+      prev.latSum += lat;
+      prev.lngSum += lng;
+      prev.geoCount += 1;
+    }
     const primer = pickFechaPrimerMtto(e);
     if (statusFromFechaPrimerMtto(primer) === 'Overdue') prev.overdue += 1;
     map.set(raw, prev);
@@ -218,6 +242,8 @@ export function aggregateCiudadesFromTelemetria(equipos: TelemetriaEquipo[]): Ci
         marcas: Array.from(v.marcas).sort((a, b) => a.localeCompare(b, 'es')),
         modelos: Array.from(v.modelos).sort((a, b) => a.localeCompare(b, 'es')),
         series: Array.from(v.series).sort((a, b) => a.localeCompare(b, 'es')),
+        avgLat: v.geoCount > 0 ? v.latSum / v.geoCount : null,
+        avgLng: v.geoCount > 0 ? v.lngSum / v.geoCount : null,
       };
     })
     .sort((a, b) => b.count - a.count);

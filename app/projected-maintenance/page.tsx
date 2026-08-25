@@ -89,6 +89,10 @@ import {
   type TelemetriaOpportunityRow,
   type TelemetriaCalendarEvent,
 } from "@/lib/proyectados/map-telemetria-ui";
+import {
+  COLOMBIA_MAP_VIEWBOX,
+  mapPointForSede,
+} from "@/lib/proyectados/colombia-map";
 import type { TelemetriaEquipo } from "@/types/database";
 
 // â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -148,93 +152,6 @@ const AUTOMATION_STEPS: AutomationStep[] = [
   { number: 5, icon: FileText,   title: "Generación de PDF",        description: "Genera automáticamente cotizaciones de mantenimiento personalizadas con precios de repuestos actuales, estimaciones de mano de obra e historial de servicio. Se adjuntan a las órdenes de trabajo y se envían por correo.", status: "Planned"         },
   { number: 6, icon: Zap,        title: "Actualización del Panel",      description: "Recálculo de KPIs en tiempo real y actualización del panel después de cada ciclo de flujo de trabajo. Seguimiento de tasas de cumplimiento, tendencias de vencimiento y métricas de desempeño de asesores.", status: "In Development"  },
 ];
-
-/**
- * Posiciones en viewBox 340×440 del mapa SVG (claves sin tildes).
- * Alineadas a costa Caribe, Andes y Pacífico.
- */
-const CITY_COORDS: Record<string, { cx: number; cy: number }> = {
-  barranquilla: { cx: 178, cy: 78 },
-  cartagena: { cx: 158, cy: 88 },
-  santamarta: { cx: 205, cy: 72 },
-  valledupar: { cx: 198, cy: 108 },
-  sincelejo: { cx: 162, cy: 118 },
-  monteria: { cx: 152, cy: 132 },
-  cucuta: { cx: 222, cy: 148 },
-  bucaramanga: { cx: 198, cy: 168 },
-  medellin: { cx: 152, cy: 188 },
-  manizales: { cx: 155, cy: 212 },
-  pereira: { cx: 148, cy: 222 },
-  armenia: { cx: 152, cy: 230 },
-  bogota: { cx: 185, cy: 235 },
-  tunja: { cx: 190, cy: 205 },
-  villavicencio: { cx: 210, cy: 245 },
-  yopal: { cx: 218, cy: 215 },
-  ibague: { cx: 168, cy: 248 },
-  neiva: { cx: 172, cy: 288 },
-  cali: { cx: 138, cy: 278 },
-  popayan: { cx: 140, cy: 308 },
-  pasto: { cx: 138, cy: 345 },
-  quibdo: { cx: 118, cy: 200 },
-  istmina: { cx: 122, cy: 228 },
-  buenaventura: { cx: 118, cy: 265 },
-};
-
-function normalizeCityKey(name: string): string {
-  return name
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, "")
-    .trim();
-}
-
-function cityCoords(name: string, index: number): { cx: number; cy: number } {
-  const key = normalizeCityKey(name);
-  if (CITY_COORDS[key]) return CITY_COORDS[key];
-
-  const aliases: Array<[string, string]> = [
-    ["bogota", "bogota"],
-    ["medellin", "medellin"],
-    ["barranquilla", "barranquilla"],
-    ["monteria", "monteria"],
-    ["bucaramanga", "bucaramanga"],
-    ["ibague", "ibague"],
-    ["istmina", "istmina"],
-    ["cali", "cali"],
-    ["cartagena", "cartagena"],
-    ["cucuta", "cucuta"],
-    ["pereira", "pereira"],
-    ["manizales", "manizales"],
-    ["armenia", "armenia"],
-    ["neiva", "neiva"],
-    ["pasto", "pasto"],
-    ["popayan", "popayan"],
-    ["villavicencio", "villavicencio"],
-    ["santamarta", "santamarta"],
-    ["valledupar", "valledupar"],
-    ["sincelejo", "sincelejo"],
-    ["quibdo", "quibdo"],
-    ["buenaventura", "buenaventura"],
-    ["yopal", "yopal"],
-    ["tunja", "tunja"],
-  ];
-
-  for (const [needle, coordKey] of aliases) {
-    if (key.includes(needle)) {
-      return CITY_COORDS[coordKey];
-    }
-  }
-
-  // Fallback: dispersión controlada dentro del continente
-  const ring = Math.floor(index / 6);
-  const slot = index % 6;
-  return {
-    cx: 135 + slot * 16 + (ring % 2) * 8,
-    cy: 160 + ring * 28,
-  };
-}
 
 function formatTooltipList(items: string[], max = 6): string {
   if (items.length === 0) return "—";
@@ -847,13 +764,16 @@ function OpportunitiesTable({
   );
 }
 
-/** Colombia SVG Map — sedes ubicadas + tooltip con equipos/marcas/modelos/series */
+const MAP_ASPECT_PCT =
+  (COLOMBIA_MAP_VIEWBOX.height / COLOMBIA_MAP_VIEWBOX.width) * 100;
+
+/** Colombia SVG Map — fondo oficial + sedes por lat/lng + tooltip detalle */
 function ColombiaMap({ equipos }: Readonly<{ equipos: TelemetriaEquipo[] }>) {
   const [tooltip, setTooltip] = useState<CityDot | null>(null);
 
   const cityDots: CityDot[] = useMemo(() => {
     return aggregateCiudadesFromTelemetria(equipos).map((c, i) => {
-      const coords = cityCoords(c.name, i);
+      const coords = mapPointForSede(c.name, c.avgLat, c.avgLng, i);
       return {
         id: c.name.toLowerCase().replace(/\s+/g, "-"),
         name: c.name,
@@ -870,13 +790,13 @@ function ColombiaMap({ equipos }: Readonly<{ equipos: TelemetriaEquipo[] }>) {
 
   const tooltipStyle = useMemo(() => {
     if (!tooltip) return undefined;
-    const leftPct = (tooltip.cx / 340) * 100;
-    const topPct = (tooltip.cy / 440) * 100;
+    const leftPct = (tooltip.cx / COLOMBIA_MAP_VIEWBOX.width) * 100;
+    const topPct = (tooltip.cy / COLOMBIA_MAP_VIEWBOX.height) * 100;
     const preferLeft = leftPct > 55;
     return {
-      left: preferLeft ? undefined : `${Math.min(leftPct + 3, 62)}%`,
-      right: preferLeft ? `${Math.min(100 - leftPct + 3, 62)}%` : undefined,
-      top: `${Math.max(4, Math.min(topPct - 8, 68))}%`,
+      left: preferLeft ? undefined : `${Math.min(leftPct + 2, 62)}%`,
+      right: preferLeft ? `${Math.min(100 - leftPct + 2, 62)}%` : undefined,
+      top: `${Math.max(4, Math.min(topPct - 6, 68))}%`,
     } as const;
   }, [tooltip]);
 
@@ -897,118 +817,25 @@ function ColombiaMap({ equipos }: Readonly<{ equipos: TelemetriaEquipo[] }>) {
           </p>
         ) : null}
         <div
-          className={`relative w-full ${cityDots.length === 0 ? "opacity-40" : ""}`}
-          style={{ paddingBottom: "90%" }}
+          className={`relative w-full overflow-hidden rounded-md bg-slate-50 ${
+            cityDots.length === 0 ? "opacity-40" : ""
+          }`}
+          style={{ paddingBottom: `${MAP_ASPECT_PCT}%` }}
         >
+          {/* Fondo: mapa oficial Colombia (mismo viewBox que la proyección lat/lng) */}
+          <img
+            src="/maps/colombia.svg"
+            alt=""
+            className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+            draggable={false}
+          />
           <svg
-            viewBox="0 0 340 440"
-            className="absolute inset-0 w-full h-full"
+            viewBox={`0 0 ${COLOMBIA_MAP_VIEWBOX.width} ${COLOMBIA_MAP_VIEWBOX.height}`}
+            className="absolute inset-0 h-full w-full"
             xmlns="http://www.w3.org/2000/svg"
+            role="img"
+            aria-label="Mapa de Colombia con distribución de equipos por sede"
           >
-            <defs>
-              <linearGradient id="colMap" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#f8fafc" />
-                <stop offset="100%" stopColor="#f1f5f9" />
-              </linearGradient>
-              <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
-                <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.12" />
-              </filter>
-            </defs>
-
-            <path
-              d="
-                M 130 60
-                L 145 52
-                L 165 50
-                L 195 58
-                L 210 70
-                L 220 85
-                L 225 100
-                L 215 110
-                L 220 125
-                L 230 135
-                L 235 150
-                L 240 165
-                L 235 178
-                L 245 190
-                L 255 205
-                L 260 220
-                L 255 235
-                L 248 248
-                L 245 265
-                L 240 280
-                L 232 295
-                L 220 310
-                L 210 325
-                L 200 340
-                L 190 355
-                L 182 368
-                L 175 375
-                L 168 368
-                L 160 355
-                L 150 340
-                L 140 325
-                L 132 310
-                L 125 295
-                L 118 280
-                L 112 265
-                L 108 248
-                L 105 235
-                L 100 220
-                L 95 205
-                L 95 190
-                L 100 175
-                L 105 160
-                L 108 145
-                L 105 130
-                L 108 115
-                L 115 100
-                L 120 85
-                L 122 72
-                Z
-              "
-              fill="url(#colMap)"
-              stroke="#cbd5e1"
-              strokeWidth="1.5"
-              filter="url(#shadow)"
-            />
-
-            <path
-              d="M 95 190 C 80 200 70 225 75 250 C 80 270 90 280 100 290 L 108 265 L 105 235 L 100 220 Z"
-              fill="#e2e8f0"
-              stroke="#cbd5e1"
-              strokeWidth="1"
-            />
-            <path
-              d="M 130 60 L 145 52 L 165 50 L 195 58 L 210 70 C 225 68 240 72 250 80 C 242 85 230 88 220 85 L 210 70 Z"
-              fill="#dbeafe"
-              stroke="#bfdbfe"
-              strokeWidth="1"
-            />
-            <path
-              d="M 155 180 Q 168 220 172 260 Q 175 300 178 340"
-              fill="none"
-              stroke="#bfdbfe"
-              strokeWidth="1.5"
-              strokeDasharray="3 2"
-              opacity="0.7"
-            />
-            <path
-              d="M 168 200 Q 185 210 200 220 Q 215 230 225 245"
-              fill="none"
-              stroke="#bfdbfe"
-              strokeWidth="1"
-              strokeDasharray="3 2"
-              opacity="0.6"
-            />
-
-            {[120, 160, 200, 240, 280, 320, 360].map((y) => (
-              <line key={`gy-${y}`} x1="90" y1={y} x2="260" y2={y} stroke="#e2e8f0" strokeWidth="0.5" />
-            ))}
-            {[110, 140, 170, 200, 230].map((x) => (
-              <line key={`gx-${x}`} x1={x} y1="50" x2={x} y2="390" stroke="#e2e8f0" strokeWidth="0.5" />
-            ))}
-
             {cityDots.map((city) => (
               <g
                 key={city.id}
@@ -1024,24 +851,24 @@ function ColombiaMap({ equipos }: Readonly<{ equipos: TelemetriaEquipo[] }>) {
                 <circle
                   cx={city.cx}
                   cy={city.cy}
-                  r="12"
+                  r="18"
                   fill={CITY_STATUS_COLORS[city.status]}
-                  opacity="0.12"
+                  opacity="0.15"
                 />
                 <circle
                   cx={city.cx}
                   cy={city.cy}
-                  r="7"
+                  r="11"
                   fill={CITY_STATUS_COLORS[city.status]}
                   stroke="white"
-                  strokeWidth="2"
-                  style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,.25))" }}
+                  strokeWidth="2.5"
+                  style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,.28))" }}
                 />
                 <text
                   x={city.cx}
-                  y={city.cy + 3}
+                  y={city.cy + 4}
                   textAnchor="middle"
-                  fontSize="7"
+                  fontSize="10"
                   fontWeight="700"
                   fill="white"
                   style={{ pointerEvents: "none" }}
@@ -1050,14 +877,14 @@ function ColombiaMap({ equipos }: Readonly<{ equipos: TelemetriaEquipo[] }>) {
                 </text>
                 <text
                   x={city.cx}
-                  y={city.cy + 18}
+                  y={city.cy + 26}
                   textAnchor="middle"
-                  fontSize="7.5"
+                  fontSize="11"
                   fontWeight="600"
-                  fill="#334155"
+                  fill="#1e293b"
                   style={{ pointerEvents: "none" }}
                 >
-                  {city.name.length > 14 ? `${city.name.slice(0, 12)}…` : city.name}
+                  {city.name.length > 16 ? `${city.name.slice(0, 14)}…` : city.name}
                 </text>
               </g>
             ))}
