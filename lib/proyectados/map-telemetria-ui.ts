@@ -75,6 +75,45 @@ export function isProgramadoPorPrimerMtto(fechaPrimerIso: string | null): boolea
   return statusFromFechaPrimerMtto(fechaPrimerIso) === 'Scheduled';
 }
 
+function fechaSortKey(iso: string | null | undefined): number {
+  if (!iso) return Number.POSITIVE_INFINITY;
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t;
+}
+
+/**
+ * Oportunidades Próximas:
+ * 1) Programadas (Fecha 1er Mtto ≥ hoy) de la más próxima a la más lejana
+ * 2) Vencidas de la más reciente a la más antigua
+ */
+export function sortOportunidadesProximas<T extends Pick<TelemetriaOpportunityRow, 'status' | 'fechaIso'>>(
+  rows: T[]
+): T[] {
+  const statusRank = (status: MaintenanceStatusUi): number => {
+    if (status === 'Scheduled') return 0;
+    if (status === 'Overdue') return 1;
+    return 2;
+  };
+
+  return [...rows].sort((a, b) => {
+    const rankDiff = statusRank(a.status) - statusRank(b.status);
+    if (rankDiff !== 0) return rankDiff;
+
+    const aKey = fechaSortKey(a.fechaIso);
+    const bKey = fechaSortKey(b.fechaIso);
+
+    if (a.status === 'Scheduled') {
+      return aKey - bKey;
+    }
+    if (a.status === 'Overdue') {
+      const aPast = aKey === Number.POSITIVE_INFINITY ? Number.NEGATIVE_INFINITY : aKey;
+      const bPast = bKey === Number.POSITIVE_INFINITY ? Number.NEGATIVE_INFINITY : bKey;
+      return bPast - aPast;
+    }
+    return aKey - bKey;
+  });
+}
+
 /** Filas de oportunidades: únicamente Fecha Primer Mtto. */
 export function mapTelemetriaToOpportunityRows(
   equipos: TelemetriaEquipo[]

@@ -83,6 +83,7 @@ import {
   mapTelemetriaToCalendarEvents,
   aggregateCiudadesFromTelemetria,
   aggregateMarcasPie,
+  sortOportunidadesProximas,
   type MaintenanceStatusUi,
   type TelemetriaOpportunityRow,
   type TelemetriaCalendarEvent,
@@ -624,16 +625,19 @@ function OpportunitiesTable({
   const [page, setPage] = useState(1);
   const rowsPerPage = 10;
 
-  const filtered = rows.filter((r) => {
-    const matchSearch =
-      r.equipment.toLowerCase().includes(search.toLowerCase()) ||
-      r.brand.toLowerCase().includes(search.toLowerCase()) ||
-      r.advisor.toLowerCase().includes(search.toLowerCase()) ||
-      r.client.toLowerCase().includes(search.toLowerCase()) ||
-      r.serie.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "all" || r.status === statusFilter;
-    return matchSearch && matchStatus;
-  });
+  const filtered = useMemo(() => {
+    const matched = rows.filter((r) => {
+      const matchSearch =
+        r.equipment.toLowerCase().includes(search.toLowerCase()) ||
+        r.brand.toLowerCase().includes(search.toLowerCase()) ||
+        r.advisor.toLowerCase().includes(search.toLowerCase()) ||
+        r.client.toLowerCase().includes(search.toLowerCase()) ||
+        r.serie.toLowerCase().includes(search.toLowerCase());
+      const matchStatus = statusFilter === "all" || r.status === statusFilter;
+      return matchSearch && matchStatus;
+    });
+    return sortOportunidadesProximas(matched);
+  }, [rows, search, statusFilter]);
 
   const totalRows = filtered.length;
   const pageRows = filtered.slice((page - 1) * rowsPerPage, page * rowsPerPage);
