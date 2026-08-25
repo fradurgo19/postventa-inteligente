@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  createAdminUser,
   createAsesor,
   createCliente,
   createMaquina,
@@ -25,6 +26,7 @@ import {
   type AsesorInput,
   type AuditQuery,
   type ClienteInput,
+  type CreateAdminUserInput,
   type MaquinaInput,
   type SystemConfig,
 } from '@/services/administration.service';
@@ -99,6 +101,16 @@ export function useAuditoria(query: AuditQuery) {
     queryKey: ['admin', 'auditoria', query],
     queryFn: () => fetchAuditoria(query),
     staleTime: 30_000,
+  });
+}
+
+export function useCreateAdminUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateAdminUserInput) => createAdminUser(input),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['admin'] });
+    },
   });
 }
 

@@ -612,6 +612,52 @@ export interface AdminPerfilUpdate {
   activo?: boolean;
 }
 
+export interface CreateAdminUserInput {
+  email: string;
+  password: string;
+  nombre: string;
+  rol: UserRole;
+  sede?: string | null;
+}
+
+export async function createAdminUser(input: CreateAdminUserInput): Promise<{ id: string }> {
+  if (!isSupabaseConfigured()) {
+    throw new Error('Supabase no configurado.');
+  }
+
+  const supabase = getSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    throw new Error('Sesión no válida. Inicie sesión nuevamente.');
+  }
+
+  const response = await fetch('/api/admin/users', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({
+      email: input.email.trim(),
+      password: input.password,
+      nombre: input.nombre.trim(),
+      rol: input.rol,
+      sede: input.sede?.trim() || null,
+    }),
+  });
+
+  const payload = (await response.json().catch(() => ({}))) as { error?: string; id?: string };
+
+  if (!response.ok) {
+    throw new Error(payload.error ?? 'No se pudo crear el usuario.');
+  }
+
+  return { id: payload.id ?? '' };
+}
+
 export async function updatePerfil(id: string, patch: AdminPerfilUpdate): Promise<void> {
   const supabase = getSupabaseClient();
   const payload: Record<string, unknown> = {};

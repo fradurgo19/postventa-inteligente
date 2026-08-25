@@ -23,6 +23,7 @@ import {
 import { isSupabaseConfigured } from '@/lib/supabase/client';
 import {
   useAdminUsers,
+  useCreateAdminUser,
   useTogglePerfilActivo,
   useUpdatePerfil,
 } from '@/hooks/use-administration';
@@ -31,6 +32,7 @@ import { toast } from 'sonner';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { UserRole } from '@/lib/mock-data';
+import { useUserStore } from '@/store';
 
 const EDIT_ROLES: { value: UserRole; label: string }[] = [
   { value: 'Administrator', label: 'Administrador' },
@@ -87,14 +89,60 @@ function StatusDot({ status }: { status: 'active' | 'inactive' }) {
 }
 
 export function AdminUsersPanel() {
+  const { role } = useUserStore();
+  const isAdmin = role === 'Administrator';
   const [showAddUser, setShowAddUser] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newRole, setNewRole] = useState<UserRole>('Viewer');
+  const [newSede, setNewSede] = useState('');
   const [editing, setEditing] = useState<AdminUserRow | null>(null);
   const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState<UserRole>('Viewer');
   const [editSede, setEditSede] = useState('');
   const { data: adminUsers = [] as AdminUserRow[], isLoading: loadingUsers, refetch } = useAdminUsers();
+  const createUser = useCreateAdminUser();
   const toggleActivo = useTogglePerfilActivo();
   const updatePerfil = useUpdatePerfil();
+
+  const resetAddForm = () => {
+    setNewName('');
+    setNewEmail('');
+    setNewPassword('');
+    setNewRole('Viewer');
+    setNewSede('');
+  };
+
+  const openAddUser = () => {
+    resetAddForm();
+    setShowAddUser(true);
+  };
+
+  const saveNewUser = async () => {
+    if (!newName.trim() || !newEmail.trim()) {
+      toast.error('Nombre y correo son obligatorios');
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast.error('La contraseña debe tener al menos 8 caracteres');
+      return;
+    }
+    try {
+      await createUser.mutateAsync({
+        nombre: newName,
+        email: newEmail,
+        password: newPassword,
+        rol: newRole,
+        sede: newSede.trim() || null,
+      });
+      toast.success('Usuario creado correctamente');
+      setShowAddUser(false);
+      resetAddForm();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo crear el usuario');
+    }
+  };
 
   const openEdit = (u: AdminUserRow) => {
     setEditing(u);
@@ -138,18 +186,25 @@ export function AdminUsersPanel() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => void refetch()}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5"
+              onClick={() => void refetch()}
+            >
               <RefreshCw className="h-3.5 w-3.5" />
               Actualizar
             </Button>
-            <Button
-              size="sm"
-              className="bg-[#cf1b22] hover:bg-[#a81419] text-white gap-1.5"
-              onClick={() => setShowAddUser(true)}
-            >
-              <UserPlus className="h-4 w-4" />
-              Agregar Usuario
-            </Button>
+            {isAdmin ? (
+              <Button
+                size="sm"
+                className="bg-[#cf1b22] hover:bg-[#a81419] text-white gap-1.5"
+                onClick={openAddUser}
+              >
+                <UserPlus className="h-4 w-4" />
+                Agregar Usuario
+              </Button>
+            ) : null}
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -276,7 +331,13 @@ export function AdminUsersPanel() {
         </div>
       </motion.div>
 
-      <Dialog open={showAddUser} onOpenChange={setShowAddUser}>
+      <Dialog
+        open={showAddUser}
+        onOpenChange={(open) => {
+          setShowAddUser(open);
+          if (!open) resetAddForm();
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -284,13 +345,77 @@ export function AdminUsersPanel() {
               Agregar Nuevo Usuario
             </DialogTitle>
           </DialogHeader>
-          <p className="text-xs text-muted-foreground">
-            Cree el usuario en Supabase Dashboard → Authentication. El trigger genera el perfil en{' '}
-            <code>perfiles</code>. Luego edite rol y sede desde esta tabla.
-          </p>
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Se crea la cuenta en Supabase Auth y el perfil en{' '}
+              <code className="text-[11px]">perfiles</code> con el rol y sede indicados.
+            </p>
+            <div className="space-y-1.5">
+              <Label>Nombre</Label>
+              <Input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Nombre completo"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Correo electrónico</Label>
+              <Input
+                type="email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                placeholder="usuario@partequipos.com"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Contraseña temporal</Label>
+              <Input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Mínimo 8 caracteres"
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Rol</Label>
+              <Select value={newRole} onValueChange={(v) => setNewRole(v as UserRole)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EDIT_ROLES.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>
+                      {r.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Sede</Label>
+              <Input
+                value={newSede}
+                onChange={(e) => setNewSede(e.target.value)}
+                placeholder="Ej: Bogotá"
+              />
+            </div>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddUser(false)}>
-              Cerrar
+              Cancelar
+            </Button>
+            <Button
+              className="bg-[#cf1b22] hover:bg-[#a81419] text-white"
+              disabled={
+                createUser.isPending ||
+                !newName.trim() ||
+                !newEmail.trim() ||
+                newPassword.length < 8
+              }
+              onClick={() => void saveNewUser()}
+            >
+              {createUser.isPending ? 'Creando…' : 'Crear usuario'}
             </Button>
           </DialogFooter>
         </DialogContent>
