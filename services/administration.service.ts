@@ -1,6 +1,12 @@
 import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/client';
 import { mapDbRoleToApp, mapAppRoleToDb } from '@/lib/supabase/auth';
 import type { UserRole } from '@/lib/mock-data';
+import {
+  cloneDefaultModuleAccess,
+  enforceAdministratorFullAccess,
+  normalizeModuleAccessMatrix,
+  type ModuleAccessMatrix,
+} from '@/lib/admin/module-access';
 
 export interface AdminUserRow {
   id: string;
@@ -636,6 +642,49 @@ export interface AdminRoleSummary {
   description: string;
   userCount: number;
   capabilities: string[];
+}
+
+export async function fetchModuleAccessMatrix(): Promise<ModuleAccessMatrix> {
+  if (!isSupabaseConfigured()) return cloneDefaultModuleAccess();
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('configuracion_sistema')
+    .select('module_access')
+    .eq('id', 1)
+    .maybeSingle();
+
+  if (error) {
+    if (/module_access|column|does not exist/i.test(error.message)) {
+      return cloneDefaultModuleAccess();
+    }
+    throw new Error(error.message);
+  }
+
+  if (!data?.module_access) return cloneDefaultModuleAccess();
+  return normalizeModuleAccessMatrix(data.module_access);
+}
+
+export async function saveModuleAccessMatrix(matrix: ModuleAccessMatrix): Promise<void> {
+  const normalized = enforceAdministratorFullAccess(normalizeModuleAccessMatrix(matrix));
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from('configuracion_sistema')
+    .update({
+      module_access: normalized,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', 1);
+
+  if (error) throw new Error(error.message);
+
+  await writeAudit({
+    modulo: 'Permisos',
+    accion: 'Updated',
+    entidad: 'configuracion_sistema',
+    entidadId: 'module_access',
+    detalle: { modules: Object.keys(normalized) },
+  });
 }
 
 export async function fetchAdminRoleSummaries(): Promise<AdminRoleSummary[]> {

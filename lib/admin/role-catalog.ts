@@ -49,8 +49,8 @@ export const ROLE_CATALOG: RoleCatalogEntry[] = [
   },
 ];
 
-/** Matriz módulo × rol (alineada al menú de la app). */
-export const MODULE_ACCESS: Record<string, Record<UserRole, boolean>> = {
+/** Matriz módulo × rol por defecto (alineada al menú de la app). */
+export const DEFAULT_MODULE_ACCESS: Record<string, Record<UserRole, boolean>> = {
   'Panel Principal': {
     Administrator: true,
     Coordinator: true,
@@ -95,7 +95,10 @@ export const MODULE_ACCESS: Record<string, Record<UserRole, boolean>> = {
   },
 };
 
-export const APP_MODULES = Object.keys(MODULE_ACCESS).filter((mod) => {
+/** @deprecated Use DEFAULT_MODULE_ACCESS or fetchModuleAccessMatrix() */
+export const MODULE_ACCESS = DEFAULT_MODULE_ACCESS;
+
+export const APP_MODULES = Object.keys(DEFAULT_MODULE_ACCESS).filter((mod) => {
   if (mod === 'Repuestos CPP') return isFeatureEnabled('cppModule');
   return true;
 });

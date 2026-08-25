@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { TopBar } from '@/components/layout/top-bar';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
+import { ModuleRouteGuard } from '@/components/layout/module-route-guard';
 import { cn } from '@/lib/utils';
 
 interface BreadcrumbItem {
@@ -24,6 +25,7 @@ export function AppShell({ children, breadcrumbs, className }: AppShellProps) {
 
   return (
     <div className="min-h-screen bg-background">
+      <ModuleRouteGuard />
       <TopBar onMenuToggle={handleSidebarToggle} sidebarOpen={sidebarOpen} />
 
       <Sidebar isOpen={sidebarOpen} onToggle={handleSidebarToggle} />

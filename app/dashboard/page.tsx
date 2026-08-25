@@ -25,6 +25,13 @@ import { DASHBOARD_KPIS } from "@/lib/mock-data";
 import type { UserRole } from "@/lib/mock-data";
 import { formatCOP } from "@/lib/mock-data";
 import { isFeatureEnabled } from "@/lib/feature-flags";
+import {
+  canRoleAccessModule,
+  cloneDefaultModuleAccess,
+  MODULE_PATHS,
+} from "@/lib/admin/module-access";
+import { useModuleAccessMatrix } from "@/hooks/use-administration";
+import type { ModuleAccessMatrix } from "@/lib/admin/module-access";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -219,21 +226,24 @@ const MOCK_ACTIVITY: ActivityItem[] = [
 
 // ── Role-based card filter ─────────────────────────────────────────────────────
 
-function filterCardsForRole(cards: ModuleCard[], role: UserRole): ModuleCard[] {
+const HREF_TO_MODULE = Object.fromEntries(
+  Object.entries(MODULE_PATHS).map(([mod, href]) => [href, mod])
+) as Record<string, string>;
+
+function filterCardsForRole(
+  cards: ModuleCard[],
+  role: UserRole,
+  matrix: ModuleAccessMatrix
+): ModuleCard[] {
   const withFeatures = isFeatureEnabled('cppModule')
     ? cards
     : cards.filter((c) => c.id !== 'cpp');
 
-  // Technician and Viewer: Calculator (y CPP solo si el módulo está activo)
-  if (role === 'Technician' || role === 'Viewer') {
-    return withFeatures.filter((c) => c.id === 'calculator' || c.id === 'cpp');
-  }
-  // Coordinator and Sales Advisor: no Administration
-  if (role === 'Coordinator' || role === 'Sales Advisor') {
-    return withFeatures.filter((c) => !c.allowedRoles || c.allowedRoles.includes(role));
-  }
-  // Administrator: all enabled cards
-  return withFeatures;
+  return withFeatures.filter((card) => {
+    const moduleName = HREF_TO_MODULE[card.href];
+    if (!moduleName) return true;
+    return canRoleAccessModule(matrix, moduleName, role);
+  });
 }
 
 // ── Framer Motion variants ─────────────────────────────────────────────────────
@@ -403,6 +413,8 @@ function ActivityRow({ item, index }: { item: ActivityItem; index: number }) {
 
 export default function DashboardPage() {
   const { currentUser, role } = useUserStore();
+  const { data: accessMatrix } = useModuleAccessMatrix();
+  const matrix = accessMatrix ?? cloneDefaultModuleAccess();
 
   const today = `Hoy es ${new Date().toLocaleDateString("es-CO", {
     weekday: "long",
@@ -411,7 +423,7 @@ export default function DashboardPage() {
     day: "numeric",
   })}`;
 
-  const visibleCards = filterCardsForRole(MODULE_CARDS, role);
+  const visibleCards = filterCardsForRole(MODULE_CARDS, role, matrix);
   const quickStats = buildQuickStats(DASHBOARD_KPIS);
 
   return (

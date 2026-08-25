@@ -12,7 +12,9 @@ import {
   fetchAdminSedes,
   fetchAdminUsers,
   fetchAuditoria,
+  fetchModuleAccessMatrix,
   fetchSystemConfig,
+  saveModuleAccessMatrix,
   saveSystemConfig,
   setPerfilActivo,
   updateAsesor,
@@ -26,6 +28,7 @@ import {
   type MaquinaInput,
   type SystemConfig,
 } from '@/services/administration.service';
+import type { ModuleAccessMatrix } from '@/lib/admin/module-access';
 
 export function useAdminDomainSummary() {
   return useQuery({
@@ -189,6 +192,25 @@ export function useUpdateMaquina() {
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['admin'] });
       await qc.invalidateQueries({ queryKey: ['proyectados'] });
+    },
+  });
+}
+
+export function useModuleAccessMatrix() {
+  return useQuery({
+    queryKey: ['app', 'module-access'],
+    queryFn: fetchModuleAccessMatrix,
+    staleTime: 60_000,
+  });
+}
+
+export function useSaveModuleAccessMatrix() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (matrix: ModuleAccessMatrix) => saveModuleAccessMatrix(matrix),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['app', 'module-access'] });
+      await qc.invalidateQueries({ queryKey: ['admin'] });
     },
   });
 }
