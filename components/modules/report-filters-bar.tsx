@@ -62,8 +62,10 @@ export function ReportFiltersBar({
   return (
     <div
       className={cn(
-        'sticky top-0 z-30 -mx-1 px-1 pb-2 pt-1',
-        'bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80'
+        'sticky top-0 z-40',
+        '-mx-6 px-6 py-2 mb-2',
+        'bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/90',
+        'border-b border-border/60 shadow-sm'
       )}
     >
       <Card className={cn('border-border shadow-sm', className)}>

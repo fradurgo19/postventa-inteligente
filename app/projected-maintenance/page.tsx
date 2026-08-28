@@ -1061,12 +1061,7 @@ function DashboardTab() {
   }, [reportFilters.marca, opportunityRows]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35 }}
-      className="space-y-6"
-    >
+    <div className="space-y-6">
       {equipos.length === 0 && !isLoading && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           No hay registros en telemetría. Use la pestaña <strong>Importar</strong> para cargar
@@ -1084,7 +1079,12 @@ function DashboardTab() {
           <Skeleton className="h-64 w-full rounded-xl" />
         </div>
       ) : (
-        <>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.35 }}
+          className="space-y-6"
+        >
           <KPIRow rows={filteredRows} />
           <KpiChartsSection rows={filteredRows} />
           <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
@@ -1097,9 +1097,9 @@ function DashboardTab() {
               <BrandsChart equipos={filteredEquipos} />
             </div>
           </div>
-        </>
+        </motion.div>
       )}
-    </motion.div>
+    </div>
   );
 }
 

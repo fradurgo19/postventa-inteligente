@@ -32,7 +32,7 @@ export function AppShell({ children, breadcrumbs, className }: AppShellProps) {
 
       <main
         className={cn(
-          'flex flex-col min-h-screen pt-16',
+          'flex flex-col h-screen pt-16',
           'transition-all duration-300 ease-in-out',
           sidebarOpen ? 'pl-60' : 'pl-0',
           className
@@ -44,7 +44,7 @@ export function AppShell({ children, breadcrumbs, className }: AppShellProps) {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto p-6 animate-fade-in">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-6">
           {children}
         </div>
       </main>

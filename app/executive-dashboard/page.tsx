@@ -230,7 +230,7 @@ export default function ExecutiveDashboardPage() {
   const loading = loadingEquipos;
 
   return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Panel Ejecutivo</h1>
