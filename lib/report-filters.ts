@@ -159,3 +159,55 @@ export function matchesTelemetriaReportFilters(
 
   return true;
 }
+
+export const PROJECTED_MAINTENANCE_FILTERS_KEY = 'partequipos-projected-report-filters';
+
+const REPORT_FILTER_KEYS: ReadonlyArray<keyof ReportFiltersState> = [
+  'marca',
+  'modelo',
+  'periodo',
+  'cliente',
+  'mes',
+  'sede',
+];
+
+/** Normaliza valores persistidos; descarta datos corruptos. */
+export function sanitizeReportFilters(raw: unknown): ReportFiltersState {
+  const next: ReportFiltersState = { ...DEFAULT_REPORT_FILTERS };
+  if (!raw || typeof raw !== 'object') return next;
+
+  const source = raw as Record<string, unknown>;
+  for (const key of REPORT_FILTER_KEYS) {
+    const value = source[key];
+    if (typeof value === 'string' && value.trim().length > 0) {
+      next[key] = value.trim();
+    }
+  }
+  return next;
+}
+
+export function readStoredReportFilters(storageKey: string): ReportFiltersState {
+  if (typeof window === 'undefined') return { ...DEFAULT_REPORT_FILTERS };
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return { ...DEFAULT_REPORT_FILTERS };
+    return sanitizeReportFilters(JSON.parse(raw) as unknown);
+  } catch {
+    return { ...DEFAULT_REPORT_FILTERS };
+  }
+}
+
+export function writeStoredReportFilters(
+  storageKey: string,
+  value: ReportFiltersState
+): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      storageKey,
+      JSON.stringify(sanitizeReportFilters(value))
+    );
+  } catch {
+    // Quota / modo privado: no bloquear la UI
+  }
+}

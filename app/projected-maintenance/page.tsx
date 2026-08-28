@@ -77,14 +77,14 @@ import type { ProyectadosImportLog } from "@/services/projected-maintenance.serv
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ReportFiltersBar,
-  DEFAULT_REPORT_FILTERS,
 } from "@/components/modules/report-filters-bar";
 import {
   sortLocale,
   matchesStringFilter,
   matchesTelemetriaReportFilters,
-  type ReportFiltersState,
+  PROJECTED_MAINTENANCE_FILTERS_KEY,
 } from "@/lib/report-filters";
+import { usePersistedReportFilters } from "@/hooks/use-persisted-report-filters";
 import {
   mapTelemetriaToOpportunityRows,
   mapTelemetriaToCalendarEvents,
@@ -1070,7 +1070,9 @@ function ColombiaMap({ equipos }: Readonly<{ equipos: TelemetriaEquipo[] }>) {
 
 /** --- TAB 1: Dashboard --- */
 function DashboardTab() {
-  const [reportFilters, setReportFilters] = useState<ReportFiltersState>(DEFAULT_REPORT_FILTERS);
+  const [reportFilters, setReportFilters] = usePersistedReportFilters(
+    PROJECTED_MAINTENANCE_FILTERS_KEY
+  );
   const { data: equipos = [], isLoading } = useTelemetriaEquipos();
   const opportunityRows = useMemo(
     () => mapTelemetriaToOpportunityRows(equipos),
