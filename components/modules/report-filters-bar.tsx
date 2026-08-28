@@ -62,13 +62,12 @@ export function ReportFiltersBar({
   return (
     <div
       className={cn(
-        'sticky top-0 z-40',
-        '-mx-6 px-6 py-2 mb-2',
-        'bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/90',
-        'border-b border-border/60 shadow-sm'
+        'sticky top-0 z-40 -mx-6 px-6',
+        'bg-muted/40 backdrop-blur-md supports-[backdrop-filter]:bg-muted/30',
+        'border-b border-border'
       )}
     >
-      <Card className={cn('border-border shadow-sm', className)}>
+      <Card className={cn('rounded-none border-0 border-b-0 shadow-none', className)}>
         <CardContent className="p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">

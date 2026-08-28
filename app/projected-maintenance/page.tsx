@@ -1307,7 +1307,7 @@ function AutomationTab() {
 export default function ProjectedMaintenancePage() {
   return (
     <AppShell breadcrumbs={[{ label: "Inicio", href: "/dashboard" }, { label: "Mantenimiento Proyectado" }]}>
-    <div className="space-y-6">
+    <div className="space-y-6 pt-6">
       {/* Page header */}
       <motion.div
         initial={{ opacity: 0, y: -8 }}

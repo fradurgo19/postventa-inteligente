@@ -44,7 +44,7 @@ export function AppShell({ children, breadcrumbs, className }: AppShellProps) {
           </div>
         )}
 
-        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-6">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-6 pb-6 pt-0">
           {children}
         </div>
       </main>

@@ -300,7 +300,7 @@ export default function CalculatorPage() {
   };
 
   return (
-    <div className="flex flex-col gap-4 -m-6 min-h-[calc(100vh-8rem)] p-4 md:p-5">
+    <div className="flex flex-col gap-4 -mx-6 -mb-6 min-h-[calc(100vh-8rem)] p-4 md:p-5 pt-6">
       {/* ── TOP FILTERS (sticky) ── */}
       <div className="sticky top-0 z-30 -mx-1 px-1 pb-1 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <SectionFrame

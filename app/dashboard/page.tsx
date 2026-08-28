@@ -481,7 +481,7 @@ export default function DashboardPage() {
         variants={pageVariants}
         initial="hidden"
         animate="visible"
-        className="space-y-8 max-w-7xl mx-auto"
+        className="space-y-8 max-w-7xl mx-auto pt-6"
       >
         {/* ── Page header ─────────────────────────────────────────────────── */}
         <motion.div variants={sectionVariants}>
