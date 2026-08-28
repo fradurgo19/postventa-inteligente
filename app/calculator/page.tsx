@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -70,6 +70,7 @@ import { useUserStore } from '@/store';
 import { CalculadoraAdminImport } from '@/components/modules/calculadora-admin-import';
 import { SectionFrame } from '@/components/ui/section-frame';
 import { downloadPreventiveQuotePdf } from '@/lib/calculadora/quote-pdf';
+import { normalizeEquipKey } from '@/lib/calculadora/build-quote';
 import type { TelemetriaEquipo, PreventiveQuoteResult } from '@/types/database';
 
 const HOROMETRO_OPTIONS = getHorometroOptions();
@@ -119,6 +120,56 @@ function isActiveTelemetria(m: TelemetriaEquipo): boolean {
   return !(estado && INACTIVE_ESTADOS.has(estado));
 }
 
+/** Resuelve valor de telemetría contra catálogo de temparios (case/espacios). */
+function resolveCatalogValue(value: string, options: string[]): string {
+  const raw = (value ?? '').trim();
+  if (!raw) return '';
+  const key = normalizeEquipKey(raw);
+  const found = options.find((o) => normalizeEquipKey(o) === key);
+  return found ?? raw;
+}
+
+function matchesEquipField(actual: string | null | undefined, filter: string): boolean {
+  if (!filter.trim()) return true;
+  return normalizeEquipKey(actual ?? '') === normalizeEquipKey(filter);
+}
+
+function filterTelemetriaByCalculator(
+  machines: TelemetriaEquipo[],
+  brand: string,
+  model: string,
+  hourMeter: number
+): TelemetriaEquipo[] {
+  const hasBrand = Boolean(brand.trim());
+  const hasModel = Boolean(model.trim());
+  const applyHorometro = hasBrand || hasModel;
+
+  return machines.filter((m) => {
+    if (!matchesEquipField(m.marca, brand)) return false;
+    if (!matchesEquipField(m.modelo, model)) return false;
+    if (applyHorometro && nearestHorometro(Number(m.horometro) || 0) !== hourMeter) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function telemetriaSheetDescription(params: {
+  brand: string;
+  model: string;
+  hourMeter: number;
+  filteredCount: number;
+  totalActive: number;
+}): string {
+  const { brand, model, hourMeter, filteredCount, totalActive } = params;
+  if (!brand.trim() && !model.trim()) {
+    return `Telemetría activa (${totalActive}). Al seleccionar una, se cargan marca, modelo y horómetro en la calculadora.`;
+  }
+  const brandPart = brand.trim() ? ` · ${brand}` : '';
+  const modelPart = model.trim() ? ` / ${model}` : '';
+  return `Filtradas por calculadora: ${filteredCount} de ${totalActive} activas${brandPart}${modelPart} · ${hourMeter.toLocaleString('es-CO')} h`;
+}
+
 export default function CalculatorPage() {
   const { role } = useUserStore();
   const isAdmin = role === 'Administrator';
@@ -156,6 +207,7 @@ export default function CalculatorPage() {
   });
 
   const selectedBrand = watch('brand');
+  const selectedModel = watch('model');
   const hourMeter = watch('hourMeter');
   const travelTime = watch('travelTime');
   const { data: modelos = [] } = useCalculadoraModelos(selectedBrand);
@@ -165,6 +217,25 @@ export default function CalculatorPage() {
     () => telemetria.filter(isActiveTelemetria),
     [telemetria]
   );
+
+  const filteredTelemetria = useMemo(
+    () =>
+      filterTelemetriaByCalculator(
+        activeTelemetria,
+        selectedBrand,
+        selectedModel,
+        hourMeter
+      ),
+    [activeTelemetria, selectedBrand, selectedModel, hourMeter]
+  );
+
+  /** Si el usuario eligió máquina primero, alinear modelo al catálogo cuando cargue. */
+  useEffect(() => {
+    if (!selectedMachine || !modelos.length) return;
+    const resolvedModel = resolveCatalogValue(selectedMachine.modelo, modelos);
+    if (!resolvedModel || resolvedModel === selectedModel) return;
+    setValue('model', resolvedModel, { shouldValidate: true });
+  }, [selectedMachine, modelos, selectedModel, setValue]);
 
   const onSubmit = async (values: FilterFormValues) => {
     setIsCalculating(true);
@@ -193,12 +264,22 @@ export default function CalculatorPage() {
 
   const handleSelectMachine = (machine: TelemetriaEquipo) => {
     setSelectedMachine(machine);
-    setValue('brand', machine.marca, { shouldValidate: true });
-    setValue('model', machine.modelo, { shouldValidate: true });
+    const brand = resolveCatalogValue(machine.marca, marcas);
+    setValue('brand', brand, { shouldValidate: true, shouldDirty: true });
+    const modelOptions = brand === selectedBrand ? modelos : [];
+    const model = resolveCatalogValue(machine.modelo, modelOptions);
+    setValue('model', model || machine.modelo.trim(), {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
     setValue('hourMeter', nearestHorometro(Number(machine.horometro) || 250), {
       shouldValidate: true,
+      shouldDirty: true,
     });
     setMachineSheetOpen(false);
+    toast.success(
+      `Equipo ${machine.serie}: ${machine.marca} ${machine.modelo} · ${Number(machine.horometro).toLocaleString('es-CO')} h`
+    );
   };
 
   const handleGeneratePdf = async () => {
@@ -493,7 +574,10 @@ export default function CalculatorPage() {
                       <List className="w-4 h-4 mr-1.5" />
                       Ver máquinas telemetría
                       <Badge variant="secondary" className="ml-2 text-xs">
-                        {activeTelemetria.length}
+                        {filteredTelemetria.length}
+                        {filteredTelemetria.length !== activeTelemetria.length
+                          ? ` / ${activeTelemetria.length}`
+                          : ''}
                       </Badge>
                     </Button>
                   </div>
@@ -947,17 +1031,25 @@ export default function CalculatorPage() {
           <SheetHeader>
             <SheetTitle>Máquinas de telemetría</SheetTitle>
             <SheetDescription>
-              Listado de telemetría activa ({activeTelemetria.length}). Seleccione una para cargar marca,
-              modelo y horómetro.
+              {telemetriaSheetDescription({
+                brand: selectedBrand,
+                model: selectedModel,
+                hourMeter,
+                filteredCount: filteredTelemetria.length,
+                totalActive: activeTelemetria.length,
+              })}
             </SheetDescription>
           </SheetHeader>
           <div className="mt-4 space-y-2">
-            {activeTelemetria.length === 0 ? (
+            {filteredTelemetria.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">
                 No hay máquinas con los filtros actuales.
+                {selectedBrand || selectedModel
+                  ? ' Ajuste marca, modelo u horómetro, o limpie los filtros.'
+                  : ''}
               </p>
             ) : (
-              activeTelemetria.map((m) => (
+              filteredTelemetria.map((m) => (
                 <button
                   key={m.id}
                   type="button"
