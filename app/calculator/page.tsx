@@ -84,7 +84,6 @@ const INACTIVE_ESTADOS = new Set(['inactivo', 'inactiva', 'baja', 'cancelado', '
 interface FilterFormValues {
   brand: string;
   model: string;
-  sede: string;
   hourMeter: number;
   kilometers: number;
   travelTime: number;
@@ -93,7 +92,6 @@ interface FilterFormValues {
 const filterSchema = z.object({
   brand: z.string().min(1, 'Selecciona una marca'),
   model: z.string().min(1, 'Selecciona un modelo'),
-  sede: z.string(),
   hourMeter: z.coerce.number().min(HOROMETRO_MIN).max(HOROMETRO_MAX),
   kilometers: z.coerce.number().min(0).max(500000),
   travelTime: z.coerce.number().min(0).max(24),
@@ -140,18 +138,15 @@ function filterTelemetriaByCalculator(
   machines: TelemetriaEquipo[],
   brand: string,
   model: string,
-  hourMeter: number,
-  sede: string
+  hourMeter: number
 ): TelemetriaEquipo[] {
   const hasBrand = Boolean(brand.trim());
   const hasModel = Boolean(model.trim());
   const applyHorometro = hasBrand || hasModel;
-  const sedeFilter = sede.trim() && sede !== 'all' ? sede : '';
 
   return machines.filter((m) => {
     if (!matchesEquipField(m.marca, brand)) return false;
     if (!matchesEquipField(m.modelo, model)) return false;
-    if (sedeFilter && !matchesEquipField(m.sede ?? m.ciudad ?? '', sedeFilter)) return false;
     if (applyHorometro && nearestHorometro(Number(m.horometro) || 0) !== hourMeter) {
       return false;
     }
@@ -162,21 +157,17 @@ function filterTelemetriaByCalculator(
 function telemetriaSheetDescription(params: {
   brand: string;
   model: string;
-  sede: string;
   hourMeter: number;
   filteredCount: number;
   totalActive: number;
 }): string {
-  const { brand, model, sede, hourMeter, filteredCount, totalActive } = params;
-  const hasFilters =
-    Boolean(brand.trim()) || Boolean(model.trim()) || (Boolean(sede.trim()) && sede !== 'all');
-  if (!hasFilters) {
-    return `Telemetría activa (${totalActive}). Al seleccionar una, se cargan marca, modelo, sede y horómetro en la calculadora.`;
+  const { brand, model, hourMeter, filteredCount, totalActive } = params;
+  if (!brand.trim() && !model.trim()) {
+    return `Telemetría activa (${totalActive}). Al seleccionar una, se cargan marca, modelo y horómetro en la calculadora.`;
   }
   const brandPart = brand.trim() ? ` · ${brand}` : '';
   const modelPart = model.trim() ? ` / ${model}` : '';
-  const sedePart = sede.trim() && sede !== 'all' ? ` · ${sede}` : '';
-  return `Filtradas por calculadora: ${filteredCount} de ${totalActive} activas${brandPart}${modelPart}${sedePart} · ${hourMeter.toLocaleString('es-CO')} h`;
+  return `Filtradas por calculadora: ${filteredCount} de ${totalActive} activas${brandPart}${modelPart} · ${hourMeter.toLocaleString('es-CO')} h`;
 }
 
 export default function CalculatorPage() {
@@ -209,7 +200,6 @@ export default function CalculatorPage() {
     defaultValues: {
       brand: '',
       model: '',
-      sede: 'all',
       hourMeter: 250,
       kilometers: 0,
       travelTime: 0,
@@ -218,7 +208,6 @@ export default function CalculatorPage() {
 
   const selectedBrand = watch('brand');
   const selectedModel = watch('model');
-  const selectedSede = watch('sede');
   const hourMeter = watch('hourMeter');
   const travelTime = watch('travelTime');
   const { data: modelos = [] } = useCalculadoraModelos(selectedBrand);
@@ -229,25 +218,15 @@ export default function CalculatorPage() {
     [telemetria]
   );
 
-  const sedeOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const m of activeTelemetria) {
-      const s = (m.sede ?? m.ciudad ?? '').trim();
-      if (s) set.add(s);
-    }
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'es'));
-  }, [activeTelemetria]);
-
   const filteredTelemetria = useMemo(
     () =>
       filterTelemetriaByCalculator(
         activeTelemetria,
         selectedBrand,
         selectedModel,
-        hourMeter,
-        selectedSede
+        hourMeter
       ),
-    [activeTelemetria, selectedBrand, selectedModel, hourMeter, selectedSede]
+    [activeTelemetria, selectedBrand, selectedModel, hourMeter]
   );
 
   /** Si el usuario eligió máquina primero, alinear modelo al catálogo cuando cargue. */
@@ -293,8 +272,6 @@ export default function CalculatorPage() {
       shouldValidate: true,
       shouldDirty: true,
     });
-    const machineSede = (machine.sede ?? machine.ciudad ?? '').trim();
-    setValue('sede', machineSede || 'all', { shouldValidate: true, shouldDirty: true });
     setValue('hourMeter', nearestHorometro(Number(machine.horometro) || 250), {
       shouldValidate: true,
       shouldDirty: true,
@@ -347,7 +324,7 @@ export default function CalculatorPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-8 gap-3 items-end">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-3 items-end">
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Marca
@@ -414,37 +391,6 @@ export default function CalculatorPage() {
             {errors.model && (
               <p className="text-xs text-destructive">{errors.model.message}</p>
             )}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Sede
-            </Label>
-            <Controller
-              name="sede"
-              control={control}
-              render={({ field }) => (
-                <Select
-                  value={field.value || 'all'}
-                  onValueChange={(v) => {
-                    field.onChange(v);
-                    setSelectedMachine(null);
-                  }}
-                >
-                  <SelectTrigger className="h-9 text-sm">
-                    <SelectValue placeholder="Sede…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas las sedes</SelectItem>
-                    {sedeOptions.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {s}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
           </div>
 
           <div className="space-y-1.5">
@@ -1090,7 +1036,6 @@ export default function CalculatorPage() {
               {telemetriaSheetDescription({
                 brand: selectedBrand,
                 model: selectedModel,
-                sede: selectedSede,
                 hourMeter,
                 filteredCount: filteredTelemetria.length,
                 totalActive: activeTelemetria.length,
@@ -1101,8 +1046,8 @@ export default function CalculatorPage() {
             {filteredTelemetria.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">
                 No hay máquinas con los filtros actuales.
-                {selectedBrand || selectedModel || (selectedSede && selectedSede !== 'all')
-                  ? ' Ajuste marca, modelo, sede u horómetro, o limpie los filtros.'
+                {selectedBrand || selectedModel
+                  ? ' Ajuste marca, modelo u horómetro, o limpie los filtros.'
                   : ''}
               </p>
             ) : (
