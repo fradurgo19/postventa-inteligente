@@ -75,7 +75,6 @@ import {
 } from "@/hooks/use-projected-maintenance";
 import type { ProyectadosImportLog } from "@/services/projected-maintenance.service";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DualScrollContainer } from "@/components/ui/dual-scroll-container";
 import {
   ReportFiltersBar,
   DEFAULT_REPORT_FILTERS,
@@ -781,50 +780,72 @@ function OpportunitiesTable({
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <DualScrollContainer>
-          <Table noScrollWrapper className="min-w-[900px]">
-            <TableHeader>
-              <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead className="text-xs font-semibold pl-4">Equipo</TableHead>
-                <TableHead className="text-xs font-semibold">Marca</TableHead>
-                <TableHead className="text-xs font-semibold">Modelo</TableHead>
-                <TableHead className="text-xs font-semibold text-right">Horas</TableHead>
-                <TableHead className="text-xs font-semibold">Descarga telemetría</TableHead>
-                <TableHead className="text-xs font-semibold">Fecha Estimada de Mtto</TableHead>
-                <TableHead className="text-xs font-semibold">Estado</TableHead>
-                <TableHead className="text-xs font-semibold pr-4">Asesor</TableHead>
+        <Table noScrollWrapper className="w-full table-fixed">
+          <TableHeader>
+            <TableRow className="bg-muted/40 hover:bg-muted/40">
+              <TableHead className="w-[11%] text-[11px] font-semibold pl-3">Equipo</TableHead>
+              <TableHead className="w-[8%] text-[11px] font-semibold">Marca</TableHead>
+              <TableHead className="w-[9%] text-[11px] font-semibold">Modelo</TableHead>
+              <TableHead className="w-[9%] text-[11px] font-semibold">Serie</TableHead>
+              <TableHead className="w-[7%] text-[11px] font-semibold text-right">Horas</TableHead>
+              <TableHead className="w-[10%] text-[11px] font-semibold">Descarga telemetría</TableHead>
+              <TableHead className="w-[11%] text-[11px] font-semibold">Fecha Estimada de Mtto</TableHead>
+              <TableHead className="w-[9%] text-[11px] font-semibold">Estado</TableHead>
+              <TableHead className="w-[12%] text-[11px] font-semibold">Asesor</TableHead>
+              <TableHead className="w-[14%] text-[11px] font-semibold pr-3">Cliente</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {pageRows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground text-sm">
+                  No se encontraron resultados
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pageRows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground text-sm">
-                    No se encontraron resultados
+            ) : (
+              pageRows.map((row, i) => (
+                <motion.tr
+                  key={row.id}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.04 }}
+                  className="border-b border-border/50 hover:bg-muted/30 transition-colors"
+                >
+                  <TableCell className="text-[11px] font-medium pl-3 py-2 max-w-0 truncate" title={row.equipment}>
+                    {row.equipment}
                   </TableCell>
-                </TableRow>
-              ) : (
-                pageRows.map((row, i) => (
-                  <motion.tr
-                    key={row.id}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.04 }}
-                    className="border-b border-border/50 hover:bg-muted/30 transition-colors"
-                  >
-                    <TableCell className="text-xs font-medium pl-4 py-2.5">{row.equipment}</TableCell>
-                    <TableCell className="text-xs py-2.5">{row.brand}</TableCell>
-                    <TableCell className="text-xs py-2.5 text-muted-foreground">{row.model}</TableCell>
-                    <TableCell className="text-xs py-2.5 text-right font-mono font-semibold">{row.hours.toLocaleString()}</TableCell>
-                    <TableCell className="text-xs py-2.5 text-muted-foreground">{row.lastMaintenance}</TableCell>
-                    <TableCell className="text-xs py-2.5 font-medium">{row.nextDue}</TableCell>
-                    <TableCell className="py-2.5"><StatusBadge status={row.status} /></TableCell>
-                    <TableCell className="text-xs py-2.5 pr-4 text-muted-foreground">{row.advisor}</TableCell>
-                  </motion.tr>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </DualScrollContainer>
+                  <TableCell className="text-[11px] py-2 max-w-0 truncate" title={row.brand}>
+                    {row.brand}
+                  </TableCell>
+                  <TableCell className="text-[11px] py-2 text-muted-foreground max-w-0 truncate" title={row.model}>
+                    {row.model}
+                  </TableCell>
+                  <TableCell className="text-[11px] py-2 font-mono max-w-0 truncate" title={row.serie}>
+                    {row.serie}
+                  </TableCell>
+                  <TableCell className="text-[11px] py-2 text-right font-mono font-semibold">
+                    {row.hours.toLocaleString()}
+                  </TableCell>
+                  <TableCell className="text-[11px] py-2 text-muted-foreground max-w-0 truncate" title={row.lastMaintenance}>
+                    {row.lastMaintenance}
+                  </TableCell>
+                  <TableCell className="text-[11px] py-2 font-medium max-w-0 truncate" title={row.nextDue}>
+                    {row.nextDue}
+                  </TableCell>
+                  <TableCell className="py-2">
+                    <StatusBadge status={row.status} />
+                  </TableCell>
+                  <TableCell className="text-[11px] py-2 text-muted-foreground max-w-0 truncate" title={row.advisor}>
+                    {row.advisor}
+                  </TableCell>
+                  <TableCell className="text-[11px] py-2 pr-3 max-w-0 truncate" title={row.client}>
+                    {row.client}
+                  </TableCell>
+                </motion.tr>
+              ))
+            )}
+          </TableBody>
+        </Table>
 
         {/* Pagination */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-border">
