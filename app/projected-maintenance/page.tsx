@@ -790,7 +790,7 @@ function OpportunitiesTable({
                 <TableHead className="text-xs font-semibold">Modelo</TableHead>
                 <TableHead className="text-xs font-semibold text-right">Horas</TableHead>
                 <TableHead className="text-xs font-semibold">Descarga telemetría</TableHead>
-                <TableHead className="text-xs font-semibold">Fecha 1er Mtto</TableHead>
+                <TableHead className="text-xs font-semibold">Fecha Estimada de Mtto</TableHead>
                 <TableHead className="text-xs font-semibold">Estado</TableHead>
                 <TableHead className="text-xs font-semibold pr-4">Asesor</TableHead>
               </TableRow>
