@@ -1,18 +1,23 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import type { PreventiveQuoteResult, TelemetriaEquipo } from '@/types/database';
+import type {
+  PreventiveConsumableLine,
+  PreventivePartLine,
+  PreventiveQuoteResult,
+  TelemetriaEquipo,
+} from '@/types/database';
 
 /** Logo oficial PARTEQUIPOS MAQUINARIA (Cloudinary). */
 export const PARTEQUIPOS_LOGO_URL =
   'https://res.cloudinary.com/dbufrzoda/image/upload/v1750457354/Captura_de_pantalla_2025-06-20_170819_wzmyli.png';
 
 const BRAND_RGB = { r: 207, g: 27, b: 34 } as const;
-const PAGE_MARGIN = 10;
+const PAGE_MARGIN = 8;
 const PAGE_WIDTH = 297;
 const PAGE_HEIGHT = 210;
 const CONTENT_WIDTH = PAGE_WIDTH - PAGE_MARGIN * 2;
-const COST_BLOCK_HEIGHT = 24;
-const FOOTER_Y = PAGE_HEIGHT - 6;
+const COST_BLOCK_HEIGHT = 22;
+const FOOTER_Y = PAGE_HEIGHT - 5;
 
 export interface QuotePdfInput {
   quote: PreventiveQuoteResult;
@@ -27,9 +32,7 @@ interface JsPdfWithAutoTable extends jsPDF {
 interface PdfLayoutMetrics {
   fontSize: number;
   cellPadding: number;
-  headerEndY: number;
   detailStartY: number;
-  detailMaxY: number;
   costStartY: number;
 }
 
@@ -71,6 +74,10 @@ function sanitizeFilePart(value: string): string {
     .slice(0, 40);
 }
 
+function refPdf(value: string | null | undefined): string {
+  return truncate(textOrDash(value), 18);
+}
+
 async function fetchImageDataUrl(url: string): Promise<string | null> {
   try {
     const response = await fetch(url, { mode: 'cors' });
@@ -103,26 +110,22 @@ function countDetailRows(quote: PreventiveQuoteResult): number {
 }
 
 function resolveLayoutMetrics(quote: PreventiveQuoteResult, fontSize: number): PdfLayoutMetrics {
-  const headerEndY = 38;
-  const detailStartY = headerEndY + 2;
-  const costStartY = PAGE_HEIGHT - COST_BLOCK_HEIGHT - 8;
-  const detailMaxY = costStartY - 4;
-  const available = detailMaxY - detailStartY;
+  const detailStartY = 30;
+  const costStartY = PAGE_HEIGHT - COST_BLOCK_HEIGHT - 7;
+  const available = costStartY - detailStartY - 4;
   const totalRows = countDetailRows(quote);
-  const rowHeight = fontSize * 0.45 + 1.8;
-  const needed = totalRows * rowHeight + 14;
+  const rowHeight = fontSize * 0.45 + 1.6;
+  const needed = totalRows * rowHeight + 18;
 
   let adjustedFont = fontSize;
-  if (needed > available && fontSize > 4.5) {
-    adjustedFont = Math.max(4.5, (fontSize * available) / needed);
+  if (needed > available && fontSize > 4) {
+    adjustedFont = Math.max(4, (fontSize * available) / needed);
   }
 
   return {
     fontSize: adjustedFont,
-    cellPadding: adjustedFont <= 5.5 ? 0.8 : 1.2,
-    headerEndY,
+    cellPadding: adjustedFont <= 5 ? 0.6 : 1,
     detailStartY,
-    detailMaxY,
     costStartY,
   };
 }
@@ -140,50 +143,47 @@ function compactTableStyles(fontSize: number, cellPadding: number) {
 
 function drawMiniTitle(doc: jsPDF, title: string, x: number, y: number, width: number): void {
   doc.setFillColor(BRAND_RGB.r, BRAND_RGB.g, BRAND_RGB.b);
-  doc.rect(x, y - 3.5, width, 4.5, 'F');
+  doc.rect(x, y - 3.2, width, 4.2, 'F');
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(6.5);
+  doc.setFontSize(6);
   doc.setTextColor(255, 255, 255);
   doc.text(title, x + 1.5, y);
   doc.setTextColor(30, 41, 59);
 }
 
 function addHeader(doc: jsPDF, logoDataUrl: string | null, input: QuotePdfInput): void {
-  const { quote, travelTimeHours, selectedMachine } = input;
-  const serial = selectedMachine?.serie ?? quote.serialNumber;
-  const client = truncate(selectedMachine?.titulo ?? '—', 36);
-  const sede = truncate(selectedMachine?.sede ?? selectedMachine?.ciudad ?? '—', 28);
-  const frecuencias = quote.frecuenciasAplicadas
-    .map((f) => `${f}`)
-    .join(', ');
+  const { quote, travelTimeHours } = input;
+  const frecuencias = quote.frecuenciasAplicadas.map((f) => `${f}`).join(', ');
 
   if (logoDataUrl) {
-    doc.addImage(logoDataUrl, 'PNG', PAGE_MARGIN, PAGE_MARGIN, 42, 14);
+    doc.addImage(logoDataUrl, 'PNG', PAGE_MARGIN, PAGE_MARGIN - 1, 38, 12);
   } else {
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.setTextColor(BRAND_RGB.r, BRAND_RGB.g, BRAND_RGB.b);
-    doc.text('PARTEQUIPOS MAQUINARIA', PAGE_MARGIN, PAGE_MARGIN + 8);
+    doc.text('PARTEQUIPOS MAQUINARIA', PAGE_MARGIN, PAGE_MARGIN + 6);
   }
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
+  doc.setFontSize(7.5);
   doc.setTextColor(71, 85, 105);
   const rightX = PAGE_MARGIN + CONTENT_WIDTH;
-  doc.text('Cotización Mantenimiento Preventivo', rightX, PAGE_MARGIN + 4, { align: 'right' });
-  doc.text(formatDateEs(new Date()), rightX, PAGE_MARGIN + 9, { align: 'right' });
+  doc.text('Cotización Mantenimiento Preventivo', rightX, PAGE_MARGIN + 3, { align: 'right' });
+  doc.text(formatDateEs(new Date()), rightX, PAGE_MARGIN + 8, { align: 'right' });
 
   autoTable(doc, {
-    startY: PAGE_MARGIN + 16,
+    startY: PAGE_MARGIN + 12,
     theme: 'plain',
-    styles: { fontSize: 7, cellPadding: 1, textColor: [30, 41, 59] },
+    styles: { fontSize: 7, cellPadding: 0.9, textColor: [30, 41, 59] },
     columnStyles: {
-      0: { fontStyle: 'bold', cellWidth: 22, textColor: [100, 116, 139] },
-      1: { cellWidth: 52 },
-      2: { fontStyle: 'bold', cellWidth: 22, textColor: [100, 116, 139] },
-      3: { cellWidth: 52 },
+      0: { fontStyle: 'bold', cellWidth: 20, textColor: [100, 116, 139] },
+      1: { cellWidth: 42 },
+      2: { fontStyle: 'bold', cellWidth: 20, textColor: [100, 116, 139] },
+      3: { cellWidth: 42 },
       4: { fontStyle: 'bold', cellWidth: 22, textColor: [100, 116, 139] },
-      5: { cellWidth: 52 },
+      5: { cellWidth: 42 },
+      6: { fontStyle: 'bold', cellWidth: 18, textColor: [100, 116, 139] },
+      7: { cellWidth: 31 },
     },
     body: [
       [
@@ -191,24 +191,20 @@ function addHeader(doc: jsPDF, logoDataUrl: string | null, input: QuotePdfInput)
         quote.brand,
         'Modelo',
         quote.model,
-        'Serie',
-        serial,
-      ],
-      [
         'Horómetro',
         `${quote.hours.toLocaleString('es-CO')} h`,
-        'Cliente',
-        client,
-        'Sede',
-        sede,
+        'Freq. (h)',
+        frecuencias,
       ],
       [
         'Km',
         `${quote.kilometers.toLocaleString('es-CO')}`,
         'Viaje',
         `${travelTimeHours ?? 0} h`,
-        'Freq. (h)',
-        frecuencias,
+        '',
+        '',
+        '',
+        '',
       ],
     ],
     margin: { left: PAGE_MARGIN, right: PAGE_MARGIN, top: PAGE_MARGIN },
@@ -230,7 +226,7 @@ function addActivitiesBlock(
       : [
           ...quote.activities.map((act) => [
             String(act.frecuenciaHoras ?? '—'),
-            truncate(act.activity, 72),
+            truncate(act.activity, 80),
             act.laborHours.toFixed(1),
             formatCOP(act.subtotal),
           ]),
@@ -248,7 +244,7 @@ function addActivitiesBlock(
         ];
 
   autoTable(doc, {
-    startY: startY + 2,
+    startY: startY + 1.5,
     head: [['F', 'Actividad', 'h', 'MO']],
     body,
     styles: compactTableStyles(layout.fontSize, layout.cellPadding),
@@ -270,7 +266,65 @@ function addActivitiesBlock(
     tableWidth: CONTENT_WIDTH,
   });
 
-  return tableFinalY(doc, startY + 12);
+  return tableFinalY(doc, startY + 10);
+}
+
+function fluidRefRow(f: PreventiveConsumableLine): string[] {
+  return [
+    String(f.frecuenciaHoras ?? '—'),
+    truncate(f.item, 36),
+    String(f.quantity),
+    textOrDash(f.unit),
+    refPdf(f.referenciaGenuina),
+    refPdf(f.referenciaStal),
+    refPdf(f.referenciaDonaldson),
+    refPdf(f.referenciaFleetguard),
+    refPdf(f.refSapDispel),
+    refPdf(f.refSapOriginal),
+  ];
+}
+
+function partRefRow(p: PreventivePartLine): string[] {
+  return [
+    String(p.frecuenciaHoras ?? '—'),
+    truncate(p.description, 36),
+    String(p.quantity),
+    textOrDash(p.unit),
+    refPdf(p.referenciaGenuina),
+    refPdf(p.referenciaStal),
+    refPdf(p.referenciaDonaldson),
+    refPdf(p.referenciaFleetguard),
+    refPdf(p.refSapDispel),
+    refPdf(p.refSapOriginal ?? p.sapCode),
+  ];
+}
+
+const REF_HEAD = [
+  'F',
+  'Descripción',
+  'Cant',
+  'Und',
+  'Genuina',
+  'Stal',
+  'Donaldson',
+  'Fleetguard',
+  'SAP Dispel',
+  'SAP Orig.',
+] as const;
+
+function refColumnStyles() {
+  return {
+    0: { cellWidth: 8, halign: 'right' as const },
+    1: { cellWidth: 48 },
+    2: { cellWidth: 10, halign: 'right' as const },
+    3: { cellWidth: 10 },
+    4: { cellWidth: 24 },
+    5: { cellWidth: 24 },
+    6: { cellWidth: 24 },
+    7: { cellWidth: 24 },
+    8: { cellWidth: 26 },
+    9: { cellWidth: 26 },
+  };
 }
 
 function addFluidsBlock(
@@ -279,45 +333,32 @@ function addFluidsBlock(
   layout: PdfLayoutMetrics,
   startY: number
 ): number {
-  const colWidth = CONTENT_WIDTH / 2 - 2;
-  const x = PAGE_MARGIN;
-
-  drawMiniTitle(doc, 'Fluidos', x, startY, colWidth);
+  drawMiniTitle(doc, 'Fluidos (referencias)', PAGE_MARGIN, startY, CONTENT_WIDTH);
 
   const body =
     quote.fluids.length === 0
-      ? [['—', 'Sin fluidos', '—', '—']]
-      : quote.fluids.map((f) => [
-          String(f.frecuenciaHoras ?? '—'),
-          truncate(f.item, 42),
-          String(f.quantity),
-          textOrDash(f.unit),
-        ]);
+      ? [['—', 'Sin fluidos', '—', '—', '—', '—', '—', '—', '—', '—']]
+      : quote.fluids.map(fluidRefRow);
 
   autoTable(doc, {
-    startY: startY + 2,
-    head: [['F', 'Fluido', 'Cant', 'Und']],
+    startY: startY + 1.5,
+    head: [Array.from(REF_HEAD)],
     body,
     styles: compactTableStyles(layout.fontSize, layout.cellPadding),
     headStyles: {
       fillColor: [22, 163, 74],
       textColor: 255,
       fontStyle: 'bold',
-      fontSize: layout.fontSize,
+      fontSize: Math.max(4, layout.fontSize - 0.3),
     },
-    columnStyles: {
-      0: { cellWidth: 8, halign: 'right' },
-      1: { cellWidth: 'auto' },
-      2: { cellWidth: 10, halign: 'right' },
-      3: { cellWidth: 12 },
-    },
-    margin: { left: x, right: PAGE_WIDTH - x - colWidth, bottom: PAGE_HEIGHT - layout.costStartY },
+    columnStyles: refColumnStyles(),
+    margin: { left: PAGE_MARGIN, right: PAGE_MARGIN, bottom: PAGE_HEIGHT - layout.costStartY },
     pageBreak: 'avoid',
     rowPageBreak: 'avoid',
-    tableWidth: colWidth,
+    tableWidth: CONTENT_WIDTH,
   });
 
-  return tableFinalY(doc, startY + 12);
+  return tableFinalY(doc, startY + 10);
 }
 
 function addPartsBlock(
@@ -326,45 +367,32 @@ function addPartsBlock(
   layout: PdfLayoutMetrics,
   startY: number
 ): number {
-  const colWidth = CONTENT_WIDTH / 2 - 2;
-  const x = PAGE_MARGIN + colWidth + 4;
-
-  drawMiniTitle(doc, 'Repuestos', x, startY, colWidth);
+  drawMiniTitle(doc, 'Repuestos (referencias)', PAGE_MARGIN, startY, CONTENT_WIDTH);
 
   const body =
     quote.parts.length === 0
-      ? [['—', 'Sin repuestos', '—', '—']]
-      : quote.parts.map((p) => [
-          String(p.frecuenciaHoras ?? '—'),
-          truncate(p.description, 42),
-          String(p.quantity),
-          textOrDash(p.unit),
-        ]);
+      ? [['—', 'Sin repuestos', '—', '—', '—', '—', '—', '—', '—', '—']]
+      : quote.parts.map(partRefRow);
 
   autoTable(doc, {
-    startY: startY + 2,
-    head: [['F', 'Repuesto', 'Cant', 'Und']],
+    startY: startY + 1.5,
+    head: [Array.from(REF_HEAD)],
     body,
     styles: compactTableStyles(layout.fontSize, layout.cellPadding),
     headStyles: {
       fillColor: [37, 99, 235],
       textColor: 255,
       fontStyle: 'bold',
-      fontSize: layout.fontSize,
+      fontSize: Math.max(4, layout.fontSize - 0.3),
     },
-    columnStyles: {
-      0: { cellWidth: 8, halign: 'right' },
-      1: { cellWidth: 'auto' },
-      2: { cellWidth: 10, halign: 'right' },
-      3: { cellWidth: 12 },
-    },
-    margin: { left: x, right: PAGE_MARGIN, bottom: PAGE_HEIGHT - layout.costStartY },
+    columnStyles: refColumnStyles(),
+    margin: { left: PAGE_MARGIN, right: PAGE_MARGIN, bottom: PAGE_HEIGHT - layout.costStartY },
     pageBreak: 'avoid',
     rowPageBreak: 'avoid',
-    tableWidth: colWidth,
+    tableWidth: CONTENT_WIDTH,
   });
 
-  return tableFinalY(doc, startY + 12);
+  return tableFinalY(doc, startY + 10);
 }
 
 function addCostSummary(doc: jsPDF, quote: PreventiveQuoteResult, startY: number): void {
@@ -373,7 +401,7 @@ function addCostSummary(doc: jsPDF, quote: PreventiveQuoteResult, startY: number
   const subtotal = quote.costs.subtotal;
   const rightX = PAGE_MARGIN + CONTENT_WIDTH;
   const boxTop = startY;
-  const rowH = 6.5;
+  const rowH = 6;
   const rows = [
     { label: 'Total mano de obra', value: formatCOP(labor), bold: false },
     { label: 'Total desplazamiento', value: formatCOP(travel), bold: false },
@@ -382,13 +410,17 @@ function addCostSummary(doc: jsPDF, quote: PreventiveQuoteResult, startY: number
 
   doc.setDrawColor(BRAND_RGB.r, BRAND_RGB.g, BRAND_RGB.b);
   doc.setFillColor(255, 247, 237);
-  doc.roundedRect(PAGE_MARGIN, boxTop, CONTENT_WIDTH, rows.length * rowH + 4, 1.5, 1.5, 'FD');
+  doc.roundedRect(PAGE_MARGIN, boxTop, CONTENT_WIDTH, rows.length * rowH + 3, 1.5, 1.5, 'FD');
 
   rows.forEach((row, index) => {
-    const rowY = boxTop + 4.5 + index * rowH;
+    const rowY = boxTop + 4 + index * rowH;
     doc.setFont('helvetica', row.bold ? 'bold' : 'normal');
-    doc.setFontSize(row.bold ? 9 : 8);
-    doc.setTextColor(row.bold ? BRAND_RGB.r : 51, row.bold ? BRAND_RGB.g : 65, row.bold ? BRAND_RGB.b : 85);
+    doc.setFontSize(row.bold ? 8.5 : 7.5);
+    doc.setTextColor(
+      row.bold ? BRAND_RGB.r : 51,
+      row.bold ? BRAND_RGB.g : 65,
+      row.bold ? BRAND_RGB.b : 85
+    );
     doc.text(row.label, PAGE_MARGIN + 3, rowY);
     doc.text(row.value, rightX - 3, rowY, { align: 'right' });
   });
@@ -396,38 +428,42 @@ function addCostSummary(doc: jsPDF, quote: PreventiveQuoteResult, startY: number
 
 function addFooter(doc: jsPDF): void {
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
+  doc.setFontSize(6);
   doc.setTextColor(148, 163, 184);
   doc.text(
-    'PARTEQUIPOS MAQUINARIA · Fluidos/repuestos sin precio SAP · Una página · Calculadora preventiva',
+    'PARTEQUIPOS MAQUINARIA · Referencias genuina / Stal / Donaldson / Fleetguard / SAP · Sin precio SAP · Una página',
     PAGE_MARGIN,
     FOOTER_Y
   );
 }
 
-function renderQuotePdf(doc: JsPdfWithAutoTable, input: QuotePdfInput, logoDataUrl: string | null, fontSize: number): void {
+function renderQuotePdf(
+  doc: JsPdfWithAutoTable,
+  input: QuotePdfInput,
+  logoDataUrl: string | null,
+  fontSize: number
+): void {
   const layout = resolveLayoutMetrics(input.quote, fontSize);
 
   addHeader(doc, logoDataUrl, input);
 
   const afterActivities = addActivitiesBlock(doc, input.quote, layout);
-  const suppliesY = afterActivities + 3;
-  addFluidsBlock(doc, input.quote, layout, suppliesY);
-  addPartsBlock(doc, input.quote, layout, suppliesY);
+  const afterFluids = addFluidsBlock(doc, input.quote, layout, afterActivities + 2.5);
+  addPartsBlock(doc, input.quote, layout, afterFluids + 2.5);
 
   addCostSummary(doc, input.quote, layout.costStartY);
   addFooter(doc);
 }
 
 function buildSinglePagePdf(input: QuotePdfInput, logoDataUrl: string | null): JsPdfWithAutoTable {
-  let fontSize = 7;
+  let fontSize = 6.5;
   let doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }) as JsPdfWithAutoTable;
 
-  while (fontSize >= 4) {
+  while (fontSize >= 3.8) {
     doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }) as JsPdfWithAutoTable;
     renderQuotePdf(doc, input, logoDataUrl, fontSize);
     if (doc.getNumberOfPages() === 1) break;
-    fontSize -= 0.5;
+    fontSize -= 0.4;
   }
 
   return doc;

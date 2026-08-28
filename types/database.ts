@@ -118,6 +118,12 @@ export interface PreventivePartLine {
   total: number;
   unit?: string;
   frecuenciaHoras?: MaintenanceFrequencyHours;
+  referenciaGenuina?: string;
+  refSapDispel?: string;
+  refSapOriginal?: string;
+  referenciaStal?: string;
+  referenciaDonaldson?: string;
+  referenciaFleetguard?: string;
 }
 
 export interface PreventiveQuoteResult {

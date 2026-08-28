@@ -195,6 +195,12 @@ export function buildPreventiveQuote(
       total: 0,
       unit: t.unidad_medida,
       frecuenciaHoras: Number(t.frecuencia_horas) as MaintenanceFrequencyHours,
+      referenciaGenuina: textOrDash(t.referencia_genuina),
+      refSapDispel: textOrDash(t.ref_sap_dispel),
+      refSapOriginal: textOrDash(t.ref_sap_original),
+      referenciaStal: textOrDash(t.referencia_stal),
+      referenciaDonaldson: textOrDash(t.referencia_donaldson),
+      referenciaFleetguard: textOrDash(t.referencia_fleetguard),
     }));
 
   const travelCost = calcularCostoDesplazamiento(input.kmTrayecto, input.horasTrayecto);
