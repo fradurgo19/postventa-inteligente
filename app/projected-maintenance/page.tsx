@@ -104,6 +104,8 @@ import {
 import {
   buildServicesByDepartment,
   buildServicesByDepartmentMunicipality,
+  buildSiteLocationAggregates,
+  buildGpsMarkersFromEntries,
   filterVistaDetalleEntries,
   mapRowsToMapEntries,
   uniqueSorted,
@@ -973,6 +975,16 @@ function DistribucionEquiposSection({
     [mapFilterEntries]
   );
 
+  const siteLocations = useMemo(
+    () => buildSiteLocationAggregates(mapFilterEntries),
+    [mapFilterEntries]
+  );
+
+  const gpsMarkers = useMemo(
+    () => buildGpsMarkersFromEntries(mapFilterEntries),
+    [mapFilterEntries]
+  );
+
   const handleDepartmentsChangeFromMap = (deps: string[]) => {
     setDetailFilterZones(deps.map((d) => toCanonicalDepartment(d)));
   };
@@ -1046,6 +1058,8 @@ function DistribucionEquiposSection({
           <ColombiaMap
             servicesByDepartment={servicesByDepartment}
             servicesByDepartmentMunicipality={servicesByDepartmentMunicipality}
+            siteLocations={siteLocations}
+            gpsMarkers={gpsMarkers}
             selectedDepartments={detailFilterZones}
             onDepartmentsChange={handleDepartmentsChangeFromMap}
             selectedSites={detailFilterSites}

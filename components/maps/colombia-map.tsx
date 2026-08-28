@@ -14,7 +14,11 @@ import { Minus, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { geoNameToZona, toCanonicalDepartment } from '@/lib/proyectados/department-mapping';
-import type { MapCounts } from '@/lib/proyectados/map-service-counts';
+import type {
+  MapCounts,
+  MapGpsMarker,
+  SiteLocationAggregate,
+} from '@/lib/proyectados/map-service-counts';
 
 type GeoProps = {
   NOMBRE_DPT?: string;
@@ -30,6 +34,10 @@ export interface ColombiaMapProps {
     string,
     Record<string, MapCounts>
   >;
+  /** Ubicaciones por sitio con GPS promedio de telemetría (prioridad sobre centroide). */
+  readonly siteLocations?: readonly SiteLocationAggregate[];
+  /** Marcadores individuales con lat/lng exactos del registro. */
+  readonly gpsMarkers?: readonly MapGpsMarker[];
   readonly selectedDepartment?: string | null;
   readonly onDepartmentSelect?: (department: string | null) => void;
   readonly selectedDepartments?: string[];
@@ -47,6 +55,7 @@ interface SiteMarker {
   coordinates: [number, number];
   total: number;
   highlighted: boolean;
+  fromGps: boolean;
 }
 
 const DEPTO_URL = '/depto.json';
@@ -79,6 +88,8 @@ export function ColombiaMap(props: ColombiaMapProps) {
   const {
     servicesByDepartment,
     servicesByDepartmentMunicipality,
+    siteLocations = [],
+    gpsMarkers = [],
     selectedDepartment = null,
     onDepartmentSelect,
     selectedDepartments = [],
@@ -142,42 +153,75 @@ export function ColombiaMap(props: ColombiaMapProps) {
   }, [deptoGeo]);
 
   const markers: SiteMarker[] = useMemo(() => {
-    if (!mpioGeo || selectedSet.size === 0 || !servicesByDepartmentMunicipality) {
-      return [];
+    if (selectedSet.size === 0) return [];
+
+    const locationByKey = new Map<string, SiteLocationAggregate>();
+    for (const loc of siteLocations) {
+      if (!selectedSet.has(loc.department)) continue;
+      locationByKey.set(`${loc.department}::${loc.site}`, loc);
     }
 
     const byDeptMpio = new Map<string, Map<string, [number, number]>>();
-    for (const f of mpioGeo.features as GeoFeature[]) {
-      const zona = geoNameToZona(String(f.properties?.NOMBRE_DPT ?? ''));
-      if (!selectedSet.has(zona)) continue;
-      const mpi = String(f.properties?.NOMBRE_MPI ?? '').trim();
-      if (!mpi) continue;
-      try {
-        const c = geoCentroid(f);
-        if (!Number.isFinite(c[0]) || !Number.isFinite(c[1])) continue;
-        if (!byDeptMpio.has(zona)) byDeptMpio.set(zona, new Map());
-        byDeptMpio.get(zona)!.set(mpi.toUpperCase(), [c[0], c[1]]);
-      } catch {
-        // skip
+    if (mpioGeo) {
+      for (const f of mpioGeo.features as GeoFeature[]) {
+        const zona = geoNameToZona(String(f.properties?.NOMBRE_DPT ?? ''));
+        if (!selectedSet.has(zona)) continue;
+        const mpi = String(f.properties?.NOMBRE_MPI ?? '').trim();
+        if (!mpi) continue;
+        try {
+          const c = geoCentroid(f);
+          if (!Number.isFinite(c[0]) || !Number.isFinite(c[1])) continue;
+          if (!byDeptMpio.has(zona)) byDeptMpio.set(zona, new Map());
+          byDeptMpio.get(zona)!.set(mpi.toUpperCase(), [c[0], c[1]]);
+        } catch {
+          // skip
+        }
       }
     }
 
     const result: SiteMarker[] = [];
-    for (const department of Array.from(selectedSet)) {
-      const sites = servicesByDepartmentMunicipality[department];
-      if (!sites) continue;
-      const mpiMap = byDeptMpio.get(department);
-      const deptCenter = centroidByDepartment.get(department) ?? ([-74.3, 4.2] as [number, number]);
-      let orphanIndex = 0;
 
-      for (const [site, counts] of Object.entries(sites)) {
-        const total = totalCounts(counts);
-        if (total <= 0) continue;
+    // Sitios con GPS promedio de telemetría o conteos agregados
+    const siteSource =
+      siteLocations.length > 0
+        ? siteLocations.filter((s) => selectedSet.has(s.department))
+        : Object.entries(servicesByDepartmentMunicipality ?? {}).flatMap(
+            ([department, sites]) =>
+              selectedSet.has(department)
+                ? Object.entries(sites).map(([site, counts]) => ({
+                    site,
+                    department,
+                    counts,
+                    avgCoordinates: null as [number, number] | null,
+                  }))
+                : []
+          );
+
+    let orphanIndex = 0;
+    for (const item of siteSource) {
+      const total = totalCounts(item.counts);
+      if (total <= 0) continue;
+      const key = `${item.department}::${item.site}`;
+
+      const loc = locationByKey.get(key);
+      const mpiMap = byDeptMpio.get(item.department);
+      const deptCenter =
+        centroidByDepartment.get(item.department) ??
+        ([-74.3, 4.2] as [number, number]);
+
+      let coordinates: [number, number] | null =
+        loc?.avgCoordinates ?? item.avgCoordinates ?? null;
+      let fromGps = coordinates != null;
+
+      if (!coordinates) {
         const geo =
-          mpiMap?.get(site.toUpperCase()) ??
-          mpiMap?.get(site.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase());
-
-        let coordinates: [number, number];
+          mpiMap?.get(item.site.toUpperCase()) ??
+          mpiMap?.get(
+            item.site
+              .normalize('NFD')
+              .replace(/[\u0300-\u036f]/g, '')
+              .toUpperCase()
+          );
         if (geo) {
           coordinates = geo;
         } else {
@@ -186,33 +230,55 @@ export function ColombiaMap(props: ColombiaMapProps) {
           coordinates = [deptCenter[0] + offset, deptCenter[1] + ring];
           orphanIndex += 1;
         }
-
-        result.push({
-          key: `${department}::${site}`,
-          site,
-          department,
-          coordinates,
-          total,
-          highlighted: selectedSitesSet.has(site),
-        });
+        fromGps = false;
       }
+
+      result.push({
+        key,
+        site: item.site,
+        department: item.department,
+        coordinates,
+        total,
+        highlighted: selectedSitesSet.has(item.site),
+        fromGps,
+      });
     }
+
     return result;
   }, [
     mpioGeo,
     selectedSet,
     servicesByDepartmentMunicipality,
+    siteLocations,
     centroidByDepartment,
     selectedSitesSet,
   ]);
 
+  const preciseGpsMarkers = useMemo(() => {
+    if (selectedSet.size === 0) return [];
+    return gpsMarkers.filter((p) => selectedSet.has(p.department));
+  }, [gpsMarkers, selectedSet]);
+
   useEffect(() => {
     if (selectedSet.size !== 1) return;
     const only = Array.from(selectedSet)[0];
+    const gpsInZone = preciseGpsMarkers.filter((p) => p.department === only);
+    if (gpsInZone.length > 0) {
+      const lng =
+        gpsInZone.reduce((s, p) => s + p.coordinates[0], 0) / gpsInZone.length;
+      const lat =
+        gpsInZone.reduce((s, p) => s + p.coordinates[1], 0) / gpsInZone.length;
+      setPosition((prev) => ({
+        ...prev,
+        coordinates: [lng, lat],
+        zoom: Math.max(prev.zoom, 2.6),
+      }));
+      return;
+    }
     const center = centroidByDepartment.get(only);
     if (!center) return;
     setPosition((prev) => ({ ...prev, coordinates: center, zoom: Math.max(prev.zoom, 2.2) }));
-  }, [selectedSet, centroidByDepartment]);
+  }, [selectedSet, centroidByDepartment, preciseGpsMarkers]);
 
   const handleDepartmentClick = useCallback(
     (zona: string) => {
@@ -325,8 +391,8 @@ export function ColombiaMap(props: ColombiaMapProps) {
                 <Marker key={m.key} coordinates={m.coordinates}>
                   <circle
                     r={r}
-                    fill={m.highlighted ? '#1d4ed8' : '#3b82f6'}
-                    stroke="#fff"
+                    fill={m.highlighted ? '#1d4ed8' : m.fromGps ? '#2563eb' : '#3b82f6'}
+                    stroke={m.fromGps ? '#eff6ff' : '#fff'}
                     strokeWidth={1.5}
                     opacity={0.92}
                     style={{ cursor: 'pointer' }}
@@ -351,12 +417,30 @@ export function ColombiaMap(props: ColombiaMapProps) {
                 </Marker>
               );
             })}
+
+            {preciseGpsMarkers.map((p) => (
+              <Marker key={`gps-${p.id}`} coordinates={p.coordinates}>
+                <title>{p.label}</title>
+                <circle
+                  r={4.5}
+                  fill={p.isOpen ? '#f59e0b' : '#10b981'}
+                  stroke="#fff"
+                  strokeWidth={1.2}
+                  opacity={0.95}
+                  style={{ cursor: 'pointer' }}
+                  onClick={(evt) => {
+                    evt.stopPropagation();
+                    onMunicipalityClick?.(p.site, p.department);
+                  }}
+                />
+              </Marker>
+            ))}
           </ZoomableGroup>
         </ComposableMap>
       )}
 
-      <div className="absolute bottom-2 left-2 rounded-md bg-white/90 border border-border px-2 py-1 text-[10px] text-muted-foreground shadow-sm">
-        Ámbar: vencidos · Verde: programados · Azul: sitios
+      <div className="absolute bottom-2 left-2 rounded-md bg-white/90 border border-border px-2 py-1 text-[10px] text-muted-foreground shadow-sm max-w-[90%]">
+        Ámbar/verde departamento: vencidos/programados · Azul: sitio · Punto GPS: lat/lng telemetría
       </div>
     </div>
   );

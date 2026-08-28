@@ -1,4 +1,5 @@
 import type { TelemetriaOpportunityRow } from '@/lib/proyectados/map-telemetria-ui';
+import { hasValidMapCoordinates } from '@/lib/proyectados/map-telemetria-ui';
 import {
   resolveSiteLabel,
   resolveZoneFromLocation,
@@ -21,6 +22,27 @@ export interface TelemetriaMapEntry {
   model: string;
   nextDue: string;
   status: TelemetriaOpportunityRow['status'];
+  latitud: number | null;
+  longitud: number | null;
+}
+
+/** Punto preciso [lng, lat] para react-simple-maps. */
+export interface MapGpsMarker {
+  id: string;
+  site: string;
+  department: string;
+  coordinates: [number, number];
+  isOpen: boolean;
+  label: string;
+}
+
+/** Agregado por sitio con GPS promedio cuando existe. */
+export interface SiteLocationAggregate {
+  site: string;
+  department: string;
+  counts: MapCounts;
+  /** Promedio de lat/lng de registros con GPS; null si ninguno. */
+  avgCoordinates: [number, number] | null;
 }
 
 export function mapRowsToMapEntries(
@@ -39,6 +61,8 @@ export function mapRowsToMapEntries(
     model: r.model,
     nextDue: r.nextDue,
     status: r.status,
+    latitud: r.latitud,
+    longitud: r.longitud,
   }));
 }
 
@@ -75,6 +99,83 @@ export function buildServicesByDepartmentMunicipality(
     bump(map[zone][site], e.isOpen);
   }
   return map;
+}
+
+/** Agrega por zona+sitio y calcula centro GPS promedio de telemetría. */
+export function buildSiteLocationAggregates(
+  entries: ReadonlyArray<TelemetriaMapEntry>
+): SiteLocationAggregate[] {
+  type Acc = {
+    site: string;
+    department: string;
+    counts: MapCounts;
+    latSum: number;
+    lngSum: number;
+    geoCount: number;
+  };
+  const map = new Map<string, Acc>();
+
+  for (const e of entries) {
+    const department = toCanonicalDepartment(e.zone);
+    const site = e.site || 'Sin sitio';
+    const key = `${department}::${site}`;
+    const prev =
+      map.get(key) ??
+      ({
+        site,
+        department,
+        counts: emptyCounts(),
+        latSum: 0,
+        lngSum: 0,
+        geoCount: 0,
+      } satisfies Acc);
+    bump(prev.counts, e.isOpen);
+    if (
+      hasValidMapCoordinates(e.latitud, e.longitud) &&
+      e.latitud != null &&
+      e.longitud != null
+    ) {
+      prev.latSum += e.latitud;
+      prev.lngSum += e.longitud;
+      prev.geoCount += 1;
+    }
+    map.set(key, prev);
+  }
+
+  return Array.from(map.values()).map((v) => ({
+    site: v.site,
+    department: v.department,
+    counts: v.counts,
+    avgCoordinates:
+      v.geoCount > 0
+        ? ([v.lngSum / v.geoCount, v.latSum / v.geoCount] as [number, number])
+        : null,
+  }));
+}
+
+/** Un marcador por registro con lat/lng válidos (ubicación precisa). */
+export function buildGpsMarkersFromEntries(
+  entries: ReadonlyArray<TelemetriaMapEntry>
+): MapGpsMarker[] {
+  const points: MapGpsMarker[] = [];
+  for (const e of entries) {
+    if (
+      !hasValidMapCoordinates(e.latitud, e.longitud) ||
+      e.latitud == null ||
+      e.longitud == null
+    ) {
+      continue;
+    }
+    points.push({
+      id: e.id,
+      site: e.site || 'Sin sitio',
+      department: toCanonicalDepartment(e.zone),
+      coordinates: [e.longitud, e.latitud],
+      isOpen: e.isOpen,
+      label: `${e.equipment} · ${e.serie}`,
+    });
+  }
+  return points;
 }
 
 export function filterVistaDetalleEntries(
