@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ProyectadosImportPanel } from '@/components/modules/proyectados-import-panel';
 import {
@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Search,
   Upload,
   Download,
@@ -44,6 +45,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { cn } from "@/lib/utils";
 
 import {
   Select,
@@ -248,6 +255,53 @@ function KPIRow({ rows }: Readonly<{ rows: TelemetriaOpportunityRow[] }>) {
 
 const CHART_COLORS = ["#cf1b22", "#50504f", "#2563eb", "#16a34a", "#d97706", "#7c3aed", "#0891b2"];
 
+function CollapsibleChartCard({
+  title,
+  children,
+  className,
+  contentClassName,
+  defaultOpen = true,
+}: Readonly<{
+  title: string;
+  children: ReactNode;
+  className?: string;
+  contentClassName?: string;
+  defaultOpen?: boolean;
+}>) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <Card className={cn("border-border shadow-sm", className)}>
+        <CardHeader className="pb-2">
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-2 rounded-md text-left transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-expanded={open}
+              aria-label={open ? `Contraer ${title}` : `Expandir ${title}`}
+            >
+              <CardTitle className="text-sm font-semibold">{title}</CardTitle>
+              <ChevronDown
+                className={cn(
+                  "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
+                  open && "rotate-180"
+                )}
+                aria-hidden
+              />
+            </button>
+          </CollapsibleTrigger>
+        </CardHeader>
+        <CollapsibleContent>
+          {open ? (
+            <CardContent className={cn("pt-0", contentClassName)}>{children}</CardContent>
+          ) : null}
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
+  );
+}
+
 function KpiChartsSection({ rows }: Readonly<{ rows: TelemetriaOpportunityRow[] }>) {
   const byMes = useMemo(() => {
     const map = new Map<string, { mes: string; total: number; vencidos: number }>();
@@ -318,54 +372,47 @@ function KpiChartsSection({ rows }: Readonly<{ rows: TelemetriaOpportunityRow[] 
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <Card className="border-border shadow-sm">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold">Oportunidades por Mes (Creado / MesCreado)</CardTitle>
-        </CardHeader>
-        <CardContent className="h-56">
+      <CollapsibleChartCard
+        title="Oportunidades por Mes (Creado / MesCreado)"
+        contentClassName="h-56"
+      >
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={byMes}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
+            <YAxis tick={{ fontSize: 11 }} />
+            <RechartsTooltip />
+            <Bar dataKey="total" name="Total" fill="#cf1b22" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="vencidos" name="Vencidos" fill="#d97706" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </CollapsibleChartCard>
+
+      <CollapsibleChartCard title="Oportunidades por Sede" contentClassName="overflow-visible">
+        <div style={{ height: sedeChartHeight(bySede.length), width: "100%" }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={byMes}>
+            <BarChart
+              data={bySede}
+              layout="vertical"
+              margin={{ left: 12, right: 16, top: 8, bottom: 8 }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
+              <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+              <YAxis
+                type="category"
+                dataKey="sede"
+                width={SEDE_CHART_Y_AXIS_WIDTH}
+                interval={0}
+                ticks={bySede.map((d) => d.sede)}
+                tick={{ fontSize: 11, fill: "currentColor" }}
+                tickLine={false}
+              />
               <RechartsTooltip />
-              <Bar dataKey="total" name="Total" fill="#cf1b22" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="vencidos" name="Vencidos" fill="#d97706" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="total" fill="#50504f" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      <Card className="border-border shadow-sm">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold">Oportunidades por Sede</CardTitle>
-        </CardHeader>
-        <CardContent className="overflow-visible">
-          <div style={{ height: sedeChartHeight(bySede.length), width: "100%" }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={bySede}
-                layout="vertical"
-                margin={{ left: 12, right: 16, top: 8, bottom: 8 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-                <YAxis
-                  type="category"
-                  dataKey="sede"
-                  width={SEDE_CHART_Y_AXIS_WIDTH}
-                  interval={0}
-                  ticks={bySede.map((d) => d.sede)}
-                  tick={{ fontSize: 11, fill: "currentColor" }}
-                  tickLine={false}
-                />
-                <RechartsTooltip />
-                <Bar dataKey="total" fill="#50504f" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      </CollapsibleChartCard>
 
       <Card className="border-border shadow-sm">
         <CardHeader className="pb-2">
@@ -412,38 +459,35 @@ function KpiChartsSection({ rows }: Readonly<{ rows: TelemetriaOpportunityRow[] 
         </CardContent>
       </Card>
 
-      <Card className="border-border shadow-sm lg:col-span-2">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold">
-            Oportunidades por Cliente
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="overflow-visible">
-          <div style={{ height: sedeChartHeight(byCliente.length), width: "100%" }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={byCliente}
-                layout="vertical"
-                margin={{ left: 12, right: 16, top: 8, bottom: 8 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-                <YAxis
-                  type="category"
-                  dataKey="cliente"
-                  width={CLIENT_CHART_Y_AXIS_WIDTH}
-                  interval={0}
-                  ticks={byCliente.map((d) => d.cliente)}
-                  tick={{ fontSize: 11, fill: "currentColor" }}
-                  tickLine={false}
-                />
-                <RechartsTooltip />
-                <Bar dataKey="total" name="Oportunidades" fill="#cf1b22" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
+      <CollapsibleChartCard
+        title="Oportunidades por Cliente"
+        className="lg:col-span-2"
+        contentClassName="overflow-visible"
+      >
+        <div style={{ height: sedeChartHeight(byCliente.length), width: "100%" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={byCliente}
+              layout="vertical"
+              margin={{ left: 12, right: 16, top: 8, bottom: 8 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+              <YAxis
+                type="category"
+                dataKey="cliente"
+                width={CLIENT_CHART_Y_AXIS_WIDTH}
+                interval={0}
+                ticks={byCliente.map((d) => d.cliente)}
+                tick={{ fontSize: 11, fill: "currentColor" }}
+                tickLine={false}
+              />
+              <RechartsTooltip />
+              <Bar dataKey="total" name="Oportunidades" fill="#cf1b22" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </CollapsibleChartCard>
     </div>
   );
 }
