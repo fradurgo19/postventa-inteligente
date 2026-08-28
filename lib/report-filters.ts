@@ -19,6 +19,7 @@ export interface ReportFiltersState {
   periodo: string;
   cliente: string;
   mes: string;
+  sede: string;
 }
 
 export const DEFAULT_REPORT_FILTERS: ReportFiltersState = {
@@ -27,6 +28,7 @@ export const DEFAULT_REPORT_FILTERS: ReportFiltersState = {
   periodo: 'all',
   cliente: 'all',
   mes: 'all',
+  sede: 'all',
 };
 
 const MES_CREADO_TO_ES: Record<string, (typeof REPORT_MESES)[number]> = {
@@ -108,6 +110,7 @@ export interface TelemetriaFilterableRow {
   brand: string;
   model: string;
   client: string;
+  sede?: string | null;
   mesCreado?: string | null;
   anio?: number | null;
   fechaIso?: string | null;
@@ -116,7 +119,7 @@ export interface TelemetriaFilterableRow {
 
 /**
  * Filtros del informe de telemetría:
- * - marca / modelo / cliente por texto
+ * - marca / modelo / cliente / sede por texto
  * - periodo / mes priorizan anio + mes_creado del Excel; fallback a fecha de mtto
  */
 export function matchesTelemetriaReportFilters(
@@ -126,6 +129,7 @@ export function matchesTelemetriaReportFilters(
   if (!matchesStringFilter(row.brand, filters.marca)) return false;
   if (!matchesStringFilter(row.model, filters.modelo)) return false;
   if (!matchesStringFilter(row.client, filters.cliente)) return false;
+  if (!matchesStringFilter(row.sede ?? '', filters.sede)) return false;
 
   if (filters.periodo !== 'all') {
     const fromAnio = row.anio != null && row.anio > 0 ? String(row.anio) : null;

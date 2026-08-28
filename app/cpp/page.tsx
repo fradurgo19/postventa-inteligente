@@ -597,7 +597,7 @@ function FilterSidebar({
   };
 
   return (
-    <aside className="w-[260px] flex-shrink-0 bg-card border border-border rounded-xl p-4 flex flex-col gap-4 h-fit sticky top-4">
+    <aside className="w-[260px] flex-shrink-0 bg-card border border-border rounded-xl p-4 flex flex-col gap-4 h-fit sticky top-0 z-20 shadow-sm">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
@@ -708,10 +708,10 @@ function FilterSidebar({
         />
       </div>
 
-      {/* Warehouse */}
+      {/* Sede / Bodega */}
       <div className="space-y-2">
         <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          Bodega
+          Sede
         </Label>
         <div className="space-y-1.5">
           {WAREHOUSES_LIST.map((wh) => (

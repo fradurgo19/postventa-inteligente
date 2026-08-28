@@ -155,6 +155,7 @@ export default function ExecutiveDashboardPage() {
         : rows.filter((r) => matchesStringFilter(r.brand, reportFilters.marca));
     const modelos = sortLocale(Array.from(new Set(source.map((r) => r.model).filter(usable))));
     const clientes = sortLocale(Array.from(new Set(rows.map((r) => r.client).filter(usable))));
+    const sedes = sortLocale(Array.from(new Set(rows.map((r) => r.sede).filter(usable))));
     const yearSet = new Set<string>();
     for (const r of rows) {
       if (r.anio != null && r.anio > 0) yearSet.add(String(r.anio));
@@ -164,7 +165,7 @@ export default function ExecutiveDashboardPage() {
       }
     }
     const periodos = sortLocale(Array.from(yearSet));
-    return { marcas, modelos, periodos, clientes };
+    return { marcas, modelos, periodos, clientes, sedes };
   }, [rows, reportFilters.marca]);
 
   const statusChart = useMemo(() => {

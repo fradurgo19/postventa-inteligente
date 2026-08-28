@@ -1045,6 +1045,9 @@ function DashboardTab() {
     const clientes = sortLocale(
       Array.from(new Set(opportunityRows.map((r) => r.client).filter(usable)))
     );
+    const sedes = sortLocale(
+      Array.from(new Set(opportunityRows.map((r) => r.sede).filter(usable)))
+    );
     const yearSet = new Set<string>();
     for (const r of opportunityRows) {
       if (r.anio != null && r.anio > 0) yearSet.add(String(r.anio));
@@ -1054,7 +1057,7 @@ function DashboardTab() {
       }
     }
     const periodos = sortLocale(Array.from(yearSet));
-    return { marcas, modelos, periodos, clientes };
+    return { marcas, modelos, periodos, clientes, sedes };
   }, [reportFilters.marca, opportunityRows]);
 
   return (
