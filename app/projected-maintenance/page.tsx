@@ -95,6 +95,8 @@ import {
   SEDE_CHART_Y_AXIS_WIDTH,
   CLIENT_CHART_Y_AXIS_WIDTH,
   sortOportunidadesProximas,
+  hasValidMapCoordinates,
+  buildGoogleMapsUrl,
   type MaintenanceStatusUi,
   type TelemetriaOpportunityRow,
   type TelemetriaCalendarEvent,
@@ -764,27 +766,30 @@ function OpportunitiesTable({
         <Table noScrollWrapper className="w-full table-fixed">
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead className="w-[11%] text-[11px] font-semibold pl-3">Equipo</TableHead>
-              <TableHead className="w-[8%] text-[11px] font-semibold">Marca</TableHead>
-              <TableHead className="w-[9%] text-[11px] font-semibold">Modelo</TableHead>
-              <TableHead className="w-[9%] text-[11px] font-semibold">Serie</TableHead>
-              <TableHead className="w-[7%] text-[11px] font-semibold text-right">Horas</TableHead>
-              <TableHead className="w-[10%] text-[11px] font-semibold">Descarga telemetría</TableHead>
-              <TableHead className="w-[11%] text-[11px] font-semibold">Fecha Estimada de Mtto</TableHead>
-              <TableHead className="w-[9%] text-[11px] font-semibold">Estado</TableHead>
-              <TableHead className="w-[12%] text-[11px] font-semibold">Asesor</TableHead>
-              <TableHead className="w-[14%] text-[11px] font-semibold pr-3">Cliente</TableHead>
+              <TableHead className="w-[10%] text-[11px] font-semibold pl-3">Equipo</TableHead>
+              <TableHead className="w-[7%] text-[11px] font-semibold">Marca</TableHead>
+              <TableHead className="w-[8%] text-[11px] font-semibold">Modelo</TableHead>
+              <TableHead className="w-[8%] text-[11px] font-semibold">Serie</TableHead>
+              <TableHead className="w-[6%] text-[11px] font-semibold text-right">Horas</TableHead>
+              <TableHead className="w-[9%] text-[11px] font-semibold">Descarga telemetría</TableHead>
+              <TableHead className="w-[10%] text-[11px] font-semibold">Fecha Estimada de Mtto</TableHead>
+              <TableHead className="w-[8%] text-[11px] font-semibold">Estado</TableHead>
+              <TableHead className="w-[10%] text-[11px] font-semibold">Asesor</TableHead>
+              <TableHead className="w-[12%] text-[11px] font-semibold">Cliente</TableHead>
+              <TableHead className="w-[12%] text-[11px] font-semibold pr-3 text-center">Ubicación</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {pageRows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground text-sm">
+                <TableCell colSpan={11} className="text-center py-8 text-muted-foreground text-sm">
                   No se encontraron resultados
                 </TableCell>
               </TableRow>
             ) : (
-              pageRows.map((row, i) => (
+              pageRows.map((row, i) => {
+                const canOpenMaps = hasValidMapCoordinates(row.latitud, row.longitud);
+                return (
                 <motion.tr
                   key={row.id}
                   initial={{ opacity: 0, x: -8 }}
@@ -819,11 +824,38 @@ function OpportunitiesTable({
                   <TableCell className="text-[11px] py-2 text-muted-foreground max-w-0 truncate" title={row.advisor}>
                     {row.advisor}
                   </TableCell>
-                  <TableCell className="text-[11px] py-2 pr-3 max-w-0 truncate" title={row.client}>
+                  <TableCell className="text-[11px] py-2 max-w-0 truncate" title={row.client}>
                     {row.client}
                   </TableCell>
+                  <TableCell className="py-2 pr-3 text-center">
+                    {canOpenMaps && row.latitud != null && row.longitud != null ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 gap-1 px-2 text-[10px]"
+                        asChild
+                      >
+                        <a
+                          href={buildGoogleMapsUrl(row.latitud, row.longitud)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={`Abrir en Google Maps (${row.latitud}, ${row.longitud})`}
+                          aria-label={`Abrir ubicación de ${row.serie} en Google Maps`}
+                        >
+                          <MapPin className="h-3 w-3 text-[#cf1b22]" />
+                          Maps
+                        </a>
+                      </Button>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground" title="Sin latitud/longitud en telemetría">
+                        Sin GPS
+                      </span>
+                    )}
+                  </TableCell>
                 </motion.tr>
-              ))
+                );
+              })
             )}
           </TableBody>
         </Table>

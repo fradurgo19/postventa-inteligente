@@ -23,6 +23,8 @@ export interface TelemetriaOpportunityRow {
   /** ISO de Fecha Primer Mtto. */
   fechaIso: string | null;
   createdAt: string | null;
+  latitud: number | null;
+  longitud: number | null;
 }
 
 export interface TelemetriaCalendarEvent {
@@ -49,6 +51,31 @@ function startOfLocalDay(value: Date): Date {
   const d = new Date(value);
   d.setHours(0, 0, 0, 0);
   return d;
+}
+
+function parseCoord(value: number | string | null | undefined): number | null {
+  if (value == null || value === '') return null;
+  const n = typeof value === 'number' ? value : Number(String(value).trim());
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Coordenadas válidas para Colombia (aprox.) o cualquier par finito usable en Maps. */
+export function hasValidMapCoordinates(
+  lat: number | null | undefined,
+  lng: number | null | undefined
+): lat is number {
+  return (
+    lat != null &&
+    lng != null &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    Math.abs(lat) <= 90 &&
+    Math.abs(lng) <= 180
+  );
+}
+
+export function buildGoogleMapsUrl(lat: number, lng: number): string {
+  return `https://www.google.com/maps?q=${encodeURIComponent(`${lat},${lng}`)}`;
 }
 
 /** Solo Fecha Primer Mtto define la proyección de mantenimiento. */
@@ -142,6 +169,8 @@ export function mapTelemetriaToOpportunityRows(
       anio: e.anio ?? null,
       fechaIso: fechaPrimer,
       createdAt: e.created_at ?? null,
+      latitud: parseCoord(e.latitud),
+      longitud: parseCoord(e.longitud),
     };
   });
 }
