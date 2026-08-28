@@ -40,6 +40,9 @@ import { useTelemetriaEquipos } from '@/hooks/use-projected-maintenance';
 import {
   mapTelemetriaToOpportunityRows,
   aggregateMarcasPie,
+  aggregateOportunidadesPorSede,
+  sedeChartHeight,
+  SEDE_CHART_Y_AXIS_WIDTH,
   sortOportunidadesProximas,
   type MaintenanceStatusUi,
   type TelemetriaOpportunityRow,
@@ -112,18 +115,6 @@ function buildMesChartFromRows(rows: TelemetriaOpportunityRow[], equiposById: Ma
   return Array.from(map.values()).sort((a, b) => a.mes.localeCompare(b.mes, 'es'));
 }
 
-function buildSedeChartFromRows(rows: TelemetriaOpportunityRow[]) {
-  const map = new Map<string, number>();
-  for (const r of rows) {
-    const sede = r.sede && r.sede !== '—' ? r.sede : 'Sin sede';
-    map.set(sede, (map.get(sede) ?? 0) + 1);
-  }
-  return Array.from(map.entries())
-    .map(([sede, total]) => ({ sede, total }))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 12);
-}
-
 export default function ExecutiveDashboardPage() {
   const [reportFilters, setReportFilters] = useState<ReportFiltersState>(DEFAULT_REPORT_FILTERS);
   const { data: equiposData, isLoading: loadingEquipos } = useTelemetriaEquipos();
@@ -185,7 +176,7 @@ export default function ExecutiveDashboardPage() {
     [filteredRows, equiposById]
   );
 
-  const sedeChart = useMemo(() => buildSedeChartFromRows(filteredRows), [filteredRows]);
+  const sedeChart = useMemo(() => aggregateOportunidadesPorSede(filteredRows), [filteredRows]);
 
   const topClientes = useMemo(() => {
     const map = new Map<string, number>();
@@ -505,19 +496,29 @@ export default function ExecutiveDashboardPage() {
 
         <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
           <h3 className="text-sm font-semibold mb-3">Oportunidades por sede</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart
-              data={sedeChart}
-              layout="vertical"
-              margin={{ left: 40 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-              <YAxis type="category" dataKey="sede" width={100} tick={{ fontSize: 11 }} />
-              <Tooltip />
-              <Bar dataKey="total" name="Total" fill={CHART_COLORS[0]} radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <div style={{ height: sedeChartHeight(sedeChart.length), width: '100%' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={sedeChart}
+                layout="vertical"
+                margin={{ left: 12, right: 16, top: 8, bottom: 8 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                <YAxis
+                  type="category"
+                  dataKey="sede"
+                  width={SEDE_CHART_Y_AXIS_WIDTH}
+                  interval={0}
+                  ticks={sedeChart.map((d) => d.sede)}
+                  tick={{ fontSize: 11, fill: 'currentColor' }}
+                  tickLine={false}
+                />
+                <Tooltip />
+                <Bar dataKey="total" name="Total" fill={CHART_COLORS[0]} radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </div>
   );

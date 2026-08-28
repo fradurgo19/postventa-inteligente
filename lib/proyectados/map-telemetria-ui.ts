@@ -271,3 +271,62 @@ export function aggregateMarcasPie(equipos: TelemetriaEquipo[]): BrandPieSlice[]
     }))
     .sort((a, b) => b.value - a.value);
 }
+
+/** Etiqueta de sede para gráficos: sede → ciudad → Sin sede. */
+export function resolveSedeChartLabel(
+  row: Pick<TelemetriaOpportunityRow, 'sede' | 'ciudad'>
+): string {
+  const sede = row.sede?.trim();
+  if (sede && sede !== '—') return sede;
+  const ciudad = row.ciudad?.trim();
+  if (ciudad && ciudad !== '—') return ciudad;
+  return 'Sin sede';
+}
+
+export interface SedeChartItem {
+  sede: string;
+  total: number;
+}
+
+/** Agrega oportunidades por sede sin truncar el listado. */
+export function aggregateOportunidadesPorSede(
+  rows: ReadonlyArray<Pick<TelemetriaOpportunityRow, 'sede' | 'ciudad'>>
+): SedeChartItem[] {
+  const map = new Map<string, number>();
+  for (const r of rows) {
+    const label = resolveSedeChartLabel(r);
+    map.set(label, (map.get(label) ?? 0) + 1);
+  }
+  return Array.from(map.entries())
+    .map(([sede, total]) => ({ sede, total }))
+    .sort((a, b) => b.total - a.total);
+}
+
+export const SEDE_CHART_ROW_HEIGHT = 36;
+export const SEDE_CHART_MIN_HEIGHT = 240;
+export const SEDE_CHART_Y_AXIS_WIDTH = 200;
+export const CLIENT_CHART_Y_AXIS_WIDTH = 220;
+
+export function sedeChartHeight(itemCount: number): number {
+  if (itemCount <= 0) return SEDE_CHART_MIN_HEIGHT;
+  return Math.max(SEDE_CHART_MIN_HEIGHT, itemCount * SEDE_CHART_ROW_HEIGHT);
+}
+
+export interface ClienteChartItem {
+  cliente: string;
+  total: number;
+}
+
+/** Agrega oportunidades por cliente sin truncar el listado. */
+export function aggregateOportunidadesPorCliente(
+  rows: ReadonlyArray<Pick<TelemetriaOpportunityRow, 'client'>>
+): ClienteChartItem[] {
+  const map = new Map<string, number>();
+  for (const r of rows) {
+    const cliente = r.client?.trim() || 'Sin cliente';
+    map.set(cliente, (map.get(cliente) ?? 0) + 1);
+  }
+  return Array.from(map.entries())
+    .map(([cliente, total]) => ({ cliente, total }))
+    .sort((a, b) => b.total - a.total);
+}

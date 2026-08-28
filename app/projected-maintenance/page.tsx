@@ -84,6 +84,11 @@ import {
   mapTelemetriaToCalendarEvents,
   aggregateCiudadesFromTelemetria,
   aggregateMarcasPie,
+  aggregateOportunidadesPorSede,
+  aggregateOportunidadesPorCliente,
+  sedeChartHeight,
+  SEDE_CHART_Y_AXIS_WIDTH,
+  CLIENT_CHART_Y_AXIS_WIDTH,
   sortOportunidadesProximas,
   type MaintenanceStatusUi,
   type TelemetriaOpportunityRow,
@@ -267,17 +272,7 @@ function KpiChartsSection({ rows }: Readonly<{ rows: TelemetriaOpportunityRow[] 
     return Array.from(map.values()).sort((a, b) => a.mes.localeCompare(b.mes, "es"));
   }, [rows]);
 
-  const bySede = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const r of rows) {
-      const sede = r.sede && r.sede !== "—" ? r.sede : "Sin sede";
-      map.set(sede, (map.get(sede) ?? 0) + 1);
-    }
-    return Array.from(map.entries())
-      .map(([sede, total]) => ({ sede, total }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 10);
-  }, [rows]);
+  const bySede = useMemo(() => aggregateOportunidadesPorSede(rows), [rows]);
 
   const marcaData = useMemo(() => {
     const map = new Map<string, number>();
@@ -293,16 +288,7 @@ function KpiChartsSection({ rows }: Readonly<{ rows: TelemetriaOpportunityRow[] 
       .sort((a, b) => b.value - a.value);
   }, [rows]);
 
-  const topClientes = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const r of rows) {
-      map.set(r.client, (map.get(r.client) ?? 0) + 1);
-    }
-    return Array.from(map.entries())
-      .map(([cliente, total]) => ({ cliente, total }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 6);
-  }, [rows]);
+  const byCliente = useMemo(() => aggregateOportunidadesPorCliente(rows), [rows]);
 
   const byStatus = useMemo(() => {
     const labels: Record<MaintenanceStatusUi, string> = {
@@ -354,16 +340,30 @@ function KpiChartsSection({ rows }: Readonly<{ rows: TelemetriaOpportunityRow[] 
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold">Oportunidades por Sede</CardTitle>
         </CardHeader>
-        <CardContent className="h-56">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={bySede} layout="vertical" margin={{ left: 24 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis type="number" tick={{ fontSize: 11 }} />
-              <YAxis type="category" dataKey="sede" width={90} tick={{ fontSize: 11 }} />
-              <RechartsTooltip />
-              <Bar dataKey="total" fill="#50504f" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+        <CardContent className="overflow-visible">
+          <div style={{ height: sedeChartHeight(bySede.length), width: "100%" }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={bySede}
+                layout="vertical"
+                margin={{ left: 12, right: 16, top: 8, bottom: 8 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                <YAxis
+                  type="category"
+                  dataKey="sede"
+                  width={SEDE_CHART_Y_AXIS_WIDTH}
+                  interval={0}
+                  ticks={bySede.map((d) => d.sede)}
+                  tick={{ fontSize: 11, fill: "currentColor" }}
+                  tickLine={false}
+                />
+                <RechartsTooltip />
+                <Bar dataKey="total" fill="#50504f" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </CardContent>
       </Card>
 
@@ -414,21 +414,33 @@ function KpiChartsSection({ rows }: Readonly<{ rows: TelemetriaOpportunityRow[] 
 
       <Card className="border-border shadow-sm lg:col-span-2">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold">Top Clientes por Oportunidades</CardTitle>
+          <CardTitle className="text-sm font-semibold">
+            Oportunidades por Cliente
+          </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {topClientes.map((c) => (
-              <div
-                key={c.cliente}
-                className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
+        <CardContent className="overflow-visible">
+          <div style={{ height: sedeChartHeight(byCliente.length), width: "100%" }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={byCliente}
+                layout="vertical"
+                margin={{ left: 12, right: 16, top: 8, bottom: 8 }}
               >
-                <span className="text-sm text-foreground truncate pr-2">{c.cliente}</span>
-                <Badge variant="outline" className="border-[#cf1b22]/30 text-[#cf1b22]">
-                  {c.total}
-                </Badge>
-              </div>
-            ))}
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                <YAxis
+                  type="category"
+                  dataKey="cliente"
+                  width={CLIENT_CHART_Y_AXIS_WIDTH}
+                  interval={0}
+                  ticks={byCliente.map((d) => d.cliente)}
+                  tick={{ fontSize: 11, fill: "currentColor" }}
+                  tickLine={false}
+                />
+                <RechartsTooltip />
+                <Bar dataKey="total" name="Oportunidades" fill="#cf1b22" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </CardContent>
       </Card>
