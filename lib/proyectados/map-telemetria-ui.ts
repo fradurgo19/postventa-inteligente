@@ -32,6 +32,10 @@ export interface TelemetriaCalendarEvent {
   year: number;
   title: string;
   status: MaintenanceStatusUi;
+  serie: string;
+  sede: string;
+  client: string;
+  advisor: string;
 }
 
 function formatDateEs(iso: string | null | undefined): string {
@@ -160,6 +164,10 @@ export function mapTelemetriaToCalendarEvents(
       year: d.getUTCFullYear(),
       title: `${e.marca} ${e.modelo} – 1er mtto`,
       status: statusFromFechaPrimerMtto(iso),
+      serie: e.serie?.trim() || '—',
+      sede: e.sede?.trim() || e.ciudad?.trim() || '—',
+      client: e.titulo?.trim() || 'Sin cliente',
+      advisor: e.asesor_email?.trim() || 'Sin asesor',
     });
   }
 

@@ -116,6 +116,10 @@ interface MaintenanceEvent {
   day: number;
   title: string;
   status: MaintenanceStatus;
+  serie: string;
+  sede: string;
+  client: string;
+  advisor: string;
 }
 
 type MaintenanceRow = TelemetriaOpportunityRow;
@@ -135,12 +139,6 @@ interface AutomationStep {
   title: string;
   description: string;
   status: "Planned" | "In Development";
-}
-
-interface BrandData {
-  name: string;
-  value: number;
-  color: string;
 }
 
 interface CityDot {
@@ -499,7 +497,7 @@ function MaintenanceCalendar({
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
-  const [hoveredEvent, setHoveredEvent] = useState<MaintenanceEvent | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<MaintenanceEvent | null>(null);
 
   const daysInMonth = getDaysInMonth(viewYear, viewMonth);
   const firstDay = getFirstDayOfWeek(viewYear, viewMonth);
@@ -518,22 +516,36 @@ function MaintenanceCalendar({
       day: ev.day,
       title: ev.title,
       status: ev.status,
+      serie: ev.serie,
+      sede: ev.sede,
+      client: ev.client,
+      advisor: ev.advisor,
     });
   });
 
   const prevMonth = () => {
-    if (viewMonth === 0) { setViewMonth(11); setViewYear((y) => y - 1); }
-    else setViewMonth((m) => m - 1);
+    setSelectedEvent(null);
+    if (viewMonth === 0) {
+      setViewMonth(11);
+      setViewYear((y) => y - 1);
+    } else setViewMonth((m) => m - 1);
   };
   const nextMonth = () => {
-    if (viewMonth === 11) { setViewMonth(0); setViewYear((y) => y + 1); }
-    else setViewMonth((m) => m + 1);
+    setSelectedEvent(null);
+    if (viewMonth === 11) {
+      setViewMonth(0);
+      setViewYear((y) => y + 1);
+    } else setViewMonth((m) => m + 1);
   };
 
   const cells: (number | null)[] = [
     ...Array(firstDay).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
   ];
+
+  const handleSelectEvent = (ev: MaintenanceEvent) => {
+    setSelectedEvent((prev) => (prev?.id === ev.id ? null : ev));
+  };
 
   return (
     <Card className="border-border shadow-sm">
@@ -554,7 +566,6 @@ function MaintenanceCalendar({
         </div>
       </CardHeader>
       <CardContent className="pt-0">
-        {/* Day headers */}
         <div className="grid grid-cols-7 mb-1">
           {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map((d) => (
             <div key={d} className="text-center text-[10px] font-semibold text-muted-foreground py-1">
@@ -563,7 +574,6 @@ function MaintenanceCalendar({
           ))}
         </div>
 
-        {/* Day cells */}
         <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden">
           {cells.map((day, idx) => {
             const events = day ? eventsByDay[day] ?? [] : [];
@@ -573,10 +583,7 @@ function MaintenanceCalendar({
               viewYear === today.getFullYear();
 
             return (
-              <div
-                key={idx}
-                className="bg-background min-h-[52px] p-1 relative"
-              >
+              <div key={idx} className="bg-background min-h-[52px] p-1 relative">
                 {day && (
                   <>
                     <span
@@ -590,21 +597,30 @@ function MaintenanceCalendar({
                     </span>
                     <div className="mt-0.5 flex flex-col gap-0.5">
                       {events.slice(0, 2).map((ev) => (
-                        <div
+                        <button
                           key={ev.id}
-                          className={`rounded-sm px-0.5 py-px text-[9px] font-medium text-white truncate cursor-pointer ${
-                            STATUS_CONFIG[ev.status].calClass
-                          }`}
-                          onMouseEnter={() => setHoveredEvent(ev)}
-                          onMouseLeave={() => setHoveredEvent(null)}
+                          type="button"
+                          className={cn(
+                            "rounded-sm px-0.5 py-px text-[9px] font-medium text-white truncate text-left w-full",
+                            STATUS_CONFIG[ev.status].calClass,
+                            selectedEvent?.id === ev.id && "ring-2 ring-offset-1 ring-foreground/40"
+                          )}
+                          onClick={() => handleSelectEvent(ev)}
+                          aria-pressed={selectedEvent?.id === ev.id}
+                          aria-label={`Ver detalle de ${ev.title}`}
                         >
                           {ev.title.split("–")[0].trim()}
-                        </div>
+                        </button>
                       ))}
                       {events.length > 2 && (
-                        <span className="text-[9px] text-muted-foreground pl-0.5">
+                        <button
+                          type="button"
+                          className="text-[9px] text-muted-foreground pl-0.5 text-left hover:text-foreground"
+                          onClick={() => handleSelectEvent(events[2])}
+                          aria-label={`Ver más eventos del día ${day}`}
+                        >
                           +{events.length - 2} más
-                        </span>
+                        </button>
                       )}
                     </div>
                   </>
@@ -614,31 +630,67 @@ function MaintenanceCalendar({
           })}
         </div>
 
-        {/* Hover tooltip */}
         <AnimatePresence>
-          {hoveredEvent && (
+          {selectedEvent && (
             <motion.div
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="mt-2 rounded-lg border border-border bg-card px-3 py-2 text-sm shadow-md"
+              className="mt-2 rounded-lg border border-border bg-card px-3 py-2.5 text-sm shadow-md"
+              role="status"
             >
-              <p className="font-semibold">{hoveredEvent.title}</p>
-              <p className="text-muted-foreground text-xs">
-                Día {hoveredEvent.day} ·{" "}
-                <span
-                  className={`font-medium ${
-                    hoveredEvent.status === "Overdue" ? "text-[#cf1b22]" : ""
-                  }`}
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-semibold">{selectedEvent.title}</p>
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-foreground"
+                  onClick={() => setSelectedEvent(null)}
+                  aria-label="Cerrar detalle"
                 >
-                  {STATUS_CONFIG[hoveredEvent.status].label}
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <p className="text-muted-foreground text-xs mt-0.5">
+                Día {selectedEvent.day} ·{" "}
+                <span
+                  className={cn(
+                    "font-medium",
+                    selectedEvent.status === "Overdue" && "text-[#cf1b22]"
+                  )}
+                >
+                  {STATUS_CONFIG[selectedEvent.status].label}
                 </span>
               </p>
+              <dl className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                <div className="flex gap-1.5 min-w-0">
+                  <dt className="text-muted-foreground shrink-0">Serie:</dt>
+                  <dd className="font-medium font-mono truncate" title={selectedEvent.serie}>
+                    {selectedEvent.serie}
+                  </dd>
+                </div>
+                <div className="flex gap-1.5 min-w-0">
+                  <dt className="text-muted-foreground shrink-0">Sede:</dt>
+                  <dd className="font-medium truncate" title={selectedEvent.sede}>
+                    {selectedEvent.sede}
+                  </dd>
+                </div>
+                <div className="flex gap-1.5 min-w-0">
+                  <dt className="text-muted-foreground shrink-0">Cliente:</dt>
+                  <dd className="font-medium truncate" title={selectedEvent.client}>
+                    {selectedEvent.client}
+                  </dd>
+                </div>
+                <div className="flex gap-1.5 min-w-0">
+                  <dt className="text-muted-foreground shrink-0">Asesor:</dt>
+                  <dd className="font-medium truncate" title={selectedEvent.advisor}>
+                    {selectedEvent.advisor}
+                  </dd>
+                </div>
+              </dl>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Legend */}
         <div className="mt-3 flex flex-wrap gap-3">
           {(Object.keys(STATUS_CONFIG) as MaintenanceStatus[]).map((s) => (
             <div key={s} className="flex items-center gap-1.5">
@@ -995,78 +1047,6 @@ function ColombiaMap({ equipos }: Readonly<{ equipos: TelemetriaEquipo[] }>) {
   );
 }
 
-/** Brands Donut Chart */
-const CustomBrandTooltip = ({
-  active,
-  payload,
-  total,
-}: {
-  active?: boolean;
-  payload?: Array<{ name: string; value: number; payload: BrandData }>;
-  total?: number;
-}) => {
-  if (!active || !payload?.length) return null;
-  const d = payload[0].payload;
-  const denom = total && total > 0 ? total : 1;
-  return (
-    <div className="rounded-lg border border-border bg-card shadow-lg px-3 py-2 text-sm">
-      <p className="font-semibold" style={{ color: d.color }}>
-        {d.name}
-      </p>
-      <p className="text-muted-foreground">
-        {d.value} proyecciones &nbsp;
-        <span className="font-medium text-foreground">
-          ({((d.value / denom) * 100).toFixed(1)}%)
-        </span>
-      </p>
-    </div>
-  );
-};
-
-function BrandsChart({ equipos }: Readonly<{ equipos: TelemetriaEquipo[] }>) {
-  const brandData = useMemo(() => aggregateMarcasPie(equipos), [equipos]);
-  const total = brandData.reduce((a, b) => a + b.value, 0);
-
-  return (
-    <Card className="border-border shadow-sm">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base font-semibold">Proyecciones por Marca</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {brandData.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-10">
-            Sin datos de telemetría cargados.
-          </p>
-        ) : (
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie
-                data={brandData}
-                cx="50%"
-                cy="50%"
-                innerRadius={55}
-                outerRadius={85}
-                paddingAngle={3}
-                dataKey="value"
-              >
-                {brandData.map((entry) => (
-                  <Cell key={entry.name} fill={entry.color} stroke="transparent" />
-                ))}
-              </Pie>
-              <RechartsTooltip content={<CustomBrandTooltip total={total} />} />
-              <Legend
-                iconType="circle"
-                iconSize={8}
-                wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 /** --- TAB 1: Dashboard --- */
 function DashboardTab() {
   const [reportFilters, setReportFilters] = useState<ReportFiltersState>(DEFAULT_REPORT_FILTERS);
@@ -1144,15 +1124,14 @@ function DashboardTab() {
           <KPIRow rows={filteredRows} />
           <KpiChartsSection rows={filteredRows} />
           <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-            <div className="xl:col-span-3 space-y-6">
+            <div className="xl:col-span-3">
               <MaintenanceCalendar equipos={filteredEquipos} />
-              <OpportunitiesTable rows={filteredRows} />
             </div>
-            <div className="xl:col-span-2 space-y-6">
+            <div className="xl:col-span-2">
               <ColombiaMap equipos={filteredEquipos} />
-              <BrandsChart equipos={filteredEquipos} />
             </div>
           </div>
+          <OpportunitiesTable rows={filteredRows} />
         </motion.div>
       )}
     </div>
