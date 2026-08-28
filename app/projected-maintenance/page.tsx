@@ -88,7 +88,6 @@ import { usePersistedReportFilters } from "@/hooks/use-persisted-report-filters"
 import {
   mapTelemetriaToOpportunityRows,
   mapTelemetriaToCalendarEvents,
-  aggregateCiudadesFromTelemetria,
   aggregateMarcasPie,
   aggregateOportunidadesPorSede,
   aggregateOportunidadesPorCliente,
@@ -101,9 +100,15 @@ import {
   type TelemetriaCalendarEvent,
 } from "@/lib/proyectados/map-telemetria-ui";
 import {
-  COLOMBIA_MAP_VIEWBOX,
-  mapPointForSede,
-} from "@/lib/proyectados/colombia-map";
+  buildServicesByDepartment,
+  buildServicesByDepartmentMunicipality,
+  filterVistaDetalleEntries,
+  mapRowsToMapEntries,
+  uniqueSorted,
+} from "@/lib/proyectados/map-service-counts";
+import { toCanonicalDepartment } from "@/lib/proyectados/department-mapping";
+import { ColombiaMap } from "@/components/maps/colombia-map";
+import { MultiSelect } from "@/components/ui/multi-select";
 import type { TelemetriaEquipo } from "@/types/database";
 
 // â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -140,18 +145,6 @@ interface AutomationStep {
   status: "Planned" | "In Development";
 }
 
-interface CityDot {
-  id: string;
-  name: string;
-  count: number;
-  status: "active" | "warning" | "critical";
-  cx: number;
-  cy: number;
-  marcas: string[];
-  modelos: string[];
-  series: string[];
-}
-
 // Roadmap de producto (no es data de prueba de negocio)
 const AUTOMATION_STEPS: AutomationStep[] = [
   { number: 1, icon: Cpu,        title: "Integración SAP",       description: "Extrae diariamente a las 6 AM los datos de equipos directamente del módulo SAP PM. Sincroniza horómetros, órdenes de trabajo y maestros de equipos automáticamente.", status: "Planned"         },
@@ -161,12 +154,6 @@ const AUTOMATION_STEPS: AutomationStep[] = [
   { number: 5, icon: FileText,   title: "Generación de PDF",        description: "Genera automáticamente cotizaciones de mantenimiento personalizadas con precios de repuestos actuales, estimaciones de mano de obra e historial de servicio. Se adjuntan a las órdenes de trabajo y se envían por correo.", status: "Planned"         },
   { number: 6, icon: Zap,        title: "Actualización del Panel",      description: "Recálculo de KPIs en tiempo real y actualización del panel después de cada ciclo de flujo de trabajo. Seguimiento de tasas de cumplimiento, tendencias de vencimiento y métricas de desempeño de asesores.", status: "In Development"  },
 ];
-
-function formatTooltipList(items: string[], max = 6): string {
-  if (items.length === 0) return "—";
-  if (items.length <= max) return items.join(", ");
-  return `${items.slice(0, max).join(", ")} +${items.length - max} más`;
-}
 
 // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -178,12 +165,6 @@ const STATUS_CONFIG: Record<
   Overdue:     { label: "Vencido",     className: "bg-red-100 text-red-700 border-red-200",       calClass: "bg-[#cf1b22]"  },
   "In Progress":{ label: "En Progreso", className: "bg-amber-100 text-amber-700 border-amber-200", calClass: "bg-amber-500"  },
   Completed:   { label: "Completado",   className: "bg-emerald-100 text-emerald-700 border-emerald-200", calClass: "bg-emerald-500" },
-};
-
-const CITY_STATUS_COLORS: Record<CityDot["status"], string> = {
-  active:   "#10b981",
-  warning:  "#f97316",
-  critical: "#cf1b22",
 };
 
 function getMonthName(month: number): string {
@@ -893,175 +874,187 @@ function OpportunitiesTable({
   );
 }
 
-const MAP_ASPECT_PCT =
-  (COLOMBIA_MAP_VIEWBOX.height / COLOMBIA_MAP_VIEWBOX.width) * 100;
+/** Distribución mapa + filtros (Vista detalle) */
+function DistribucionEquiposSection({
+  rows,
+}: Readonly<{ rows: TelemetriaOpportunityRow[] }>) {
+  const [detailFilterZones, setDetailFilterZones] = useState<string[]>([]);
+  const [detailFilterSites, setDetailFilterSites] = useState<string[]>([]);
+  const [detailFilterTechnicians, setDetailFilterTechnicians] = useState<string[]>([]);
 
-/** Colombia SVG Map — fondo oficial + sedes por lat/lng + tooltip detalle */
-function ColombiaMap({ equipos }: Readonly<{ equipos: TelemetriaEquipo[] }>) {
-  const [tooltip, setTooltip] = useState<CityDot | null>(null);
+  const entries = useMemo(() => mapRowsToMapEntries(rows), [rows]);
 
-  const cityDots: CityDot[] = useMemo(() => {
-    return aggregateCiudadesFromTelemetria(equipos).map((c, i) => {
-      const coords = mapPointForSede(c.name, c.avgLat, c.avgLng, i);
-      return {
-        id: c.name.toLowerCase().replace(/\s+/g, "-"),
-        name: c.name,
-        count: c.count,
-        status: c.status,
-        cx: coords.cx,
-        cy: coords.cy,
-        marcas: c.marcas,
-        modelos: c.modelos,
-        series: c.series,
-      };
-    });
-  }, [equipos]);
+  const zoneOptions = useMemo(
+    () =>
+      uniqueSorted(
+        entries
+          .map((e) => toCanonicalDepartment(e.zone))
+          .filter((z) => z !== "Sin zona")
+      ),
+    [entries]
+  );
 
-  const tooltipStyle = useMemo(() => {
-    if (!tooltip) return undefined;
-    const leftPct = (tooltip.cx / COLOMBIA_MAP_VIEWBOX.width) * 100;
-    const topPct = (tooltip.cy / COLOMBIA_MAP_VIEWBOX.height) * 100;
-    const preferLeft = leftPct > 55;
-    return {
-      left: preferLeft ? undefined : `${Math.min(leftPct + 2, 62)}%`,
-      right: preferLeft ? `${Math.min(100 - leftPct + 2, 62)}%` : undefined,
-      top: `${Math.max(4, Math.min(topPct - 6, 68))}%`,
-    } as const;
-  }, [tooltip]);
+  const siteOptions = useMemo(() => {
+    const source =
+      detailFilterZones.length === 0
+        ? entries
+        : entries.filter((e) =>
+            detailFilterZones.includes(toCanonicalDepartment(e.zone))
+          );
+    return uniqueSorted(source.map((e) => e.site || "Sin sitio"));
+  }, [entries, detailFilterZones]);
+
+  const technicianOptions = useMemo(
+    () => uniqueSorted(entries.map((e) => e.technician)),
+    [entries]
+  );
+
+  const mapFilterEntries = useMemo(
+    () =>
+      filterVistaDetalleEntries(
+        entries,
+        detailFilterZones,
+        [],
+        detailFilterTechnicians
+      ),
+    [entries, detailFilterZones, detailFilterTechnicians]
+  );
+
+  const displayedEntries = useMemo(
+    () =>
+      filterVistaDetalleEntries(
+        entries,
+        detailFilterZones,
+        detailFilterSites,
+        detailFilterTechnicians
+      ),
+    [entries, detailFilterZones, detailFilterSites, detailFilterTechnicians]
+  );
+
+  const servicesByDepartment = useMemo(
+    () => buildServicesByDepartment(mapFilterEntries),
+    [mapFilterEntries]
+  );
+
+  const servicesByDepartmentMunicipality = useMemo(
+    () => buildServicesByDepartmentMunicipality(mapFilterEntries),
+    [mapFilterEntries]
+  );
+
+  const handleDepartmentsChangeFromMap = (deps: string[]) => {
+    setDetailFilterZones(deps.map((d) => toCanonicalDepartment(d)));
+  };
+
+  const handleMunicipalityClickFromMap = (
+    siteName: string,
+    department: string
+  ) => {
+    const zona = toCanonicalDepartment(department);
+    setDetailFilterZones((prev) =>
+      prev.includes(zona) ? prev : [...prev, zona]
+    );
+    setDetailFilterSites((prev) =>
+      prev.includes(siteName)
+        ? prev.filter((s) => s !== siteName)
+        : [...prev, siteName]
+    );
+  };
+
+  const clearDetailFilters = () => {
+    setDetailFilterZones([]);
+    setDetailFilterSites([]);
+    setDetailFilterTechnicians([]);
+  };
+
+  const hasDetailFilters =
+    detailFilterZones.length > 0 ||
+    detailFilterSites.length > 0 ||
+    detailFilterTechnicians.length > 0;
 
   return (
     <Card className="border-border shadow-sm">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <MapPin className="h-4 w-4 text-[#cf1b22]" />
-            Distribución de Equipos por Ciudad/Sede
-          </CardTitle>
+      <CardHeader className="pb-3 space-y-3">
+        <CardTitle className="text-base font-semibold flex items-center gap-2">
+          <MapPin className="h-4 w-4 text-[#cf1b22]" />
+          Distribución de Equipos por Ciudad/Sede
+        </CardTitle>
+        <div className="flex flex-wrap items-center gap-2">
+          <MultiSelect
+            label="Zona"
+            options={zoneOptions}
+            value={detailFilterZones}
+            onChange={setDetailFilterZones}
+          />
+          <MultiSelect
+            label="Sitio"
+            options={siteOptions}
+            value={detailFilterSites}
+            onChange={setDetailFilterSites}
+          />
+          <MultiSelect
+            label="Asesor"
+            options={technicianOptions}
+            value={detailFilterTechnicians}
+            onChange={setDetailFilterTechnicians}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9"
+            onClick={clearDetailFilters}
+            disabled={!hasDetailFilters}
+          >
+            Limpiar
+          </Button>
         </div>
       </CardHeader>
       <CardContent>
-        {cityDots.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-8 text-center">
-            Sin datos de telemetría. Importe la carga masiva para ver la distribución.
-          </p>
-        ) : null}
-        <div
-          className={`relative w-full overflow-hidden rounded-md bg-slate-50 ${
-            cityDots.length === 0 ? "opacity-40" : ""
-          }`}
-          style={{ paddingBottom: `${MAP_ASPECT_PCT}%` }}
-        >
-          {/* Fondo: mapa oficial Colombia (mismo viewBox que la proyección lat/lng) */}
-          <img
-            src="/maps/colombia.svg"
-            alt=""
-            className="pointer-events-none absolute inset-0 h-full w-full object-contain"
-            draggable={false}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <ColombiaMap
+            servicesByDepartment={servicesByDepartment}
+            servicesByDepartmentMunicipality={servicesByDepartmentMunicipality}
+            selectedDepartments={detailFilterZones}
+            onDepartmentsChange={handleDepartmentsChangeFromMap}
+            selectedSites={detailFilterSites}
+            onMunicipalityClick={handleMunicipalityClickFromMap}
+            showZoomControls
           />
-          <svg
-            viewBox={`0 0 ${COLOMBIA_MAP_VIEWBOX.width} ${COLOMBIA_MAP_VIEWBOX.height}`}
-            className="absolute inset-0 h-full w-full"
-            xmlns="http://www.w3.org/2000/svg"
-            role="img"
-            aria-label="Mapa de Colombia con distribución de equipos por sede"
-          >
-            {cityDots.map((city) => (
-              <g
-                key={city.id}
-                className="cursor-pointer"
-                onMouseEnter={() => setTooltip(city)}
-                onMouseLeave={() => setTooltip(null)}
-                onFocus={() => setTooltip(city)}
-                onBlur={() => setTooltip(null)}
-                tabIndex={0}
-                role="img"
-                aria-label={`${city.name}: ${city.count} equipos`}
-              >
-                <circle
-                  cx={city.cx}
-                  cy={city.cy}
-                  r="18"
-                  fill={CITY_STATUS_COLORS[city.status]}
-                  opacity="0.15"
-                />
-                <circle
-                  cx={city.cx}
-                  cy={city.cy}
-                  r="11"
-                  fill={CITY_STATUS_COLORS[city.status]}
-                  stroke="white"
-                  strokeWidth="2.5"
-                  style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,.28))" }}
-                />
-                <text
-                  x={city.cx}
-                  y={city.cy + 4}
-                  textAnchor="middle"
-                  fontSize="10"
-                  fontWeight="700"
-                  fill="white"
-                  style={{ pointerEvents: "none" }}
-                >
-                  {city.count > 99 ? "99+" : city.count}
-                </text>
-                <text
-                  x={city.cx}
-                  y={city.cy + 26}
-                  textAnchor="middle"
-                  fontSize="11"
-                  fontWeight="600"
-                  fill="#1e293b"
-                  style={{ pointerEvents: "none" }}
-                >
-                  {city.name.length > 16 ? `${city.name.slice(0, 14)}…` : city.name}
-                </text>
-              </g>
-            ))}
-          </svg>
-
-          {tooltip ? (
-            <div
-              className="pointer-events-none absolute z-20 w-[min(100%,220px)] rounded-lg border border-border bg-white p-3 shadow-lg"
-              style={tooltipStyle}
-            >
-              <p className="text-sm font-bold text-foreground truncate">{tooltip.name}</p>
-              <p className="text-xs text-[#cf1b22] font-semibold mt-0.5">
-                {tooltip.count} equipos · {tooltip.series.length} series
-              </p>
-              <div className="mt-2 space-y-1.5 text-[11px] leading-snug text-muted-foreground">
-                <p>
-                  <span className="font-semibold text-foreground">Marcas: </span>
-                  {formatTooltipList(tooltip.marcas)}
-                </p>
-                <p>
-                  <span className="font-semibold text-foreground">Modelos: </span>
-                  {formatTooltipList(tooltip.modelos)}
-                </p>
-                <p>
-                  <span className="font-semibold text-foreground">Series: </span>
-                  {formatTooltipList(tooltip.series, 8)}
-                </p>
-              </div>
+          <div className="rounded-md border border-border overflow-hidden flex flex-col min-h-[360px]">
+            <div className="px-3 py-2 border-b border-border bg-muted/40 text-xs font-semibold">
+              Equipos en mapa ({displayedEntries.length})
             </div>
-          ) : null}
-        </div>
-
-        <div className="mt-3 flex flex-wrap gap-3">
-          {(
-            [
-              { label: "Activo", status: "active" },
-              { label: "Advertencia", status: "warning" },
-              { label: "Crítico", status: "critical" },
-            ] as { label: string; status: CityDot["status"] }[]
-          ).map(({ label, status }) => (
-            <div key={status} className="flex items-center gap-1.5">
-              <span
-                className="h-2.5 w-2.5 rounded-full"
-                style={{ backgroundColor: CITY_STATUS_COLORS[status] }}
-              />
-              <span className="text-xs text-muted-foreground">{label}</span>
-            </div>
-          ))}
+            <ul className="flex-1 overflow-y-auto max-h-[480px] divide-y divide-border">
+              {displayedEntries.length === 0 ? (
+                <li className="px-3 py-8 text-sm text-muted-foreground text-center">
+                  Sin equipos para los filtros del mapa.
+                </li>
+              ) : (
+                displayedEntries.slice(0, 80).map((e) => (
+                  <li key={e.id}>
+                    <button
+                      type="button"
+                      className="w-full text-left px-3 py-2 hover:bg-muted/40 transition-colors"
+                      onClick={() => {
+                        const zona = toCanonicalDepartment(e.zone);
+                        setDetailFilterZones((prev) =>
+                          prev.includes(zona) ? prev : [...prev, zona]
+                        );
+                      }}
+                    >
+                      <p className="text-sm font-medium truncate">{e.equipment}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        {e.serie} · {e.site} · {e.zone}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        {e.client} · {e.technician}
+                      </p>
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -1146,14 +1139,8 @@ function DashboardTab() {
         >
           <KPIRow rows={filteredRows} />
           <KpiChartsSection rows={filteredRows} />
-          <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-            <div className="xl:col-span-3">
-              <MaintenanceCalendar equipos={filteredEquipos} />
-            </div>
-            <div className="xl:col-span-2">
-              <ColombiaMap equipos={filteredEquipos} />
-            </div>
-          </div>
+          <MaintenanceCalendar equipos={filteredEquipos} />
+          <DistribucionEquiposSection rows={filteredRows} />
           <OpportunitiesTable rows={filteredRows} />
         </motion.div>
       )}

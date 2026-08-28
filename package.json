@@ -48,6 +48,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
+    "d3-geo": "^3.1.1",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.3.0",
     "eslint": "8.49.0",
@@ -65,6 +66,7 @@
     "react-dom": "18.2.0",
     "react-hook-form": "^7.81.0",
     "react-resizable-panels": "^2.1.3",
+    "react-simple-maps": "^3.0.0",
     "recharts": "^2.15.4",
     "sonner": "^1.5.0",
     "tailwind-merge": "^2.5.2",
@@ -75,5 +77,9 @@
     "xlsx": "^0.18.5",
     "zod": "^3.23.8",
     "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@types/d3-geo": "^3.1.1",
+    "@types/react-simple-maps": "^3.0.6"
   }
 }
