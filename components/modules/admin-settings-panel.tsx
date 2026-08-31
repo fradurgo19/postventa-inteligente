@@ -187,10 +187,12 @@ export function AdminSettingsPanel() {
               <Bell className="h-3.5 w-3.5" /> Alertas de mantenimiento (telemetría)
             </p>
             <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
-              Envío automático diario a las <strong>8:00 AM (Colombia)</strong> a los asesores asignados,
-              con <strong>7 días de antelación</strong> respecto a{' '}
-              <code className="text-[11px]">fecha_primer/segundo/tercer_mtto</code>. Configure Gmail en
-              Supabase Edge Function Secrets.
+              Envío automático diario a las <strong>8:00 AM (Colombia)</strong> vía{' '}
+              <strong>Vercel Cron</strong> → Edge Function Supabase, con{' '}
+              <strong>7 días de antelación</strong> respecto a{' '}
+              <code className="text-[11px]">fecha_primer/segundo/tercer_mtto</code>. Gmail se
+              configura en Secrets de la Edge Function; el cron en Vercel (
+              <code className="text-[11px]">CRON_SECRET</code>).
             </p>
             <Button
               type="button"

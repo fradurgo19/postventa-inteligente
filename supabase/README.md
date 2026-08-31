@@ -68,30 +68,39 @@ Dashboard → **Edge Functions** → deben aparecer `import-excel`, `create-admi
 
 ### Cron de alertas (7 días antes del MTTO)
 
-Dashboard → Edge Functions → `send-maintenance-alerts` → **Schedules**:
+**Nota:** si el plan de Supabase no muestra **Schedules**, use **Vercel Cron** (recomendado en este proyecto).
 
-- Cron: `0 13 * * *` (08:00 America/Bogota)
-- La función busca equipos cuya `fecha_primer_mtto`, `fecha_segundo_mtto` o `fecha_tercer_mtto` cae **exactamente en 7 días** (fecha Colombia).
+#### Opción A — Vercel Cron (sin Schedules de Supabase)
 
-**Secrets** (Dashboard → Edge Functions → Secrets):
+1. En Vercel → Project → Settings → Environment Variables, agregar:
+   - `CRON_SECRET` = token largo aleatorio
+   - `SUPABASE_SERVICE_ROLE_KEY` = service role (si aún no está)
+2. Deploy con `vercel.json` que incluye:
+   - path: `/api/cron/send-maintenance-alerts`
+   - schedule: `0 13 * * *` (08:00 America/Bogota)
+3. Vercel → Project → **Cron Jobs** debe listar esa ruta.
+4. Prueba manual (PowerShell):
+
+```powershell
+curl -X GET "https://postventa-inteligente.vercel.app/api/cron/send-maintenance-alerts" `
+  -H "Authorization: Bearer TU_CRON_SECRET"
+```
+
+#### Opción B — Secrets Gmail (siempre en Supabase)
 
 | Secret | Valor |
 |--------|--------|
 | `GMAIL_USER` | `storageentrenapartequipos@gmail.com` |
-| `GMAIL_APP_PASSWORD` | Contraseña de aplicación Gmail (16 caracteres) |
-| `ALERT_FROM_EMAIL` | Mismo correo Gmail (opcional) |
-| `ALERT_FROM_NAME` | `PARTEQUIPOS Alertas` (opcional) |
-| `ALERT_FALLBACK_EMAIL` | Correo si el equipo no tiene asesor |
-| `CRON_SECRET` | Token opcional para invocaciones programadas |
-| `RESEND_API_KEY` | Alternativa a Gmail (opcional) |
+| `GMAIL_APP_PASSWORD` | Contraseña de aplicación Gmail |
+| `ALERT_FROM_EMAIL` | Mismo correo Gmail |
 
-**Prueba manual:** Administración → Configuración → «Ejecutar alertas ahora».
-
-**Redeploy** tras cambiar código:
+**Redeploy Edge Function:**
 
 ```powershell
 supabase functions deploy send-maintenance-alerts
 ```
+
+**Prueba desde la app:** Administración → Configuración → «Ejecutar alertas ahora».
 
 ## Auth
 
