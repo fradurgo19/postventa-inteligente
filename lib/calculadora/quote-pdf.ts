@@ -98,6 +98,11 @@ async function fetchImageDataUrl(url: string): Promise<string | null> {
   }
 }
 
+/** Logo PARTEQUIPOS como data URL (reutilizable en otros PDF). */
+export async function fetchPartequiposLogoDataUrl(): Promise<string | null> {
+  return fetchImageDataUrl(PARTEQUIPOS_LOGO_URL);
+}
+
 function tableFinalY(doc: JsPdfWithAutoTable, fallback: number): number {
   return doc.lastAutoTable?.finalY ?? fallback;
 }
@@ -471,7 +476,7 @@ function buildSinglePagePdf(input: QuotePdfInput, logoDataUrl: string | null): J
 
 /** Genera y descarga el PDF de cotización (una sola página landscape). */
 export async function downloadPreventiveQuotePdf(input: QuotePdfInput): Promise<void> {
-  const logoDataUrl = await fetchImageDataUrl(PARTEQUIPOS_LOGO_URL);
+  const logoDataUrl = await fetchPartequiposLogoDataUrl();
   const doc = buildSinglePagePdf(input, logoDataUrl);
 
   const stamp = new Date().toISOString().slice(0, 10);

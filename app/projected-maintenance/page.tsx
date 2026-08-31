@@ -2,7 +2,9 @@
 
 import { useState, useMemo, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ProyectadosImportPanel } from '@/components/modules/proyectados-import-panel';
+import { toast } from "sonner";
+import { downloadOportunidadesProgramadasPdf } from "@/lib/proyectados/oportunidades-pdf";
+import { ProyectadosImportPanel } from "@/components/modules/proyectados-import-panel";
 import {
   Wrench,
   Calendar,
@@ -25,6 +27,7 @@ import {
   MapPin,
   Filter,
   X,
+  Loader2,
 } from "lucide-react";
 import {
   PieChart,
@@ -706,6 +709,7 @@ function OpportunitiesTable({
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const rowsPerPage = 10;
 
   const filtered = useMemo(() => {
@@ -722,15 +726,52 @@ function OpportunitiesTable({
     return sortOportunidadesProximas(matched);
   }, [rows, search, statusFilter]);
 
+  const programadasCount = useMemo(
+    () => filtered.filter((r) => r.status === "Scheduled").length,
+    [filtered]
+  );
+
   const totalRows = filtered.length;
   const pageRows = filtered.slice((page - 1) * rowsPerPage, page * rowsPerPage);
+
+  const handleDownloadPdf = async () => {
+    setPdfLoading(true);
+    try {
+      const result = await downloadOportunidadesProgramadasPdf(filtered);
+      if (!result.ok) {
+        toast.warning("No hay oportunidades programadas para exportar.");
+        return;
+      }
+      toast.success(`PDF descargado (${result.count} programada(s)).`);
+    } catch {
+      toast.error("No se pudo generar el PDF. Intente de nuevo.");
+    } finally {
+      setPdfLoading(false);
+    }
+  };
 
   return (
     <Card className="border-border shadow-sm">
       <CardHeader className="pb-3">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <CardTitle className="text-base font-semibold">Oportunidades Próximas</CardTitle>
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 text-xs"
+              onClick={() => void handleDownloadPdf()}
+              disabled={pdfLoading || programadasCount === 0}
+              aria-label="Descargar oportunidades programadas en PDF"
+            >
+              {pdfLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <FileText className="h-3.5 w-3.5 text-[#cf1b22]" />
+              )}
+              PDF programadas
+            </Button>
             <div className="relative flex-1 sm:w-52">
               <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input
