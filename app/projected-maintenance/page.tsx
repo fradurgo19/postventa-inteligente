@@ -242,7 +242,7 @@ function CollapsibleChartCard({
   children,
   className,
   contentClassName,
-  defaultOpen = true,
+  defaultOpen = false,
 }: Readonly<{
   title: string;
   children: ReactNode;
