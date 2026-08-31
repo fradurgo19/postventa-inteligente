@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Building2, Globe, Percent, Save } from 'lucide-react';
+import { Building2, Bell, Globe, Percent, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,6 +16,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSaveSystemConfig, useSystemConfig } from '@/hooks/use-administration';
 import { useUserStore } from '@/store';
+import { getSupabaseClient } from '@/lib/supabase/client';
 import type { SystemConfig } from '@/services/administration.service';
 import { toast } from 'sonner';
 
@@ -23,7 +24,10 @@ export function AdminSettingsPanel() {
   const { data, isLoading } = useSystemConfig();
   const saveMutation = useSaveSystemConfig();
   const currentUser = useUserStore((s) => s.currentUser);
+  const role = useUserStore((s) => s.role);
+  const isAdmin = role === 'Administrator';
   const [form, setForm] = useState<SystemConfig | null>(null);
+  const [sendingAlerts, setSendingAlerts] = useState(false);
 
   useEffect(() => {
     if (data) setForm({ ...data });
@@ -46,6 +50,45 @@ export function AdminSettingsPanel() {
       toast.success('Configuración guardada');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'No se pudo guardar. Ejecute SQL 20.');
+    }
+  };
+
+  const handleSendMaintenanceAlerts = async () => {
+    setSendingAlerts(true);
+    try {
+      const supabase = getSupabaseClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        throw new Error('Debe iniciar sesión como administrador.');
+      }
+      const response = await fetch('/api/admin/send-maintenance-alerts', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = (await response.json()) as {
+        error?: string;
+        alertasEnviadas?: number;
+        targetMaintenanceDate?: string;
+        equiposEvaluados?: number;
+        mailConfigured?: boolean;
+      };
+      if (!response.ok) {
+        throw new Error(body.error ?? 'No se pudieron enviar las alertas.');
+      }
+      if (!body.mailConfigured) {
+        toast.warning(
+          'Función ejecutada, pero Gmail no está configurado en Supabase Secrets (GMAIL_USER / GMAIL_APP_PASSWORD).'
+        );
+        return;
+      }
+      toast.success(
+        `Alertas procesadas: ${body.alertasEnviadas ?? 0} enviadas · MTTO objetivo ${body.targetMaintenanceDate ?? '—'} · ${body.equiposEvaluados ?? 0} equipos evaluados`
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al enviar alertas.');
+    } finally {
+      setSendingAlerts(false);
     }
   };
 
@@ -135,6 +178,32 @@ export function AdminSettingsPanel() {
             </div>
           </div>
         </div>
+
+        <div className="border-t border-border" />
+
+        {isAdmin ? (
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+              <Bell className="h-3.5 w-3.5" /> Alertas de mantenimiento (telemetría)
+            </p>
+            <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
+              Envío automático diario a las <strong>8:00 AM (Colombia)</strong> a los asesores asignados,
+              con <strong>7 días de antelación</strong> respecto a{' '}
+              <code className="text-[11px]">fecha_primer/segundo/tercer_mtto</code>. Configure Gmail en
+              Supabase Edge Function Secrets.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-1.5"
+              disabled={sendingAlerts}
+              onClick={() => void handleSendMaintenanceAlerts()}
+            >
+              <Bell className="h-4 w-4" />
+              {sendingAlerts ? 'Enviando…' : 'Ejecutar alertas ahora (prueba)'}
+            </Button>
+          </div>
+        ) : null}
 
         <div className="border-t border-border" />
 

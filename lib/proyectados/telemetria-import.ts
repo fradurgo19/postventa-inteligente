@@ -580,12 +580,17 @@ export function maquinaIdentityKey(
   return `${normalizeIdentityPart(row.marca)}|${normalizeIdentityPart(row.modelo)}|${normalizeIdentityPart(row.serie)}`;
 }
 
-/** Clave de fila de telemetría para upsert (serie + periodo + tipo MTTO). */
+/**
+ * Clave de oportunidad para upsert.
+ * Incluye fecha de primer MTTO para permitir varios servicios del mismo tipo
+ * (p. ej. 250 h + 250 h) en el mismo mes.
+ */
 export function telemetriaImportRowKey(
-  row: Pick<TelemetriaMappedRow, 'serie' | 'mes_creado' | 'anio' | 'tipo_mtto'>
+  row: Pick<TelemetriaMappedRow, 'serie' | 'mes_creado' | 'anio' | 'tipo_mtto' | 'fecha_primer_mtto'>
 ): string {
   const tipo = row.tipo_mtto ?? '∅';
-  return `${row.serie}|${row.mes_creado}|${row.anio}|${tipo}`;
+  const fecha = row.fecha_primer_mtto ?? '∅';
+  return `${row.serie}|${row.mes_creado}|${row.anio}|${tipo}|${fecha}`;
 }
 
 export async function parseTelemetriaFile(file: File): Promise<TelemetriaParseResult> {

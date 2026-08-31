@@ -132,8 +132,9 @@ export function AdminImportsPanel() {
         <p className="text-xs text-muted-foreground mb-4">
           El Excel de telemetría alimenta <strong>asesores</strong>, <strong>clientes</strong>,{' '}
           <strong>equipos</strong> y el <strong>cronograma</strong> (
-          <code className="text-[11px]">telemetria_equipos</code>). Los maestros también se
-          gestionan en las pestañas inferiores.
+          <code className="text-[11px]">telemetria_equipos</code>). La primera carga puede ser el
+          histórico completo; cada mes se <strong>agregan</strong> ~300 registros sin borrar lo
+          anterior. Si cambian cliente/asesor/ubicación, se actualizan en maestros e historial.
         </p>
 
         <div className="mb-5">

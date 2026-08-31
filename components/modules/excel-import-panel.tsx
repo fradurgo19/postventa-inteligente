@@ -154,9 +154,7 @@ export function ExcelImportPanel({
 
         const updatedLabel =
           modulo === 'proyectados'
-            ? duplicates > 0
-              ? `Proyecciones actualizadas (mismo periodo/MTTO): ${duplicates}`
-              : 'Proyecciones nuevas insertadas'
+            ? `Registros agregados al historial: ${recordsOk} (no se borran meses anteriores)`
             : `Actualizados (mismo ID): ${duplicates}`;
 
         const accounted = recordsOk + recordsError + skipped;
@@ -164,11 +162,13 @@ export function ExcelImportPanel({
           `Archivo: ${f.name}`,
           `Filas leídas del Excel: ${total}`,
           ...(skipped > 0 ? [`Filas omitidas (vacías / sin serie): ${skipped}`] : []),
+          ...(modulo === 'proyectados'
+            ? [
+                'Modo: carga aditiva (histórico se conserva; cada mes suma filas nuevas)',
+              ]
+            : []),
           ...(modulo === 'proyectados' && deduplicated > 0
             ? [`Máquinas sincronizadas (cliente/asesor/ubicación en historial): ${deduplicated}`]
-            : []),
-          ...(modulo !== 'proyectados' && deduplicated > 0
-            ? [`Filas consolidadas (duplicado exacto en archivo): ${deduplicated}`]
             : []),
           ...(modulo === 'proyectados' && importResumen?.cambio_cliente
             ? [`Máquinas con cambio de cliente: ${importResumen.cambio_cliente}`]
@@ -188,6 +188,9 @@ export function ExcelImportPanel({
                   .map((m) => `${m.serie} (${m.campo})`)
                   .join(', ')}`,
               ]
+            : []),
+          ...(modulo !== 'proyectados' && deduplicated > 0
+            ? [`Filas consolidadas (duplicado exacto en archivo): ${deduplicated}`]
             : []),
           `Registros cargados OK: ${recordsOk}`,
           updatedLabel,

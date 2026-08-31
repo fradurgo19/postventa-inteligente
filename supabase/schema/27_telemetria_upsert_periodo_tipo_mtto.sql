@@ -1,24 +1,31 @@
 -- ═══════════════════════════════════════════════════════════════════════════════
--- 27 · Telemetría: UNIQUE por serie + periodo + tipo MTTO (upsert en reimport)
+-- 27 · Telemetría: permitir varios MTTOs iguales en el mismo mes
 -- Ejecutar DESPUÉS de 24_telemetria_allow_multi_mtto_mes.sql
 --
--- Permite varios MTTOs en el mismo mes (tipo_mtto distinto) y actualiza la misma
--- proyección al reimportar el Excel mensual.
+-- IMPORTANTE: este script NO elimina filas de telemetria_equipos.
+-- Una misma máquina puede tener varios servicios 250 h (u otro tipo) en el mismo
+-- mes; todas las filas del Excel deben conservarse.
+--
+-- Si una versión anterior del 27 borró registros, reimporte el Excel de telemetría
+-- (Administración → Importaciones) para recuperar el total (~5153).
 -- ═══════════════════════════════════════════════════════════════════════════════
 
--- Deduplicar (serie, mes, año, tipo_mtto) conservando el más reciente
-DELETE FROM telemetria_equipos a
-USING telemetria_equipos b
-WHERE a.serie = b.serie
-  AND lower(btrim(a.mes_creado)) = lower(btrim(b.mes_creado))
-  AND a.anio = b.anio
-  AND COALESCE(a.tipo_mtto, -1) = COALESCE(b.tipo_mtto, -1)
-  AND a.id <> b.id
-  AND COALESCE(a.updated_at, a.created_at) < COALESCE(b.updated_at, b.created_at);
+-- Quitar índices únicos que colapsaban / impedían varios MTTOs del mismo tipo
+DROP INDEX IF EXISTS idx_telemetria_serie_periodo_tipo;
+DROP INDEX IF EXISTS idx_telemetria_oportunidad_uid;
 
--- Índice único con COALESCE para tratar NULL tipo_mtto como un solo valor
-CREATE UNIQUE INDEX IF NOT EXISTS idx_telemetria_serie_periodo_tipo
-  ON telemetria_equipos (serie, mes_creado, anio, COALESCE(tipo_mtto, -1));
+-- Normalizar mes (Title Case) — solo UPDATE de texto, sin borrar filas
+UPDATE telemetria_equipos
+SET mes_creado = initcap(lower(btrim(mes_creado)))
+WHERE mes_creado IS NOT NULL
+  AND btrim(mes_creado) <> '';
 
-COMMENT ON INDEX idx_telemetria_serie_periodo_tipo IS
-  'Proyección única por máquina, periodo y tipo MTTO. Reimportar actualiza la misma fila.';
+-- Índices de consulta (NO únicos)
+CREATE INDEX IF NOT EXISTS idx_telemetria_serie_tipo_mtto
+  ON telemetria_equipos (serie, tipo_mtto);
+
+CREATE INDEX IF NOT EXISTS idx_telemetria_serie_periodo_fecha
+  ON telemetria_equipos (serie, anio, mes_creado, fecha_primer_mtto);
+
+COMMENT ON TABLE telemetria_equipos IS
+  'Servicios proyectados de telemetría: varias filas por máquina/mes (varios MTTOs del mismo tipo permitidos). Sin UNIQUE que colapse oportunidades.';

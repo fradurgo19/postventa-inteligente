@@ -66,12 +66,32 @@ supabase functions deploy send-maintenance-alerts
 
 Dashboard → **Edge Functions** → deben aparecer `import-excel`, `create-admin-user` y `send-maintenance-alerts`.
 
-### Cron de alertas
+### Cron de alertas (7 días antes del MTTO)
 
 Dashboard → Edge Functions → `send-maintenance-alerts` → **Schedules**:
 
-- Cron: `0 13 * * *` (08:00 Colombia)
-- Secrets opcionales: `RESEND_API_KEY`, `ALERT_FROM_EMAIL`
+- Cron: `0 13 * * *` (08:00 America/Bogota)
+- La función busca equipos cuya `fecha_primer_mtto`, `fecha_segundo_mtto` o `fecha_tercer_mtto` cae **exactamente en 7 días** (fecha Colombia).
+
+**Secrets** (Dashboard → Edge Functions → Secrets):
+
+| Secret | Valor |
+|--------|--------|
+| `GMAIL_USER` | `storageentrenapartequipos@gmail.com` |
+| `GMAIL_APP_PASSWORD` | Contraseña de aplicación Gmail (16 caracteres) |
+| `ALERT_FROM_EMAIL` | Mismo correo Gmail (opcional) |
+| `ALERT_FROM_NAME` | `PARTEQUIPOS Alertas` (opcional) |
+| `ALERT_FALLBACK_EMAIL` | Correo si el equipo no tiene asesor |
+| `CRON_SECRET` | Token opcional para invocaciones programadas |
+| `RESEND_API_KEY` | Alternativa a Gmail (opcional) |
+
+**Prueba manual:** Administración → Configuración → «Ejecutar alertas ahora».
+
+**Redeploy** tras cambiar código:
+
+```powershell
+supabase functions deploy send-maintenance-alerts
+```
 
 ## Auth
 

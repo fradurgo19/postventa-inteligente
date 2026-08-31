@@ -14,7 +14,7 @@ export function ProyectadosImportPanel() {
   return (
     <ExcelImportPanel
       title="Importar Telemetría Mensual"
-      description="Carga masiva mensual: identifica clientes, asesores, sedes y máquinas (únicos) y guarda proyecciones de telemetría por serie + mes + año (historial de próximos mtto, sin tratar meses distintos como duplicados)."
+      description="Carga aditiva: la primera puede ser el histórico completo (~5k). Cada mes se agregan ~300 servicios nuevos sin borrar meses anteriores. Clientes, asesores y máquinas se actualizan si cambian en la carga."
       expectedColumns={TELEMETRIA_EXCEL_COLUMNS}
       modulo="proyectados"
       onDownloadTemplate={downloadTelemetriaExcelTemplate}
@@ -24,13 +24,11 @@ export function ProyectadosImportPanel() {
         await queryClient.invalidateQueries({ queryKey: ['admin'] });
 
         if (result.recordsOk > 0) {
-          toast.success('Telemetría cargada', {
+          toast.success('Telemetría cargada (registros agregados)', {
             description:
-              `${result.recordsOk} OK` +
-              (result.duplicates
-                ? ` · ${result.duplicates} actualizados (mismo mes/año por serie)`
-                : '') +
-              (result.recordsError ? ` · ${result.recordsError} con error` : ''),
+              `${result.recordsOk} nuevos` +
+              (result.recordsError ? ` · ${result.recordsError} con error` : '') +
+              ' · El historial previo se conserva',
             duration: 12_000,
           });
         } else {
