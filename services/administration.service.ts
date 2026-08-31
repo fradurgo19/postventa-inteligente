@@ -7,6 +7,7 @@ import {
   normalizeModuleAccessMatrix,
   type ModuleAccessMatrix,
 } from '@/lib/admin/module-access';
+import type { TelemetriaImportResumen } from '@/services/import.service';
 
 export interface AdminUserRow {
   id: string;
@@ -45,6 +46,40 @@ export interface AdminMaquinaRow {
   sede: string | null;
   sede_id: string | null;
   activo: boolean;
+}
+
+/** Relación equipo → cliente → asesor (vista unificada para administración). */
+export interface AdminEquipoRelacionRow {
+  id: string;
+  serie: string;
+  marca: string;
+  modelo: string;
+  cliente_id: string | null;
+  cliente_titulo: string | null;
+  cliente_nit: string | null;
+  asesor_id: string | null;
+  asesor_nombre: string | null;
+  asesor_email: string | null;
+  sede: string | null;
+  telemetria_registros: number;
+}
+
+export interface AdminEquipoRelacionPage {
+  rows: AdminEquipoRelacionRow[];
+  total: number;
+}
+
+export interface AdminEquipoRelacionUpdateInput {
+  maquinaId: string;
+  serie: string;
+  clienteId?: string | null;
+  asesorId?: string | null;
+}
+
+export interface AdminSelectOption {
+  id: string;
+  label: string;
+  sublabel?: string | null;
 }
 
 export interface AdminSedeOption {
@@ -89,14 +124,21 @@ export interface AdminAsesorRow {
 }
 
 export interface AdminImportRow {
+  /** UUID corto solo para visualización. */
   id: string;
+  /** UUID completo de importaciones (acciones de lote). */
+  batchId: string;
   modulo: string;
   typeLabel: string;
   file: string;
   rows: number;
-  status: 'success' | 'error' | 'warning' | 'processing';
+  status: 'success' | 'error' | 'warning' | 'processing' | 'reverted';
   date: string;
   user: string;
+  /** Proyecciones actualizadas (mismo periodo/MTTO). */
+  proyeccionesActualizadas?: number;
+  /** Resumen de cambios detectados en la carga (telemetría). */
+  resumen?: TelemetriaImportResumen;
 }
 
 export interface AdminDomainSummary {
@@ -130,6 +172,38 @@ function moduloToTypeLabel(modulo: string): string {
   }
 }
 
+function parseTelemetriaResumen(raw: unknown): TelemetriaImportResumen | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const o = raw as Record<string, unknown>;
+  const resumen: TelemetriaImportResumen = {};
+  if (typeof o.maquinas_sincronizadas === 'number') {
+    resumen.maquinas_sincronizadas = o.maquinas_sincronizadas;
+  }
+  if (typeof o.proyecciones_nuevas === 'number') {
+    resumen.proyecciones_nuevas = o.proyecciones_nuevas;
+  }
+  if (typeof o.proyecciones_actualizadas === 'number') {
+    resumen.proyecciones_actualizadas = o.proyecciones_actualizadas;
+  }
+  if (typeof o.cambio_cliente === 'number') resumen.cambio_cliente = o.cambio_cliente;
+  if (typeof o.cambio_asesor === 'number') resumen.cambio_asesor = o.cambio_asesor;
+  if (typeof o.cambio_ubicacion === 'number') resumen.cambio_ubicacion = o.cambio_ubicacion;
+  if (Array.isArray(o.muestras)) {
+    resumen.muestras = o.muestras
+      .filter((m): m is Record<string, unknown> => Boolean(m) && typeof m === 'object')
+      .map((m) => ({
+        serie: String(m.serie ?? ''),
+        campo: (m.campo === 'cliente' || m.campo === 'asesor' || m.campo === 'ubicacion'
+          ? m.campo
+          : 'cliente') as 'cliente' | 'asesor' | 'ubicacion',
+        antes: String(m.antes ?? '—'),
+        despues: String(m.despues ?? '—'),
+      }))
+      .filter((m) => m.serie.length > 0);
+  }
+  return Object.keys(resumen).length > 0 ? resumen : undefined;
+}
+
 function mapImportEstado(estado: string): AdminImportRow['status'] {
   switch (estado) {
     case 'completado':
@@ -139,6 +213,8 @@ function mapImportEstado(estado: string): AdminImportRow['status'] {
       return 'warning';
     case 'procesando':
       return 'processing';
+    case 'revertido':
+      return 'reverted';
     default:
       return 'error';
   }
@@ -404,6 +480,254 @@ export async function fetchAdminMaquinas(limit = 50): Promise<AdminMaquinaRow[]>
   });
 }
 
+function resolveJoinLabel(
+  join: { titulo?: string; nombre?: string } | { titulo?: string; nombre?: string }[] | null,
+  field: 'titulo' | 'nombre'
+): string | null {
+  if (!join) return null;
+  if (Array.isArray(join)) return join[0]?.[field] ?? null;
+  return join[field] ?? null;
+}
+
+export async function fetchAdminClienteOptions(limit = 500): Promise<AdminSelectOption[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('clientes')
+    .select('id, titulo, nit')
+    .order('titulo')
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((c) => ({
+    id: c.id as string,
+    label: String(c.titulo),
+    sublabel: (c.nit as string | null) ?? null,
+  }));
+}
+
+export async function fetchAdminAsesorOptions(): Promise<AdminSelectOption[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('asesores')
+    .select('id, nombre, email')
+    .eq('activo', true)
+    .order('nombre');
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((a) => ({
+    id: a.id as string,
+    label: String(a.nombre),
+    sublabel: String(a.email),
+  }));
+}
+
+export async function fetchAdminEquipoRelacionesPage(params: {
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<AdminEquipoRelacionPage> {
+  if (!isSupabaseConfigured()) return { rows: [], total: 0 };
+  const supabase = getSupabaseClient();
+  const page = Math.max(1, params.page ?? 1);
+  const pageSize = Math.min(100, Math.max(10, params.pageSize ?? 25));
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = supabase
+    .from('maquinas')
+    .select(
+      'id, serie, marca, modelo, cliente_id, clientes(id, titulo, nit), sedes(nombre)',
+      { count: 'exact' }
+    )
+    .eq('activo', true)
+    .order('serie', { ascending: true })
+    .range(from, to);
+
+  const search = params.search?.trim();
+  if (search) {
+    const safe = search.replace(/[%_,]/g, '');
+    query = query.or(`serie.ilike.%${safe}%,marca.ilike.%${safe}%,modelo.ilike.%${safe}%`);
+  }
+
+  const { data, error, count } = await query;
+  if (error) throw new Error(error.message);
+
+  const maquinas = data ?? [];
+  const series = maquinas.map((m) => String(m.serie));
+  const asesorBySerie = new Map<
+    string,
+    { asesor_id: string | null; asesor_email: string | null }
+  >();
+  const telemetriaCountBySerie = new Map<string, number>();
+
+  if (series.length > 0) {
+    const { data: telemetria } = await supabase
+      .from('telemetria_equipos')
+      .select('serie, asesor_id, asesor_email, updated_at')
+      .in('serie', series)
+      .order('updated_at', { ascending: false });
+
+    for (const row of telemetria ?? []) {
+      const serie = String(row.serie);
+      telemetriaCountBySerie.set(serie, (telemetriaCountBySerie.get(serie) ?? 0) + 1);
+      if (!asesorBySerie.has(serie)) {
+        asesorBySerie.set(serie, {
+          asesor_id: (row.asesor_id as string | null) ?? null,
+          asesor_email: (row.asesor_email as string | null) ?? null,
+        });
+      }
+    }
+  }
+
+  const asesorIds = Array.from(
+    new Set(
+      Array.from(asesorBySerie.values())
+        .map((a) => a.asesor_id)
+        .filter(Boolean)
+    )
+  ) as string[];
+  const asesorNameById = new Map<string, string>();
+  if (asesorIds.length > 0) {
+    const { data: asesores } = await supabase
+      .from('asesores')
+      .select('id, nombre')
+      .in('id', asesorIds);
+    for (const a of asesores ?? []) {
+      asesorNameById.set(a.id as string, String(a.nombre));
+    }
+  }
+
+  const emailToAsesorId = new Map<string, string>();
+  if (series.length > 0) {
+    const emails = Array.from(
+      new Set(
+        Array.from(asesorBySerie.values())
+          .map((a) => a.asesor_email?.trim().toLowerCase())
+          .filter(Boolean)
+      )
+    ) as string[];
+    if (emails.length > 0) {
+      const { data: asesoresByEmail } = await supabase
+        .from('asesores')
+        .select('id, email')
+        .in('email', emails);
+      for (const a of asesoresByEmail ?? []) {
+        emailToAsesorId.set(String(a.email).toLowerCase(), a.id as string);
+      }
+    }
+  }
+
+  const rows: AdminEquipoRelacionRow[] = maquinas.map((m) => {
+    const serie = String(m.serie);
+    const clienteJoin = m.clientes as { id?: string; titulo?: string; nit?: string } | null;
+    const asesorSnap = asesorBySerie.get(serie);
+    let asesorId = asesorSnap?.asesor_id ?? null;
+    if (!asesorId && asesorSnap?.asesor_email) {
+      asesorId = emailToAsesorId.get(asesorSnap.asesor_email.toLowerCase()) ?? null;
+    }
+
+    return {
+      id: m.id as string,
+      serie,
+      marca: String(m.marca),
+      modelo: String(m.modelo),
+      cliente_id: (m.cliente_id as string | null) ?? null,
+      cliente_titulo: clienteJoin?.titulo ?? null,
+      cliente_nit: clienteJoin?.nit ?? null,
+      asesor_id: asesorId,
+      asesor_nombre: asesorId ? asesorNameById.get(asesorId) ?? null : null,
+      asesor_email: asesorSnap?.asesor_email ?? null,
+      sede: resolveJoinLabel(m.sedes as { nombre?: string } | { nombre?: string }[] | null, 'nombre'),
+      telemetria_registros: telemetriaCountBySerie.get(serie) ?? 0,
+    };
+  });
+
+  return { rows, total: count ?? 0 };
+}
+
+export async function updateAdminEquipoRelacion(
+  input: AdminEquipoRelacionUpdateInput
+): Promise<{ telemetriaActualizados: number }> {
+  if (!isSupabaseConfigured()) throw new Error('Supabase no configurado.');
+  const supabase = getSupabaseClient();
+  const now = new Date().toISOString();
+  const serie = input.serie.trim();
+  const telePayload: Record<string, unknown> = {
+    updated_at: now,
+    maquina_id: input.maquinaId,
+  };
+  const maquinaPayload: Record<string, unknown> = { updated_at: now };
+
+  if (input.clienteId !== undefined) {
+    maquinaPayload.cliente_id = input.clienteId;
+    telePayload.cliente_id = input.clienteId;
+    if (input.clienteId) {
+      const { data: cliente } = await supabase
+        .from('clientes')
+        .select('titulo, nit, email, telefono, ciudad')
+        .eq('id', input.clienteId)
+        .maybeSingle();
+      if (cliente) {
+        telePayload.titulo = cliente.titulo;
+        telePayload.nit = cliente.nit;
+        telePayload.email = cliente.email;
+        telePayload.telefono = cliente.telefono;
+        telePayload.ciudad = cliente.ciudad;
+      }
+    } else {
+      telePayload.titulo = null;
+      telePayload.nit = null;
+      telePayload.email = null;
+      telePayload.telefono = null;
+      telePayload.ciudad = null;
+    }
+  }
+
+  if (input.asesorId !== undefined) {
+    telePayload.asesor_id = input.asesorId;
+    if (input.asesorId) {
+      const { data: asesor } = await supabase
+        .from('asesores')
+        .select('email, sede')
+        .eq('id', input.asesorId)
+        .maybeSingle();
+      telePayload.asesor_email = asesor?.email ?? null;
+      if (asesor?.sede) telePayload.sede = asesor.sede;
+    } else {
+      telePayload.asesor_email = null;
+    }
+  }
+
+  if (Object.keys(maquinaPayload).length > 1) {
+    const { error: maquinaErr } = await supabase
+      .from('maquinas')
+      .update(maquinaPayload)
+      .eq('id', input.maquinaId);
+    if (maquinaErr) throw new Error(maquinaErr.message);
+  }
+
+  const { data: updatedRows, error: teleErr } = await supabase
+    .from('telemetria_equipos')
+    .update(telePayload)
+    .eq('serie', serie)
+    .select('id');
+  if (teleErr) throw new Error(teleErr.message);
+
+  await writeAudit({
+    modulo: 'Importaciones',
+    accion: 'Updated',
+    entidad: 'maquinas',
+    entidadId: input.maquinaId,
+    detalle: {
+      serie,
+      ...telePayload,
+      telemetria_actualizados: updatedRows?.length ?? 0,
+    },
+  });
+
+  return { telemetriaActualizados: updatedRows?.length ?? 0 };
+}
+
 export async function fetchAdminSedes(): Promise<AdminSedeOption[]> {
   if (!isSupabaseConfigured()) return [];
   const supabase = getSupabaseClient();
@@ -559,7 +883,9 @@ export async function fetchAdminImportaciones(limit = 30): Promise<AdminImportRo
 
   const { data, error } = await supabase
     .from('importaciones')
-    .select('id, modulo, nombre_archivo, registros_ok, registros_total, estado, created_at, user_id')
+    .select(
+      'id, modulo, nombre_archivo, registros_ok, registros_total, duplicados, resumen_json, estado, created_at, user_id'
+    )
     .order('created_at', { ascending: false })
     .limit(limit);
 
@@ -580,16 +906,23 @@ export async function fetchAdminImportaciones(limit = 30): Promise<AdminImportRo
     }
   }
 
-  return (data ?? []).map((r) => ({
-    id: String(r.id).slice(0, 8).toUpperCase(),
-    modulo: String(r.modulo),
-    typeLabel: moduloToTypeLabel(String(r.modulo)),
-    file: String(r.nombre_archivo),
-    rows: Number(r.registros_ok ?? r.registros_total ?? 0),
-    status: mapImportEstado(String(r.estado)),
-    date: formatDateTime(r.created_at as string),
-    user: r.user_id ? nameById.get(r.user_id as string) ?? '—' : '—',
-  }));
+  return (data ?? []).map((r) => {
+    const fullId = String(r.id);
+    const resumen = parseTelemetriaResumen(r.resumen_json);
+    return {
+      id: fullId.slice(0, 8).toUpperCase(),
+      batchId: fullId,
+      modulo: String(r.modulo),
+      typeLabel: moduloToTypeLabel(String(r.modulo)),
+      file: String(r.nombre_archivo),
+      rows: Number(r.registros_ok ?? r.registros_total ?? 0),
+      status: mapImportEstado(String(r.estado)),
+      date: formatDateTime(r.created_at as string),
+      user: r.user_id ? nameById.get(r.user_id as string) ?? '—' : '—',
+      proyeccionesActualizadas: Number(r.duplicados ?? resumen?.proyecciones_actualizadas ?? 0) || undefined,
+      resumen,
+    };
+  });
 }
 
 export async function setPerfilActivo(id: string, activo: boolean): Promise<void> {
@@ -957,6 +1290,227 @@ export async function fetchAuditoria(query: AuditQuery = {}): Promise<AdminAudit
         .toLowerCase()
         .includes(search);
     });
+}
+
+export interface AdminTelemetriaRow {
+  id: string;
+  titulo: string | null;
+  serie: string;
+  marca: string;
+  modelo: string;
+  horometro: number;
+  sede: string | null;
+  ciudad: string | null;
+  asesor_email: string | null;
+  estado: string | null;
+  fecha_primer_mtto: string | null;
+  mes_creado: string | null;
+  anio: number | null;
+  observaciones: string | null;
+  import_batch_id: string | null;
+  created_at: string | null;
+}
+
+export interface AdminTelemetriaUpdateInput {
+  titulo?: string | null;
+  serie?: string;
+  marca?: string;
+  modelo?: string;
+  horometro?: number;
+  sede?: string | null;
+  ciudad?: string | null;
+  asesor_email?: string | null;
+  estado?: string | null;
+  fecha_primer_mtto?: string | null;
+  mes_creado?: string | null;
+  anio?: number | null;
+  observaciones?: string | null;
+}
+
+export interface AdminTelemetriaPage {
+  rows: AdminTelemetriaRow[];
+  total: number;
+}
+
+function mapAdminTelemetriaRow(row: Record<string, unknown>): AdminTelemetriaRow {
+  return {
+    id: String(row.id),
+    titulo: (row.titulo as string | null) ?? null,
+    serie: String(row.serie ?? ''),
+    marca: String(row.marca ?? ''),
+    modelo: String(row.modelo ?? ''),
+    horometro: Number(row.horometro ?? 0),
+    sede: (row.sede as string | null) ?? null,
+    ciudad: (row.ciudad as string | null) ?? null,
+    asesor_email: (row.asesor_email as string | null) ?? null,
+    estado: (row.estado as string | null) ?? null,
+    fecha_primer_mtto: (row.fecha_primer_mtto as string | null) ?? null,
+    mes_creado: (row.mes_creado as string | null) ?? null,
+    anio: row.anio == null ? null : Number(row.anio),
+    observaciones: (row.observaciones as string | null) ?? null,
+    import_batch_id: (row.import_batch_id as string | null) ?? null,
+    created_at: (row.created_at as string | null) ?? null,
+  };
+}
+
+export async function fetchAdminTelemetriaPage(params: {
+  search?: string;
+  batchId?: string | null;
+  page?: number;
+  pageSize?: number;
+}): Promise<AdminTelemetriaPage> {
+  if (!isSupabaseConfigured()) return { rows: [], total: 0 };
+  const supabase = getSupabaseClient();
+  const page = Math.max(1, params.page ?? 1);
+  const pageSize = Math.min(100, Math.max(10, params.pageSize ?? 25));
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = supabase
+    .from('telemetria_equipos')
+    .select(
+      'id, titulo, serie, marca, modelo, horometro, sede, ciudad, asesor_email, estado, fecha_primer_mtto, mes_creado, anio, observaciones, import_batch_id, created_at',
+      { count: 'exact' }
+    )
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  if (params.batchId?.trim()) {
+    query = query.eq('import_batch_id', params.batchId.trim());
+  }
+
+  const search = params.search?.trim();
+  if (search) {
+    const safe = search.replace(/[%_,]/g, '');
+    query = query.or(
+      `serie.ilike.%${safe}%,marca.ilike.%${safe}%,modelo.ilike.%${safe}%,titulo.ilike.%${safe}%,sede.ilike.%${safe}%,asesor_email.ilike.%${safe}%`
+    );
+  }
+
+  const { data, error, count } = await query;
+  if (error) throw new Error(error.message);
+
+  return {
+    rows: (data ?? []).map((r) => mapAdminTelemetriaRow(r as Record<string, unknown>)),
+    total: count ?? 0,
+  };
+}
+
+export async function updateAdminTelemetriaEquipo(
+  id: string,
+  input: AdminTelemetriaUpdateInput
+): Promise<void> {
+  if (!isSupabaseConfigured()) throw new Error('Supabase no configurado.');
+  const supabase = getSupabaseClient();
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
+  if (input.titulo !== undefined) payload.titulo = input.titulo?.trim() || null;
+  if (input.serie !== undefined) payload.serie = input.serie.trim();
+  if (input.marca !== undefined) payload.marca = input.marca.trim();
+  if (input.modelo !== undefined) payload.modelo = input.modelo.trim();
+  if (input.horometro !== undefined) payload.horometro = input.horometro;
+  if (input.sede !== undefined) payload.sede = input.sede?.trim() || null;
+  if (input.ciudad !== undefined) payload.ciudad = input.ciudad?.trim() || null;
+  if (input.asesor_email !== undefined) payload.asesor_email = input.asesor_email?.trim() || null;
+  if (input.estado !== undefined) payload.estado = input.estado?.trim() || null;
+  if (input.fecha_primer_mtto !== undefined) {
+    payload.fecha_primer_mtto = input.fecha_primer_mtto?.trim() || null;
+  }
+  if (input.mes_creado !== undefined) payload.mes_creado = input.mes_creado?.trim() || null;
+  if (input.anio !== undefined) payload.anio = input.anio;
+  if (input.observaciones !== undefined) {
+    payload.observaciones = input.observaciones?.trim() || null;
+  }
+
+  const { error } = await supabase.from('telemetria_equipos').update(payload).eq('id', id);
+  if (error) throw new Error(error.message);
+
+  await writeAudit({
+    modulo: 'Importaciones',
+    accion: 'Updated',
+    entidad: 'telemetria_equipos',
+    entidadId: id,
+    detalle: payload,
+  });
+}
+
+export async function deleteAdminTelemetriaEquipo(id: string): Promise<void> {
+  if (!isSupabaseConfigured()) throw new Error('Supabase no configurado.');
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.from('telemetria_equipos').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+
+  await writeAudit({
+    modulo: 'Importaciones',
+    accion: 'Deleted',
+    entidad: 'telemetria_equipos',
+    entidadId: id,
+    detalle: { scope: 'single' },
+  });
+}
+
+export async function countTelemetriaByImportBatch(batchId: string): Promise<number> {
+  if (!isSupabaseConfigured()) return 0;
+  const supabase = getSupabaseClient();
+  const { count, error } = await supabase
+    .from('telemetria_equipos')
+    .select('id', { count: 'exact', head: true })
+    .eq('import_batch_id', batchId);
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+/**
+ * Elimina solo las filas de telemetría de una carga masiva (import_batch_id).
+ * No borra maestros (clientes, asesores, máquinas, sedes).
+ */
+export async function deleteTelemetriaImportBatch(
+  batchId: string
+): Promise<{ deleted: number }> {
+  if (!isSupabaseConfigured()) throw new Error('Supabase no configurado.');
+  const supabase = getSupabaseClient();
+
+  const { data: log } = await supabase
+    .from('importaciones')
+    .select('id, modulo')
+    .eq('id', batchId)
+    .maybeSingle();
+
+  if (!log) throw new Error('Carga masiva no encontrada.');
+  if (String(log.modulo) !== 'proyectados') {
+    throw new Error('Solo se pueden revertir cargas de Cronograma / Telemetría.');
+  }
+
+  const before = await countTelemetriaByImportBatch(batchId);
+
+  const { error: delError } = await supabase
+    .from('telemetria_equipos')
+    .delete()
+    .eq('import_batch_id', batchId);
+
+  if (delError) throw new Error(delError.message);
+
+  await supabase
+    .from('importaciones')
+    .update({
+      estado: 'revertido',
+      resumen_json: {
+        reverted: true,
+        deleted_rows: before,
+        reverted_at: new Date().toISOString(),
+      },
+    })
+    .eq('id', batchId);
+
+  await writeAudit({
+    modulo: 'Importaciones',
+    accion: 'Deleted',
+    entidad: 'importaciones',
+    entidadId: batchId,
+    detalle: { scope: 'batch', deleted_rows: before, modulo: 'proyectados' },
+  });
+
+  return { deleted: before };
 }
 
 export async function writeAudit(input: {

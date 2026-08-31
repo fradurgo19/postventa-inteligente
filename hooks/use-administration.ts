@@ -22,12 +22,23 @@ import {
   updateCliente,
   updateMaquina,
   updatePerfil,
+  fetchAdminTelemetriaPage,
+  updateAdminTelemetriaEquipo,
+  deleteAdminTelemetriaEquipo,
+  deleteTelemetriaImportBatch,
+  countTelemetriaByImportBatch,
+  fetchAdminEquipoRelacionesPage,
+  fetchAdminClienteOptions,
+  fetchAdminAsesorOptions,
+  updateAdminEquipoRelacion,
   type AdminPerfilUpdate,
+  type AdminTelemetriaUpdateInput,
   type AsesorInput,
   type AuditQuery,
   type ClienteInput,
   type CreateAdminUserInput,
   type MaquinaInput,
+  type AdminEquipoRelacionUpdateInput,
   type SystemConfig,
 } from '@/services/administration.service';
 import type { ModuleAccessMatrix } from '@/lib/admin/module-access';
@@ -77,6 +88,119 @@ export function useAdminImportaciones() {
     queryKey: ['admin', 'importaciones'],
     queryFn: () => fetchAdminImportaciones(40),
     staleTime: 30_000,
+  });
+}
+
+export function useAdminTelemetriaPage(params: {
+  search: string;
+  batchId: string | null;
+  page: number;
+  pageSize?: number;
+  enabled?: boolean;
+}) {
+  return useQuery({
+    queryKey: [
+      'admin',
+      'telemetria',
+      params.search,
+      params.batchId,
+      params.page,
+      params.pageSize ?? 25,
+    ],
+    queryFn: () =>
+      fetchAdminTelemetriaPage({
+        search: params.search,
+        batchId: params.batchId,
+        page: params.page,
+        pageSize: params.pageSize ?? 25,
+      }),
+    enabled: params.enabled !== false,
+    staleTime: 20_000,
+  });
+}
+
+export function useUpdateAdminTelemetria() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: AdminTelemetriaUpdateInput }) =>
+      updateAdminTelemetriaEquipo(id, input),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['admin', 'telemetria'] });
+      await qc.invalidateQueries({ queryKey: ['proyectados'] });
+      await qc.invalidateQueries({ queryKey: ['admin', 'summary'] });
+    },
+  });
+}
+
+export function useDeleteAdminTelemetria() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteAdminTelemetriaEquipo(id),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['admin', 'telemetria'] });
+      await qc.invalidateQueries({ queryKey: ['proyectados'] });
+      await qc.invalidateQueries({ queryKey: ['admin', 'summary'] });
+    },
+  });
+}
+
+export function useDeleteTelemetriaImportBatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (batchId: string) => deleteTelemetriaImportBatch(batchId),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['admin'] });
+      await qc.invalidateQueries({ queryKey: ['proyectados'] });
+    },
+  });
+}
+
+export function useAdminEquipoRelacionesPage(params: {
+  search: string;
+  page: number;
+  pageSize?: number;
+}) {
+  return useQuery({
+    queryKey: ['admin', 'equipo-relaciones', params.search, params.page, params.pageSize ?? 25],
+    queryFn: () =>
+      fetchAdminEquipoRelacionesPage({
+        search: params.search,
+        page: params.page,
+        pageSize: params.pageSize ?? 25,
+      }),
+    staleTime: 20_000,
+  });
+}
+
+export function useAdminClienteOptions() {
+  return useQuery({
+    queryKey: ['admin', 'cliente-options'],
+    queryFn: () => fetchAdminClienteOptions(500),
+    staleTime: 60_000,
+  });
+}
+
+export function useAdminAsesorOptions() {
+  return useQuery({
+    queryKey: ['admin', 'asesor-options'],
+    queryFn: fetchAdminAsesorOptions,
+    staleTime: 60_000,
+  });
+}
+
+export function useUpdateAdminEquipoRelacion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AdminEquipoRelacionUpdateInput) => updateAdminEquipoRelacion(input),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['admin', 'equipo-relaciones'] });
+      await qc.invalidateQueries({ queryKey: ['admin', 'maquinas'] });
+      await qc.invalidateQueries({ queryKey: ['admin', 'clientes'] });
+      await qc.invalidateQueries({ queryKey: ['admin', 'asesores'] });
+      await qc.invalidateQueries({ queryKey: ['admin', 'telemetria'] });
+      await qc.invalidateQueries({ queryKey: ['proyectados'] });
+      await qc.invalidateQueries({ queryKey: ['admin', 'summary'] });
+    },
   });
 }
 

@@ -2,6 +2,22 @@ import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
 export type ImportModulo = 'calculadora' | 'proyectados' | 'cpp';
 
+/** Resumen de una carga masiva de telemetría (persistido en importaciones.resumen_json). */
+export interface TelemetriaImportResumen {
+  maquinas_sincronizadas?: number;
+  proyecciones_nuevas?: number;
+  proyecciones_actualizadas?: number;
+  cambio_cliente?: number;
+  cambio_asesor?: number;
+  cambio_ubicacion?: number;
+  muestras?: Array<{
+    serie: string;
+    campo: 'cliente' | 'asesor' | 'ubicacion';
+    antes: string;
+    despues: string;
+  }>;
+}
+
 export interface ImportExcelResponse {
   importId?: string;
   recordsOk: number;
@@ -9,8 +25,9 @@ export interface ImportExcelResponse {
   duplicates: number;
   total?: number;
   skipped?: number;
-  /** Filas del Excel consolidadas por misma serie + mes + año. */
+  /** Máquinas sincronizadas en historial (telemetría). */
   deduplicated?: number;
+  resumen?: TelemetriaImportResumen;
   errors?: Array<{ row: number; message: string }>;
   error?: string;
 }

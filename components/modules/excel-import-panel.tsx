@@ -105,6 +105,7 @@ export function ExcelImportPanel({
         let total = 0;
         let skipped = 0;
         let deduplicated = 0;
+        let importResumen: import('@/services/import.service').TelemetriaImportResumen | undefined;
         let errors: Array<{ row: number; message: string }> = [];
 
         if (modulo === 'calculadora') {
@@ -136,6 +137,7 @@ export function ExcelImportPanel({
           total = response.total ?? recordsOk + recordsError;
           skipped = response.skipped ?? 0;
           deduplicated = response.deduplicated ?? 0;
+          importResumen = response.resumen;
           errors = response.errors ?? [];
         } else if (isSupabaseConfigured()) {
           const response = await invokeImportExcel(modulo, f);
@@ -152,17 +154,39 @@ export function ExcelImportPanel({
 
         const updatedLabel =
           modulo === 'proyectados'
-            ? `Insertados como servicios proyectados (varios MTTOs/mes permitidos)`
+            ? duplicates > 0
+              ? `Proyecciones actualizadas (mismo periodo/MTTO): ${duplicates}`
+              : 'Proyecciones nuevas insertadas'
             : `Actualizados (mismo ID): ${duplicates}`;
 
-        const accounted = recordsOk + recordsError + skipped + deduplicated;
+        const accounted = recordsOk + recordsError + skipped;
         const previewLines = [
           `Archivo: ${f.name}`,
           `Filas leídas del Excel: ${total}`,
           ...(skipped > 0 ? [`Filas omitidas (vacías / sin serie): ${skipped}`] : []),
-          ...(deduplicated > 0
+          ...(modulo === 'proyectados' && deduplicated > 0
+            ? [`Máquinas sincronizadas (cliente/asesor/ubicación en historial): ${deduplicated}`]
+            : []),
+          ...(modulo !== 'proyectados' && deduplicated > 0
+            ? [`Filas consolidadas (duplicado exacto en archivo): ${deduplicated}`]
+            : []),
+          ...(modulo === 'proyectados' && importResumen?.cambio_cliente
+            ? [`Máquinas con cambio de cliente: ${importResumen.cambio_cliente}`]
+            : []),
+          ...(modulo === 'proyectados' && importResumen?.cambio_asesor
+            ? [`Máquinas con cambio de asesor: ${importResumen.cambio_asesor}`]
+            : []),
+          ...(modulo === 'proyectados' && importResumen?.cambio_ubicacion
+            ? [`Máquinas con cambio de ubicación: ${importResumen.cambio_ubicacion}`]
+            : []),
+          ...(modulo === 'proyectados' &&
+          importResumen?.muestras &&
+          importResumen.muestras.length > 0
             ? [
-                `Filas consolidadas (duplicado exacto en archivo): ${deduplicated}`,
+                `Ejemplos: ${importResumen.muestras
+                  .slice(0, 3)
+                  .map((m) => `${m.serie} (${m.campo})`)
+                  .join(', ')}`,
               ]
             : []),
           `Registros cargados OK: ${recordsOk}`,

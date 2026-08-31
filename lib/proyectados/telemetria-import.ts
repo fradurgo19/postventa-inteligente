@@ -569,6 +569,25 @@ export function telemetriaPeriodKey(row: Pick<TelemetriaMappedRow, 'serie' | 'me
   return `${row.serie}|${(row.mes_creado ?? '').toLowerCase()}|${row.anio ?? 0}`;
 }
 
+function normalizeIdentityPart(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase();
+}
+
+/** Identifica la máquina en maestros (marca + modelo + serie). La serie es la clave única en BD. */
+export function maquinaIdentityKey(
+  row: Pick<TelemetriaMappedRow, 'marca' | 'modelo' | 'serie'>
+): string {
+  return `${normalizeIdentityPart(row.marca)}|${normalizeIdentityPart(row.modelo)}|${normalizeIdentityPart(row.serie)}`;
+}
+
+/** Clave de fila de telemetría para upsert (serie + periodo + tipo MTTO). */
+export function telemetriaImportRowKey(
+  row: Pick<TelemetriaMappedRow, 'serie' | 'mes_creado' | 'anio' | 'tipo_mtto'>
+): string {
+  const tipo = row.tipo_mtto ?? '∅';
+  return `${row.serie}|${row.mes_creado}|${row.anio}|${tipo}`;
+}
+
 export async function parseTelemetriaFile(file: File): Promise<TelemetriaParseResult> {
   const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
   let rawRows: TelemetriaRawSheetRow[] = [];

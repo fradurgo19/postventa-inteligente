@@ -1,9 +1,10 @@
 import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/client';
 import {
   parseTelemetriaFile,
+  telemetriaImportRowKey,
   type TelemetriaMappedRow,
 } from '@/lib/proyectados/telemetria-import';
-import type { ImportExcelResponse } from '@/services/import.service';
+import type { ImportExcelResponse, TelemetriaImportResumen } from '@/services/import.service';
 
 /** Mismo tamaño de lote que temparios: evita saturar red/BD con ~5k filas. */
 const BATCH_SIZE = 100;
@@ -63,11 +64,256 @@ function clienteKey(row: Pick<TelemetriaMappedRow, 'nit' | 'titulo' | 'email'>):
   return null;
 }
 
+function buildLatestRowBySerie(rows: TelemetriaMappedRow[]): Map<string, TelemetriaMappedRow> {
+  const bySerie = new Map<string, TelemetriaMappedRow>();
+  for (const row of rows) {
+    bySerie.set(row.serie, row);
+  }
+  return bySerie;
+}
+
+function resolveRowIds(
+  row: TelemetriaMappedRow,
+  maps: {
+    clienteIds: Map<string, string>;
+    asesorIds: Map<string, string>;
+    sedeIds: Map<string, string>;
+    maquinaIds: Map<string, string>;
+    importBatchId: string | null;
+  }
+) {
+  const ck = clienteKey(row);
+  return {
+    clienteId: ck ? maps.clienteIds.get(ck) ?? null : null,
+    asesorId: row.asesor_email
+      ? maps.asesorIds.get(row.asesor_email.toLowerCase()) ?? null
+      : null,
+    sedeId: row.sede ? maps.sedeIds.get(row.sede) ?? null : null,
+    maquinaId: maps.maquinaIds.get(row.serie) ?? null,
+    importBatchId: maps.importBatchId,
+  };
+}
+
+/** Campos de máquina/cliente/asesor/ubicación que se propagan a todo el historial de la serie. */
+function toMachineSnapshotPayload(
+  row: TelemetriaMappedRow,
+  ids: ReturnType<typeof resolveRowIds>
+): Record<string, unknown> {
+  return {
+    titulo: row.titulo,
+    email: row.email,
+    nit: row.nit,
+    telefono: row.telefono,
+    ciudad: row.ciudad,
+    latitud: row.latitud,
+    longitud: row.longitud,
+    ultima_fecha_comunicacion: row.ultima_fecha_comunicacion,
+    sede: row.sede,
+    asesor_email: row.asesor_email,
+    asesor_secundario_email: row.asesor_secundario_email,
+    marca: row.marca,
+    modelo: row.modelo,
+    numero_serie: row.numero_serie,
+    tipo_maquina: row.tipo_maquina,
+    cliente_id: ids.clienteId,
+    asesor_id: ids.asesorId,
+    sede_id: ids.sedeId,
+    maquina_id: ids.maquinaId,
+    updated_at: new Date().toISOString(),
+  };
+}
+
 function stripOptionalFks(body: Record<string, unknown>): Record<string, unknown> {
   const next = { ...body };
   delete next.sede_id;
   delete next.maquina_id;
   return next;
+}
+
+const MAX_CHANGE_SAMPLES = 15;
+
+interface ExistingMachineState {
+  serie: string;
+  clienteId: string | null;
+  sedeId: string | null;
+  marca: string;
+  modelo: string;
+  asesorEmail: string | null;
+  ciudad: string | null;
+  latitud: number | null;
+  longitud: number | null;
+  sedeNombre: string | null;
+}
+
+function normEmail(value: string | null | undefined): string | null {
+  const v = value?.trim().toLowerCase();
+  return v || null;
+}
+
+function normLabel(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase();
+}
+
+function coordsChanged(a: number | null, b: number | null): boolean {
+  if (a == null && b == null) return false;
+  if (a == null || b == null) return true;
+  return Math.abs(a - b) > 0.000001;
+}
+
+async function prefetchExistingMachineState(
+  rows: TelemetriaMappedRow[]
+): Promise<Map<string, ExistingMachineState>> {
+  const supabase = getSupabaseClient();
+  const series = Array.from(new Set(rows.map((row) => row.serie)));
+  const bySerie = new Map<string, ExistingMachineState>();
+
+  for (const batch of chunkArray(series, BATCH_SIZE)) {
+    await refreshSessionIfNeeded();
+
+    const [{ data: maquinas }, { data: telemetria }] = await Promise.all([
+      supabase
+        .from('maquinas')
+        .select('serie, cliente_id, sede_id, marca, modelo')
+        .in('serie', batch),
+      supabase
+        .from('telemetria_equipos')
+        .select('serie, asesor_email, ciudad, latitud, longitud, sede, updated_at')
+        .in('serie', batch)
+        .order('updated_at', { ascending: false }),
+    ]);
+
+    for (const m of maquinas ?? []) {
+      bySerie.set(String(m.serie), {
+        serie: String(m.serie),
+        clienteId: (m.cliente_id as string | null) ?? null,
+        sedeId: (m.sede_id as string | null) ?? null,
+        marca: String(m.marca ?? ''),
+        modelo: String(m.modelo ?? ''),
+        asesorEmail: null,
+        ciudad: null,
+        latitud: null,
+        longitud: null,
+        sedeNombre: null,
+      });
+    }
+
+    for (const t of telemetria ?? []) {
+      const serie = String(t.serie);
+      const current = bySerie.get(serie);
+      if (!current) continue;
+      if (current.asesorEmail != null) continue;
+      current.asesorEmail = (t.asesor_email as string | null) ?? null;
+      current.ciudad = (t.ciudad as string | null) ?? null;
+      current.latitud = t.latitud == null ? null : Number(t.latitud);
+      current.longitud = t.longitud == null ? null : Number(t.longitud);
+      current.sedeNombre = (t.sede as string | null) ?? null;
+    }
+
+    await sleep(BATCH_PAUSE_MS);
+  }
+
+  return bySerie;
+}
+
+function computeImportChangeSummary(
+  rows: TelemetriaMappedRow[],
+  existingBySerie: Map<string, ExistingMachineState>,
+  clienteIds: Map<string, string>
+): TelemetriaImportResumen {
+  const bySerie = buildLatestRowBySerie(rows);
+  let cambioCliente = 0;
+  let cambioAsesor = 0;
+  let cambioUbicacion = 0;
+  const muestras: NonNullable<TelemetriaImportResumen['muestras']> = [];
+
+  const pushSample = (
+    serie: string,
+    campo: 'cliente' | 'asesor' | 'ubicacion',
+    antes: string,
+    despues: string
+  ) => {
+    if (muestras.length >= MAX_CHANGE_SAMPLES) return;
+    muestras.push({ serie, campo, antes, despues });
+  };
+
+  for (const [serie, row] of Array.from(bySerie.entries())) {
+    const existing = existingBySerie.get(serie);
+    if (!existing) continue;
+
+    const ck = clienteKey(row);
+    const newClienteId = ck ? clienteIds.get(ck) ?? null : null;
+    if (existing.clienteId !== newClienteId) {
+      cambioCliente += 1;
+      pushSample(
+        serie,
+        'cliente',
+        existing.clienteId ?? 'sin cliente',
+        newClienteId ?? row.titulo ?? 'sin cliente'
+      );
+    }
+
+    if (normEmail(existing.asesorEmail) !== normEmail(row.asesor_email)) {
+      cambioAsesor += 1;
+      pushSample(
+        serie,
+        'asesor',
+        existing.asesorEmail ?? 'sin asesor',
+        row.asesor_email ?? 'sin asesor'
+      );
+    }
+
+    const ubicacionCambio =
+      normLabel(existing.sedeNombre) !== normLabel(row.sede) ||
+      normLabel(existing.ciudad) !== normLabel(row.ciudad) ||
+      coordsChanged(existing.latitud, row.latitud) ||
+      coordsChanged(existing.longitud, row.longitud);
+
+    if (ubicacionCambio) {
+      cambioUbicacion += 1;
+      const antes = [existing.sedeNombre, existing.ciudad].filter(Boolean).join(' · ') || 'sin ubicación';
+      const despues = [row.sede, row.ciudad].filter(Boolean).join(' · ') || 'sin ubicación';
+      pushSample(serie, 'ubicacion', antes, despues);
+    }
+  }
+
+  return {
+    cambio_cliente: cambioCliente,
+    cambio_asesor: cambioAsesor,
+    cambio_ubicacion: cambioUbicacion,
+    ...(muestras.length > 0 ? { muestras } : {}),
+  };
+}
+
+async function prefetchTelemetriaIdsByKey(
+  rows: TelemetriaMappedRow[]
+): Promise<Map<string, string>> {
+  const supabase = getSupabaseClient();
+  const keysNeeded = new Set(rows.map((row) => telemetriaImportRowKey(row)));
+  const series = Array.from(new Set(rows.map((row) => row.serie)));
+  const idByKey = new Map<string, string>();
+
+  for (const batch of chunkArray(series, BATCH_SIZE)) {
+    await refreshSessionIfNeeded();
+    const { data } = await supabase
+      .from('telemetria_equipos')
+      .select('id, serie, mes_creado, anio, tipo_mtto')
+      .in('serie', batch);
+
+    for (const existing of data ?? []) {
+      const key = telemetriaImportRowKey({
+        serie: String(existing.serie),
+        mes_creado: String(existing.mes_creado),
+        anio: Number(existing.anio),
+        tipo_mtto: existing.tipo_mtto == null ? null : Number(existing.tipo_mtto),
+      });
+      if (keysNeeded.has(key)) {
+        idByKey.set(key, existing.id as string);
+      }
+    }
+    await sleep(BATCH_PAUSE_MS);
+  }
+
+  return idByKey;
 }
 
 function toTelemetriaPayload(
@@ -352,8 +598,7 @@ async function batchUpsertMaquinas(
   sedeIds: Map<string, string>
 ): Promise<Map<string, string>> {
   const supabase = getSupabaseClient();
-  const bySerie = new Map<string, TelemetriaMappedRow>();
-  for (const row of rows) bySerie.set(row.serie, row);
+  const bySerie = buildLatestRowBySerie(rows);
 
   const idBySerie = new Map<string, string>();
   const list = Array.from(bySerie.values());
@@ -401,7 +646,7 @@ async function batchUpsertMaquinas(
   return idBySerie;
 }
 
-async function batchInsertTelemetria(
+async function batchUpsertTelemetria(
   rows: TelemetriaMappedRow[],
   maps: {
     clienteIds: Map<string, string>;
@@ -410,10 +655,12 @@ async function batchInsertTelemetria(
     maquinaIds: Map<string, string>;
     importBatchId: string | null;
   },
+  existingIds: Map<string, string>,
   onProgress?: ProgressCb
 ): Promise<{ ok: number; updated: number; errors: Array<{ row: number; message: string }> }> {
   const supabase = getSupabaseClient();
   let ok = 0;
+  let updated = 0;
   let processed = 0;
   const errors: Array<{ row: number; message: string }> = [];
   const total = rows.length;
@@ -424,72 +671,140 @@ async function batchInsertTelemetria(
       processed,
       total,
       ok,
-      updated: 0,
+      updated,
       errors: errors.length,
     });
   };
 
-  const formatInsertError = (payload: Record<string, unknown>, message: string): string => {
-    if (/telemetria_serie_mes_anio_uid|idx_telemetria_serie_unique|telemetria_serie_unique/i.test(message)) {
-      return 'Ejecute en Supabase el script 24_telemetria_allow_multi_mtto_mes.sql (varios MTTOs por máquina/mes).';
+  const formatRowError = (payload: Record<string, unknown>, message: string): string => {
+    if (/idx_telemetria_serie_periodo_tipo|telemetria_serie_periodo_tipo/i.test(message)) {
+      return 'Ejecute en Supabase el script 27_telemetria_upsert_periodo_tipo_mtto.sql.';
     }
     if (/numeric field overflow/i.test(message)) {
       return `Serie ${String(payload.serie)}: valor numérico fuera de rango (script 22_telemetria_widen_numerics.sql).`;
     }
-    return `Serie ${String(payload.serie)} (${payload.mes_creado}/${payload.anio}, tipo ${payload.tipo_mtto ?? '—'}): ${message}`;
+    const tipoLabel =
+      payload.tipo_mtto == null || payload.tipo_mtto === ''
+        ? '—'
+        : String(payload.tipo_mtto);
+    return `Serie ${String(payload.serie)} (${payload.mes_creado}/${payload.anio}, tipo ${tipoLabel}): ${message}`;
   };
 
   for (const batch of chunkArray(rows, BATCH_SIZE)) {
     await refreshSessionIfNeeded();
 
-    const payloads = batch.map((row) => {
-      const ck = clienteKey(row);
-      return toTelemetriaPayload(row, {
-        clienteId: ck ? maps.clienteIds.get(ck) ?? null : null,
-        asesorId: row.asesor_email
-          ? maps.asesorIds.get(row.asesor_email.toLowerCase()) ?? null
-          : null,
-        sedeId: row.sede ? maps.sedeIds.get(row.sede) ?? null : null,
-        maquinaId: maps.maquinaIds.get(row.serie) ?? null,
-        importBatchId: maps.importBatchId,
+    const inserts: Record<string, unknown>[] = [];
+    const updates: Array<{ id: string; payload: Record<string, unknown> }> = [];
+
+    for (const row of batch) {
+      const ids = resolveRowIds(row, maps);
+      const payload = toTelemetriaPayload(row, {
+        clienteId: ids.clienteId,
+        asesorId: ids.asesorId,
+        sedeId: ids.sedeId,
+        maquinaId: ids.maquinaId,
+        importBatchId: ids.importBatchId,
       });
-    });
-
-    let { error } = await supabase.from('telemetria_equipos').insert(payloads);
-
-    if (error && /sede_id|maquina_id|column/i.test(error.message)) {
-      ({ error } = await supabase.from('telemetria_equipos').insert(payloads.map(stripOptionalFks)));
-    }
-
-    if (error) {
-      for (const payload of payloads) {
-        const { error: rowErr } = await supabase
-          .from('telemetria_equipos')
-          .insert(stripOptionalFks(payload));
-        if (rowErr) {
-          errors.push({ row: 0, message: formatInsertError(payload, rowErr.message) });
-        } else {
-          ok += 1;
-        }
-        processed += 1;
+      const key = telemetriaImportRowKey(row);
+      const existingId = existingIds.get(key);
+      if (existingId) {
+        updates.push({ id: existingId, payload });
+      } else {
+        inserts.push(payload);
       }
-    } else {
-      ok += batch.length;
-      processed += batch.length;
     }
 
+    if (inserts.length > 0) {
+      let { error } = await supabase.from('telemetria_equipos').insert(inserts);
+      if (error && /sede_id|maquina_id|column/i.test(error.message)) {
+        ({ error } = await supabase
+          .from('telemetria_equipos')
+          .insert(inserts.map(stripOptionalFks)));
+      }
+      if (error) {
+        for (const payload of inserts) {
+          const { error: rowErr } = await supabase
+            .from('telemetria_equipos')
+            .insert(stripOptionalFks(payload));
+          if (rowErr) {
+            errors.push({ row: 0, message: formatRowError(payload, rowErr.message) });
+          } else {
+            ok += 1;
+          }
+        }
+      } else {
+        ok += inserts.length;
+      }
+    }
+
+    if (updates.length > 0) {
+      await Promise.all(
+        updates.map(async ({ id, payload }) => {
+          let { error } = await supabase.from('telemetria_equipos').update(payload).eq('id', id);
+          if (error && /sede_id|maquina_id|column/i.test(error.message)) {
+            ({ error } = await supabase
+              .from('telemetria_equipos')
+              .update(stripOptionalFks(payload))
+              .eq('id', id));
+          }
+          if (error) {
+            errors.push({ row: 0, message: formatRowError(payload, error.message) });
+          } else {
+            updated += 1;
+          }
+        })
+      );
+    }
+
+    processed += batch.length;
     report();
     await sleep(BATCH_PAUSE_MS);
   }
 
-  return { ok, updated: 0, errors };
+  return { ok, updated, errors };
+}
+
+/** Propaga cliente, asesor, ubicación y datos de máquina a todo el historial de cada serie importada. */
+async function batchSyncTelemetriaMachineSnapshots(
+  rows: TelemetriaMappedRow[],
+  maps: {
+    clienteIds: Map<string, string>;
+    asesorIds: Map<string, string>;
+    sedeIds: Map<string, string>;
+    maquinaIds: Map<string, string>;
+    importBatchId: string | null;
+  }
+): Promise<number> {
+  const supabase = getSupabaseClient();
+  const bySerie = buildLatestRowBySerie(rows);
+  const entries = Array.from(bySerie.entries());
+  let synced = 0;
+
+  for (const batch of chunkArray(entries, 50)) {
+    await refreshSessionIfNeeded();
+    await Promise.all(
+      batch.map(async ([serie, row]) => {
+        const ids = resolveRowIds(row, maps);
+        let payload = toMachineSnapshotPayload(row, ids);
+        let { error } = await supabase.from('telemetria_equipos').update(payload).eq('serie', serie);
+        if (error && /sede_id|maquina_id|column/i.test(error.message)) {
+          payload = stripOptionalFks(payload);
+          ({ error } = await supabase.from('telemetria_equipos').update(payload).eq('serie', serie));
+        }
+        if (!error) synced += 1;
+      })
+    );
+    await sleep(BATCH_PAUSE_MS);
+  }
+
+  return synced;
 }
 
 /**
  * Carga masiva mensual (~5k filas):
- * - clientes / asesores / sedes / máquinas → upsert únicos (sin duplicar flota)
- * - telemetria_equipos → inserta todas las filas (varios MTTOs por máquina en el mismo mes)
- * Reimportar limpio: ejecutar 23_truncate_telemetria_reimport.sql antes.
+ * - Identifica máquinas por marca + modelo + serie (única en maquinas)
+ * - clientes / asesores / sedes / máquinas → upsert y actualiza si cambian en la carga
+ * - telemetria_equipos → upsert por serie + periodo + tipo MTTO; sincroniza datos de máquina en todo el historial
  */
 export async function importTelemetriaFromFile(
   file: File,
@@ -558,10 +873,16 @@ export async function importTelemetriaFromFile(
     errors: parseErrors.length,
   });
 
+  const existingMachineState = await prefetchExistingMachineState(rows);
+
   const asesorIds = await batchUpsertAsesores(rows);
   const sedeIds = await batchUpsertSedes(rows);
   const clienteIds = await batchResolveClientes(rows);
+  const changeSummary = computeImportChangeSummary(rows, existingMachineState, clienteIds);
   const maquinaIds = await batchUpsertMaquinas(rows, clienteIds, sedeIds);
+  const relationMaps = { clienteIds, asesorIds, sedeIds, maquinaIds, importBatchId };
+
+  const existingIds = await prefetchTelemetriaIdsByKey(rows);
 
   onProgress?.({
     phase: 'upload',
@@ -572,15 +893,19 @@ export async function importTelemetriaFromFile(
     errors: parseErrors.length,
   });
 
-  const result = await batchInsertTelemetria(
-    rows,
-    { clienteIds, asesorIds, sedeIds, maquinaIds, importBatchId },
-    onProgress
-  );
+  const result = await batchUpsertTelemetria(rows, relationMaps, existingIds, onProgress);
+  const syncedMachines = await batchSyncTelemetriaMachineSnapshots(rows, relationMaps);
 
-  const recordsOk = result.ok;
+  const recordsOk = result.ok + result.updated;
   const recordsError = parseErrors.length + result.errors.length;
   const allErrors = [...parseErrors, ...result.errors].slice(0, MAX_ERROR_SAMPLES);
+
+  const resumen: TelemetriaImportResumen = {
+    ...changeSummary,
+    maquinas_sincronizadas: syncedMachines,
+    proyecciones_nuevas: result.ok,
+    proyecciones_actualizadas: result.updated,
+  };
 
   if (importBatchId) {
     await supabase
@@ -588,7 +913,16 @@ export async function importTelemetriaFromFile(
       .update({
         registros_ok: recordsOk,
         registros_error: recordsError,
-        estado: recordsError > 0 && recordsOk === 0 ? 'fallido' : recordsError > 0 ? 'parcial' : 'completado',
+        registros_total: parsed.rawTotal,
+        duplicados: result.updated,
+        resumen_json: resumen,
+        completed_at: new Date().toISOString(),
+        estado:
+          recordsError > 0 && recordsOk === 0
+            ? 'fallido'
+            : recordsError > 0
+              ? 'parcial'
+              : 'completado',
       })
       .eq('id', importBatchId);
   }
@@ -598,17 +932,18 @@ export async function importTelemetriaFromFile(
     processed: rows.length,
     total: rows.length,
     ok: recordsOk,
-    updated: 0,
+    updated: result.updated,
     errors: recordsError,
   });
 
   return {
     recordsOk,
     recordsError,
-    duplicates: 0,
+    duplicates: result.updated,
     total: parsed.rawTotal,
     skipped: parsed.skipped,
-    deduplicated: 0,
+    deduplicated: syncedMachines,
+    resumen,
     errors: allErrors,
   };
 }
