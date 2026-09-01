@@ -25,6 +25,8 @@ export interface TelemetriaOpportunityRow {
   createdAt: string | null;
   latitud: number | null;
   longitud: number | null;
+  /** Columna Tipo Mtto del Excel de telemetría (horas de servicio, ej. 250, 2000). */
+  tipoMtto: number | null;
 }
 
 export interface TelemetriaCalendarEvent {
@@ -38,6 +40,16 @@ export interface TelemetriaCalendarEvent {
   sede: string;
   client: string;
   advisor: string;
+  hours: number;
+  tipoMtto: number | null;
+}
+
+/** Etiqueta legible para columna Tipo Mtto (plantilla Excel). */
+export function formatTipoMttoLabel(tipoMtto: number | null | undefined): string {
+  if (tipoMtto == null || !Number.isFinite(Number(tipoMtto))) return '—';
+  const h = Math.trunc(Number(tipoMtto));
+  if (h >= 250) return `Mantenimiento de ${h.toLocaleString('es-CO')} horas`;
+  return `Tipo MTTO ${h}`;
 }
 
 function formatDateEs(iso: string | null | undefined): string {
@@ -171,6 +183,7 @@ export function mapTelemetriaToOpportunityRows(
       createdAt: e.created_at ?? null,
       latitud: parseCoord(e.latitud),
       longitud: parseCoord(e.longitud),
+      tipoMtto: e.tipo_mtto == null ? null : Number(e.tipo_mtto),
     };
   });
 }
@@ -197,6 +210,8 @@ export function mapTelemetriaToCalendarEvents(
       sede: e.sede?.trim() || e.ciudad?.trim() || '—',
       client: e.titulo?.trim() || 'Sin cliente',
       advisor: e.asesor_email?.trim() || 'Sin asesor',
+      hours: Math.round(Number(e.horometro) || 0),
+      tipoMtto: e.tipo_mtto == null ? null : Number(e.tipo_mtto),
     });
   }
 

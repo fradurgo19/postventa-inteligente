@@ -3,7 +3,10 @@ import autoTable from 'jspdf-autotable';
 import {
   fetchPartequiposLogoDataUrl,
 } from '@/lib/calculadora/quote-pdf';
-import type { TelemetriaOpportunityRow } from '@/lib/proyectados/map-telemetria-ui';
+import {
+  formatTipoMttoLabel,
+  type TelemetriaOpportunityRow,
+} from '@/lib/proyectados/map-telemetria-ui';
 
 const BRAND_RGB = { r: 207, g: 27, b: 34 } as const;
 const PAGE_MARGIN = 10;
@@ -117,6 +120,7 @@ export async function downloadOportunidadesProgramadasPdf(
         'Modelo',
         'Serie',
         'Horas',
+        'Tipo Mtto',
         'Descarga telemetría',
         'Fecha estimada mtto',
         'Asesor',
@@ -129,6 +133,7 @@ export async function downloadOportunidadesProgramadasPdf(
       textOrDash(r.model),
       textOrDash(r.serie),
       r.hours.toLocaleString('es-CO'),
+      textOrDash(formatTipoMttoLabel(r.tipoMtto)),
       textOrDash(r.lastMaintenance),
       textOrDash(r.nextDue),
       textOrDash(r.advisor),

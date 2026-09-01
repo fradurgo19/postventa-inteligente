@@ -100,6 +100,7 @@ import {
   sortOportunidadesProximas,
   hasValidMapCoordinates,
   buildGoogleMapsUrl,
+  formatTipoMttoLabel,
   type MaintenanceStatusUi,
   type TelemetriaOpportunityRow,
   type TelemetriaCalendarEvent,
@@ -131,6 +132,8 @@ interface MaintenanceEvent {
   sede: string;
   client: string;
   advisor: string;
+  hours: number;
+  tipoMtto: number | null;
 }
 
 type MaintenanceRow = TelemetriaOpportunityRow;
@@ -507,6 +510,8 @@ function MaintenanceCalendar({
       sede: ev.sede,
       client: ev.client,
       advisor: ev.advisor,
+      hours: ev.hours,
+      tipoMtto: ev.tipoMtto,
     });
   });
 
@@ -673,6 +678,18 @@ function MaintenanceCalendar({
                     {selectedEvent.advisor}
                   </dd>
                 </div>
+                <div className="flex gap-1.5 min-w-0">
+                  <dt className="text-muted-foreground shrink-0">Horómetro:</dt>
+                  <dd className="font-medium font-mono">
+                    {selectedEvent.hours.toLocaleString("es-CO")} h
+                  </dd>
+                </div>
+                <div className="flex gap-1.5 min-w-0 sm:col-span-2">
+                  <dt className="text-muted-foreground shrink-0">Tipo Mtto:</dt>
+                  <dd className="font-medium" title={formatTipoMttoLabel(selectedEvent.tipoMtto)}>
+                    {formatTipoMttoLabel(selectedEvent.tipoMtto)}
+                  </dd>
+                </div>
               </dl>
             </motion.div>
           )}
@@ -809,23 +826,24 @@ function OpportunitiesTable({
         <Table noScrollWrapper className="w-full table-fixed">
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead className="w-[10%] text-[11px] font-semibold pl-3">Equipo</TableHead>
-              <TableHead className="w-[7%] text-[11px] font-semibold">Marca</TableHead>
-              <TableHead className="w-[8%] text-[11px] font-semibold">Modelo</TableHead>
-              <TableHead className="w-[8%] text-[11px] font-semibold">Serie</TableHead>
-              <TableHead className="w-[6%] text-[11px] font-semibold text-right">Horas</TableHead>
-              <TableHead className="w-[9%] text-[11px] font-semibold">Descarga telemetría</TableHead>
-              <TableHead className="w-[10%] text-[11px] font-semibold">Fecha Estimada de Mtto</TableHead>
-              <TableHead className="w-[8%] text-[11px] font-semibold">Estado</TableHead>
-              <TableHead className="w-[10%] text-[11px] font-semibold">Asesor</TableHead>
-              <TableHead className="w-[12%] text-[11px] font-semibold">Cliente</TableHead>
+              <TableHead className="w-[9%] text-[11px] font-semibold pl-3">Equipo</TableHead>
+              <TableHead className="w-[6%] text-[11px] font-semibold">Marca</TableHead>
+              <TableHead className="w-[7%] text-[11px] font-semibold">Modelo</TableHead>
+              <TableHead className="w-[7%] text-[11px] font-semibold">Serie</TableHead>
+              <TableHead className="w-[5%] text-[11px] font-semibold text-right">Horas</TableHead>
+              <TableHead className="w-[10%] text-[11px] font-semibold">Tipo Mtto</TableHead>
+              <TableHead className="w-[8%] text-[11px] font-semibold">Descarga telemetría</TableHead>
+              <TableHead className="w-[9%] text-[11px] font-semibold">Fecha Estimada de Mtto</TableHead>
+              <TableHead className="w-[7%] text-[11px] font-semibold">Estado</TableHead>
+              <TableHead className="w-[9%] text-[11px] font-semibold">Asesor</TableHead>
+              <TableHead className="w-[11%] text-[11px] font-semibold">Cliente</TableHead>
               <TableHead className="w-[12%] text-[11px] font-semibold pr-3 text-center">Ubicación</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {pageRows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="text-center py-8 text-muted-foreground text-sm">
+                <TableCell colSpan={12} className="text-center py-8 text-muted-foreground text-sm">
                   No se encontraron resultados
                 </TableCell>
               </TableRow>
@@ -854,6 +872,12 @@ function OpportunitiesTable({
                   </TableCell>
                   <TableCell className="text-[11px] py-2 text-right font-mono font-semibold">
                     {row.hours.toLocaleString()}
+                  </TableCell>
+                  <TableCell
+                    className="text-[11px] py-2 max-w-0 truncate"
+                    title={formatTipoMttoLabel(row.tipoMtto)}
+                  >
+                    {formatTipoMttoLabel(row.tipoMtto)}
                   </TableCell>
                   <TableCell className="text-[11px] py-2 text-muted-foreground max-w-0 truncate" title={row.lastMaintenance}>
                     {row.lastMaintenance}
@@ -1135,6 +1159,9 @@ function DistribucionEquiposSection({
                       </p>
                       <p className="text-[11px] text-muted-foreground truncate">
                         {e.client} · {e.technician}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        {formatTipoMttoLabel(e.tipoMtto)} · {e.hours.toLocaleString("es-CO")} h
                       </p>
                     </button>
                   </li>

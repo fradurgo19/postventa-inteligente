@@ -1,5 +1,8 @@
 import type { TelemetriaOpportunityRow } from '@/lib/proyectados/map-telemetria-ui';
-import { hasValidMapCoordinates } from '@/lib/proyectados/map-telemetria-ui';
+import {
+  formatTipoMttoLabel,
+  hasValidMapCoordinates,
+} from '@/lib/proyectados/map-telemetria-ui';
 import {
   resolveSiteLabel,
   resolveZoneFromLocation,
@@ -24,6 +27,8 @@ export interface TelemetriaMapEntry {
   status: TelemetriaOpportunityRow['status'];
   latitud: number | null;
   longitud: number | null;
+  hours: number;
+  tipoMtto: number | null;
 }
 
 /** Punto preciso [lng, lat] para react-simple-maps. */
@@ -63,6 +68,8 @@ export function mapRowsToMapEntries(
     status: r.status,
     latitud: r.latitud,
     longitud: r.longitud,
+    hours: r.hours,
+    tipoMtto: r.tipoMtto,
   }));
 }
 
@@ -172,7 +179,7 @@ export function buildGpsMarkersFromEntries(
       department: toCanonicalDepartment(e.zone),
       coordinates: [e.longitud, e.latitud],
       isOpen: e.isOpen,
-      label: `${e.equipment} · ${e.serie}`,
+      label: `${e.equipment} · ${e.serie} · ${formatTipoMttoLabel(e.tipoMtto)} · ${e.hours.toLocaleString('es-CO')} h`,
     });
   }
   return points;
