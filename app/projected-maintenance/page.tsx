@@ -480,6 +480,86 @@ function KpiChartsSection({ rows }: Readonly<{ rows: TelemetriaOpportunityRow[] 
   );
 }
 
+/** Cantidad de proyecciones visibles por día antes de expandir. */
+const CALENDAR_DAY_PREVIEW = 2;
+
+function CalendarDayCell({
+  day,
+  events,
+  isToday,
+  isExpanded,
+  selectedEventId,
+  onSelectEvent,
+  onToggleExpand,
+}: Readonly<{
+  day: number;
+  events: MaintenanceEvent[];
+  isToday: boolean;
+  isExpanded: boolean;
+  selectedEventId: string | null;
+  onSelectEvent: (ev: MaintenanceEvent) => void;
+  onToggleExpand: (day: number) => void;
+}>) {
+  const hasOverflow = events.length > CALENDAR_DAY_PREVIEW;
+  const visibleEvents = isExpanded ? events : events.slice(0, CALENDAR_DAY_PREVIEW);
+  const hiddenCount = events.length - CALENDAR_DAY_PREVIEW;
+
+  return (
+    <div className="bg-background min-h-[52px] p-1 relative">
+      <span
+        className={`text-xs font-medium leading-none ${
+          isToday
+            ? "inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#cf1b22] text-white"
+            : "text-foreground/70"
+        }`}
+      >
+        {day}
+      </span>
+      <div
+        className={cn(
+          "mt-0.5 flex flex-col gap-0.5",
+          isExpanded && events.length > 6 && "max-h-40 overflow-y-auto pr-0.5"
+        )}
+      >
+        {visibleEvents.map((ev) => (
+          <button
+            key={ev.id}
+            type="button"
+            className={cn(
+              "rounded-sm px-0.5 py-px text-[9px] font-medium text-white truncate text-left w-full",
+              STATUS_CONFIG[ev.status].calClass,
+              selectedEventId === ev.id && "ring-2 ring-offset-1 ring-foreground/40"
+            )}
+            onClick={() => onSelectEvent(ev)}
+            aria-pressed={selectedEventId === ev.id}
+            aria-label={`Ver detalle de ${ev.title}`}
+          >
+            {ev.title.split("–")[0].trim()}
+          </button>
+        ))}
+        {hasOverflow && (
+          <button
+            type="button"
+            className="inline-flex items-center gap-0.5 text-[9px] text-muted-foreground pl-0.5 text-left hover:text-foreground"
+            onClick={() => onToggleExpand(day)}
+            aria-expanded={isExpanded}
+            aria-label={
+              isExpanded
+                ? `Contraer proyecciones del día ${day}`
+                : `Expandir ${hiddenCount} proyecciones más del día ${day}`
+            }
+          >
+            <ChevronDown
+              className={cn("h-2.5 w-2.5 shrink-0 transition-transform", isExpanded && "rotate-180")}
+            />
+            {isExpanded ? "Ver menos" : `+${hiddenCount} más`}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** Monthly Maintenance Calendar — fechas reales de telemetría filtrada */
 function MaintenanceCalendar({
   equipos,
@@ -488,6 +568,7 @@ function MaintenanceCalendar({
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [selectedEvent, setSelectedEvent] = useState<MaintenanceEvent | null>(null);
+  const [expandedDays, setExpandedDays] = useState<ReadonlySet<number>>(() => new Set());
 
   const daysInMonth = getDaysInMonth(viewYear, viewMonth);
   const firstDay = getFirstDayOfWeek(viewYear, viewMonth);
@@ -498,32 +579,40 @@ function MaintenanceCalendar({
     );
   }, [equipos, viewMonth, viewYear]);
 
-  const eventsByDay: Record<number, MaintenanceEvent[]> = {};
-  monthEvents.forEach((ev) => {
-    if (!eventsByDay[ev.day]) eventsByDay[ev.day] = [];
-    eventsByDay[ev.day].push({
-      id: ev.id,
-      day: ev.day,
-      title: ev.title,
-      status: ev.status,
-      serie: ev.serie,
-      sede: ev.sede,
-      client: ev.client,
-      advisor: ev.advisor,
-      hours: ev.hours,
-      tipoMtto: ev.tipoMtto,
-    });
-  });
+  const eventsByDay = useMemo(() => {
+    const byDay: Record<number, MaintenanceEvent[]> = {};
+    for (const ev of monthEvents) {
+      if (!byDay[ev.day]) byDay[ev.day] = [];
+      byDay[ev.day].push({
+        id: ev.id,
+        day: ev.day,
+        title: ev.title,
+        status: ev.status,
+        serie: ev.serie,
+        sede: ev.sede,
+        client: ev.client,
+        advisor: ev.advisor,
+        hours: ev.hours,
+        tipoMtto: ev.tipoMtto,
+      });
+    }
+    return byDay;
+  }, [monthEvents]);
+
+  const resetMonthUi = () => {
+    setSelectedEvent(null);
+    setExpandedDays(new Set());
+  };
 
   const prevMonth = () => {
-    setSelectedEvent(null);
+    resetMonthUi();
     if (viewMonth === 0) {
       setViewMonth(11);
       setViewYear((y) => y - 1);
     } else setViewMonth((m) => m - 1);
   };
   const nextMonth = () => {
-    setSelectedEvent(null);
+    resetMonthUi();
     if (viewMonth === 11) {
       setViewMonth(0);
       setViewYear((y) => y + 1);
@@ -537,6 +626,15 @@ function MaintenanceCalendar({
 
   const handleSelectEvent = (ev: MaintenanceEvent) => {
     setSelectedEvent((prev) => (prev?.id === ev.id ? null : ev));
+  };
+
+  const toggleDayExpanded = (day: number) => {
+    setExpandedDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(day)) next.delete(day);
+      else next.add(day);
+      return next;
+    });
   };
 
   return (
@@ -568,56 +666,26 @@ function MaintenanceCalendar({
 
         <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden">
           {cells.map((day, idx) => {
-            const events = day ? eventsByDay[day] ?? [] : [];
+            if (day == null) {
+              return <div key={`empty-${idx}`} className="bg-background min-h-[52px] p-1" />;
+            }
+            const events = eventsByDay[day] ?? [];
             const isToday =
               day === today.getDate() &&
               viewMonth === today.getMonth() &&
               viewYear === today.getFullYear();
 
             return (
-              <div key={idx} className="bg-background min-h-[52px] p-1 relative">
-                {day && (
-                  <>
-                    <span
-                      className={`text-xs font-medium leading-none ${
-                        isToday
-                          ? "inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#cf1b22] text-white"
-                          : "text-foreground/70"
-                      }`}
-                    >
-                      {day}
-                    </span>
-                    <div className="mt-0.5 flex flex-col gap-0.5">
-                      {events.slice(0, 2).map((ev) => (
-                        <button
-                          key={ev.id}
-                          type="button"
-                          className={cn(
-                            "rounded-sm px-0.5 py-px text-[9px] font-medium text-white truncate text-left w-full",
-                            STATUS_CONFIG[ev.status].calClass,
-                            selectedEvent?.id === ev.id && "ring-2 ring-offset-1 ring-foreground/40"
-                          )}
-                          onClick={() => handleSelectEvent(ev)}
-                          aria-pressed={selectedEvent?.id === ev.id}
-                          aria-label={`Ver detalle de ${ev.title}`}
-                        >
-                          {ev.title.split("–")[0].trim()}
-                        </button>
-                      ))}
-                      {events.length > 2 && (
-                        <button
-                          type="button"
-                          className="text-[9px] text-muted-foreground pl-0.5 text-left hover:text-foreground"
-                          onClick={() => handleSelectEvent(events[2])}
-                          aria-label={`Ver más eventos del día ${day}`}
-                        >
-                          +{events.length - 2} más
-                        </button>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
+              <CalendarDayCell
+                key={`day-${viewYear}-${viewMonth}-${day}`}
+                day={day}
+                events={events}
+                isToday={isToday}
+                isExpanded={expandedDays.has(day)}
+                selectedEventId={selectedEvent?.id ?? null}
+                onSelectEvent={handleSelectEvent}
+                onToggleExpand={toggleDayExpanded}
+              />
             );
           })}
         </div>
