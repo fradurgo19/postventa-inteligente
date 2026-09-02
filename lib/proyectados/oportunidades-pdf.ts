@@ -1,15 +1,21 @@
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import autoTable, { type CellHookData } from 'jspdf-autotable';
 import {
   fetchPartequiposLogoDataUrl,
 } from '@/lib/calculadora/quote-pdf';
 import {
+  buildGoogleMapsUrl,
   formatTipoMttoLabel,
+  hasValidMapCoordinates,
   type TelemetriaOpportunityRow,
 } from '@/lib/proyectados/map-telemetria-ui';
 
 const BRAND_RGB = { r: 207, g: 27, b: 34 } as const;
 const PAGE_MARGIN = 10;
+const MAPS_LINK_LABEL = 'Maps';
+const NO_GPS_LABEL = 'Sin GPS';
+/** Índice de columna "Ubicación" en el cuerpo de la tabla (0-based). */
+const UBICACION_COL_INDEX = 10;
 
 interface JsPdfWithAutoTable extends jsPDF {
   lastAutoTable?: { finalY: number };
@@ -33,6 +39,21 @@ export function filterProgramadasForPdf(
   rows: ReadonlyArray<TelemetriaOpportunityRow>
 ): TelemetriaOpportunityRow[] {
   return rows.filter((r) => r.status === 'Scheduled');
+}
+
+function resolveMapsUrl(row: TelemetriaOpportunityRow): string | null {
+  if (
+    !hasValidMapCoordinates(row.latitud, row.longitud) ||
+    row.latitud == null ||
+    row.longitud == null
+  ) {
+    return null;
+  }
+  return buildGoogleMapsUrl(row.latitud, row.longitud);
+}
+
+function ubicacionCellContent(row: TelemetriaOpportunityRow): string {
+  return resolveMapsUrl(row) ? MAPS_LINK_LABEL : NO_GPS_LABEL;
 }
 
 function addHeader(doc: jsPDF, logoDataUrl: string | null, total: number): void {
@@ -89,9 +110,24 @@ function addFooter(doc: JsPdfWithAutoTable): void {
   }
 }
 
+function styleUbicacionCell(data: CellHookData): void {
+  if (data.section !== 'body' || data.column.index !== UBICACION_COL_INDEX) return;
+  if (data.cell.text.join('') !== MAPS_LINK_LABEL) return;
+  data.cell.styles.textColor = [BRAND_RGB.r, BRAND_RGB.g, BRAND_RGB.b];
+  data.cell.styles.fontStyle = 'bold';
+}
+
+function attachMapsLink(data: CellHookData, mapsUrls: ReadonlyArray<string | null>): void {
+  if (data.section !== 'body' || data.column.index !== UBICACION_COL_INDEX) return;
+  const url = mapsUrls[data.row.index];
+  if (!url) return;
+  data.doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url });
+}
+
 /**
  * Genera y descarga PDF de oportunidades próximas programadas
  * (excluye vencidas y demás estados).
+ * Incluye hipervínculo Google Maps por registro cuando hay GPS válido.
  */
 export async function downloadOportunidadesProgramadasPdf(
   rows: ReadonlyArray<TelemetriaOpportunityRow>
@@ -102,6 +138,7 @@ export async function downloadOportunidadesProgramadasPdf(
   }
 
   const logoDataUrl = await fetchPartequiposLogoDataUrl();
+  const mapsUrls = programadas.map(resolveMapsUrl);
 
   const doc = new jsPDF({
     orientation: 'landscape',
@@ -125,6 +162,7 @@ export async function downloadOportunidadesProgramadasPdf(
         'Fecha estimada mtto',
         'Asesor',
         'Cliente',
+        'Ubicación',
       ],
     ],
     body: programadas.map((r) => [
@@ -138,6 +176,7 @@ export async function downloadOportunidadesProgramadasPdf(
       textOrDash(r.nextDue),
       textOrDash(r.advisor),
       textOrDash(r.client),
+      ubicacionCellContent(r),
     ]),
     theme: 'striped',
     styles: {
@@ -155,7 +194,12 @@ export async function downloadOportunidadesProgramadasPdf(
       fontSize: 7.5,
     },
     alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: {
+      [UBICACION_COL_INDEX]: { halign: 'center' },
+    },
     margin: { left: PAGE_MARGIN, right: PAGE_MARGIN, bottom: 12 },
+    didParseCell: styleUbicacionCell,
+    didDrawCell: (data) => attachMapsLink(data, mapsUrls),
   });
 
   addFooter(doc);

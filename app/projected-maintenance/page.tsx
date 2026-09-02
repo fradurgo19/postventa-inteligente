@@ -4,6 +4,7 @@ import { useState, useMemo, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { downloadOportunidadesProgramadasPdf } from "@/lib/proyectados/oportunidades-pdf";
+import { downloadOportunidadesProgramadasExcel } from "@/lib/proyectados/oportunidades-excel";
 import { ProyectadosImportPanel } from "@/components/modules/proyectados-import-panel";
 import {
   Wrench,
@@ -795,6 +796,7 @@ function OpportunitiesTable({
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [excelLoading, setExcelLoading] = useState(false);
   const rowsPerPage = 10;
 
   const filtered = useMemo(() => {
@@ -835,6 +837,22 @@ function OpportunitiesTable({
     }
   };
 
+  const handleDownloadExcel = async () => {
+    setExcelLoading(true);
+    try {
+      const result = await downloadOportunidadesProgramadasExcel(filtered);
+      if (!result.ok) {
+        toast.warning("No hay oportunidades programadas para exportar.");
+        return;
+      }
+      toast.success(`Excel descargado (${result.count} programada(s)).`);
+    } catch {
+      toast.error("No se pudo generar el Excel. Intente de nuevo.");
+    } finally {
+      setExcelLoading(false);
+    }
+  };
+
   return (
     <Card className="border-border shadow-sm">
       <CardHeader className="pb-3">
@@ -847,7 +865,7 @@ function OpportunitiesTable({
               size="sm"
               className="h-8 gap-1.5 text-xs"
               onClick={() => void handleDownloadPdf()}
-              disabled={pdfLoading || programadasCount === 0}
+              disabled={pdfLoading || excelLoading || programadasCount === 0}
               aria-label="Descargar oportunidades programadas en PDF"
             >
               {pdfLoading ? (
@@ -856,6 +874,22 @@ function OpportunitiesTable({
                 <FileText className="h-3.5 w-3.5 text-[#cf1b22]" />
               )}
               PDF programadas
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 text-xs"
+              onClick={() => void handleDownloadExcel()}
+              disabled={excelLoading || pdfLoading || programadasCount === 0}
+              aria-label="Descargar oportunidades programadas en Excel"
+            >
+              {excelLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="h-3.5 w-3.5 text-[#cf1b22]" />
+              )}
+              Excel programadas
             </Button>
             <div className="relative flex-1 sm:w-52">
               <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
