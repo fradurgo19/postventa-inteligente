@@ -11,6 +11,7 @@ import { ProyectadosImportPanel } from '@/components/modules/proyectados-import-
 import { AdminDomainImportTables } from '@/components/modules/admin-domain-import-tables';
 import { AdminTelemetriaRecordsTable } from '@/components/modules/admin-telemetria-records-table';
 import { AdminEquipoRelacionesTable } from '@/components/modules/admin-equipo-relaciones-table';
+import { CalculadoraAdminImport } from '@/components/modules/calculadora-admin-import';
 import {
   useAdminImportaciones,
   useDeleteTelemetriaImportBatch,
@@ -26,6 +27,7 @@ import { useUserStore } from '@/store';
 
 const IMPORT_TYPES = [
   'Cronograma / Telemetría',
+  'Temparios',
   'Relaciones Equipo · Cliente · Asesor',
   'Asesores',
   'Equipos',
@@ -148,11 +150,20 @@ export function AdminImportsPanel() {
       >
         <h2 className="text-sm font-semibold text-foreground mb-2">Importar Datos</h2>
         <p className="text-xs text-muted-foreground mb-4">
-          El Excel de telemetría alimenta <strong>asesores</strong>, <strong>clientes</strong>,{' '}
-          <strong>equipos</strong> y el <strong>cronograma</strong> (
-          <code className="text-[11px]">telemetria_equipos</code>). La primera carga puede ser el
-          histórico completo; cada mes se <strong>agregan</strong> ~300 registros sin borrar lo
-          anterior. Si cambian cliente/asesor/ubicación, se actualizan en maestros e historial.
+          {importType === 'Temparios' ? (
+            <>
+              Carga masiva y edición de <strong>temparios de mantenimiento</strong> que alimentan la
+              calculadora. Solo administradores.
+            </>
+          ) : (
+            <>
+              El Excel de telemetría alimenta <strong>asesores</strong>, <strong>clientes</strong>,{' '}
+              <strong>equipos</strong> y el <strong>cronograma</strong> (
+              <code className="text-[11px]">telemetria_equipos</code>). La primera carga puede ser el
+              histórico completo; cada mes se <strong>agregan</strong> ~300 registros sin borrar lo
+              anterior. Si cambian cliente/asesor/ubicación, se actualizan en maestros e historial.
+            </>
+          )}
         </p>
 
         <div className="mb-5">
@@ -204,6 +215,13 @@ export function AdminImportsPanel() {
               />
             ) : null}
           </div>
+        ) : null}
+
+        {importType === 'Temparios' && isAdmin ? <CalculadoraAdminImport /> : null}
+        {importType === 'Temparios' && !isAdmin ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">
+            Solo administradores pueden gestionar temparios.
+          </p>
         ) : null}
 
         {importType === 'Relaciones Equipo · Cliente · Asesor' ? (

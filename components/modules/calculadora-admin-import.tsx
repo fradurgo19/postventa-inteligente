@@ -245,7 +245,7 @@ export function CalculadoraAdminImport() {
   };
 
   return (
-    <div className="mt-6 border-t border-border pt-6 space-y-4 min-w-0">
+    <div className="space-y-4 min-w-0">
       <div className="flex items-start gap-3">
         <div className="h-9 w-9 rounded-lg bg-[#cf1b22]/10 flex items-center justify-center shrink-0">
           <Database className="h-4 w-4 text-[#cf1b22]" />

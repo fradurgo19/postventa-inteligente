@@ -801,15 +801,15 @@ function OpportunitiesTable({
 
   const filtered = useMemo(() => {
     const matched = rows.filter((r) => {
-      const matchSearch =
-        r.equipment.toLowerCase().includes(search.toLowerCase()) ||
-        r.brand.toLowerCase().includes(search.toLowerCase()) ||
+    const matchSearch =
+      r.equipment.toLowerCase().includes(search.toLowerCase()) ||
+      r.brand.toLowerCase().includes(search.toLowerCase()) ||
         r.advisor.toLowerCase().includes(search.toLowerCase()) ||
         r.client.toLowerCase().includes(search.toLowerCase()) ||
         r.serie.toLowerCase().includes(search.toLowerCase());
-      const matchStatus = statusFilter === "all" || r.status === statusFilter;
-      return matchSearch && matchStatus;
-    });
+    const matchStatus = statusFilter === "all" || r.status === statusFilter;
+    return matchSearch && matchStatus;
+  });
     return sortOportunidadesProximas(matched);
   }, [rows, search, statusFilter]);
 
@@ -926,8 +926,8 @@ function OpportunitiesTable({
       </CardHeader>
       <CardContent className="p-0">
         <Table noScrollWrapper className="w-full table-fixed">
-          <TableHeader>
-            <TableRow className="bg-muted/40 hover:bg-muted/40">
+            <TableHeader>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableHead className="w-[9%] text-[11px] font-semibold pl-3">Equipo</TableHead>
               <TableHead className="w-[6%] text-[11px] font-semibold">Marca</TableHead>
               <TableHead className="w-[7%] text-[11px] font-semibold">Modelo</TableHead>
@@ -940,26 +940,26 @@ function OpportunitiesTable({
               <TableHead className="w-[9%] text-[11px] font-semibold">Asesor</TableHead>
               <TableHead className="w-[11%] text-[11px] font-semibold">Cliente</TableHead>
               <TableHead className="w-[12%] text-[11px] font-semibold pr-3 text-center">Ubicación</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {pageRows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={12} className="text-center py-8 text-muted-foreground text-sm">
-                  No se encontraron resultados
-                </TableCell>
               </TableRow>
-            ) : (
+            </TableHeader>
+            <TableBody>
+            {pageRows.length === 0 ? (
+                <TableRow>
+                <TableCell colSpan={12} className="text-center py-8 text-muted-foreground text-sm">
+                    No se encontraron resultados
+                  </TableCell>
+                </TableRow>
+              ) : (
               pageRows.map((row, i) => {
                 const canOpenMaps = hasValidMapCoordinates(row.latitud, row.longitud);
                 return (
-                <motion.tr
-                  key={row.id}
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.04 }}
-                  className="border-b border-border/50 hover:bg-muted/30 transition-colors"
-                >
+                  <motion.tr
+                    key={row.id}
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.04 }}
+                    className="border-b border-border/50 hover:bg-muted/30 transition-colors"
+                  >
                   <TableCell className="text-[11px] font-medium pl-3 py-2 max-w-0 truncate" title={row.equipment}>
                     {row.equipment}
                   </TableCell>
@@ -1022,12 +1022,12 @@ function OpportunitiesTable({
                       </span>
                     )}
                   </TableCell>
-                </motion.tr>
+                  </motion.tr>
                 );
               })
-            )}
-          </TableBody>
-        </Table>
+              )}
+            </TableBody>
+          </Table>
 
         {/* Pagination */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-border">
@@ -1347,18 +1347,18 @@ function DashboardTab() {
           <Skeleton className="h-64 w-full rounded-xl" />
         </div>
       ) : (
-        <motion.div
+    <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.35 }}
-          className="space-y-6"
-        >
+      transition={{ duration: 0.35 }}
+      className="space-y-6"
+    >
           <KPIRow rows={filteredRows} />
           <KpiChartsSection rows={filteredRows} />
           <MaintenanceCalendar equipos={filteredEquipos} />
           <DistribucionEquiposSection rows={filteredRows} />
           <OpportunitiesTable rows={filteredRows} />
-        </motion.div>
+    </motion.div>
       )}
     </div>
   );
@@ -1396,17 +1396,17 @@ function ImportTab() {
               <Skeleton className="h-32 w-full" />
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/40 hover:bg-muted/40">
-                  <TableHead className="text-xs font-semibold pl-4">Fecha</TableHead>
-                  <TableHead className="text-xs font-semibold">Nombre del Archivo</TableHead>
-                  <TableHead className="text-xs font-semibold text-right">Registros</TableHead>
-                  <TableHead className="text-xs font-semibold">Estado</TableHead>
-                  <TableHead className="text-xs font-semibold pr-4">Usuario</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead className="text-xs font-semibold pl-4">Fecha</TableHead>
+                <TableHead className="text-xs font-semibold">Nombre del Archivo</TableHead>
+                <TableHead className="text-xs font-semibold text-right">Registros</TableHead>
+                <TableHead className="text-xs font-semibold">Estado</TableHead>
+                <TableHead className="text-xs font-semibold pr-4">Usuario</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
                 {importHistory.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-8 text-sm text-muted-foreground">
@@ -1415,31 +1415,31 @@ function ImportTab() {
                   </TableRow>
                 ) : (
                   importHistory.map((row: ProyectadosImportLog, i: number) => (
-                    <motion.tr
-                      key={row.id}
-                      initial={{ opacity: 0, x: -6 }}
-                      animate={{ opacity: 1, x: 0 }}
+                <motion.tr
+                  key={row.id}
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.04 }}
-                      className="border-b border-border/50 hover:bg-muted/30 transition-colors"
+                  className="border-b border-border/50 hover:bg-muted/30 transition-colors"
+                >
+                  <TableCell className="text-xs pl-4 py-2.5 text-muted-foreground whitespace-nowrap">
+                    {row.date}
+                  </TableCell>
+                  <TableCell className="text-xs py-2.5 font-medium font-mono">{row.fileName}</TableCell>
+                  <TableCell className="text-xs py-2.5 text-right font-semibold">{row.records}</TableCell>
+                  <TableCell className="py-2.5">
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${importStatusConfig[row.status].className}`}
                     >
-                      <TableCell className="text-xs pl-4 py-2.5 text-muted-foreground whitespace-nowrap">
-                        {row.date}
-                      </TableCell>
-                      <TableCell className="text-xs py-2.5 font-medium font-mono">{row.fileName}</TableCell>
-                      <TableCell className="text-xs py-2.5 text-right font-semibold">{row.records}</TableCell>
-                      <TableCell className="py-2.5">
-                        <span
-                          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${importStatusConfig[row.status].className}`}
-                        >
-                          {importStatusConfig[row.status].label}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-xs py-2.5 pr-4 text-muted-foreground">{row.user}</TableCell>
-                    </motion.tr>
+                      {importStatusConfig[row.status].label}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-xs py-2.5 pr-4 text-muted-foreground">{row.user}</TableCell>
+                </motion.tr>
                   ))
                 )}
-              </TableBody>
-            </Table>
+            </TableBody>
+          </Table>
           )}
         </CardContent>
       </Card>

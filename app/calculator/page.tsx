@@ -66,8 +66,6 @@ import {
   HOROMETRO_MIN,
   normalizeHorometro,
 } from '@/lib/maintenance-frequency';
-import { useUserStore } from '@/store';
-import { CalculadoraAdminImport } from '@/components/modules/calculadora-admin-import';
 import { SectionFrame } from '@/components/ui/section-frame';
 import { downloadPreventiveQuotePdf } from '@/lib/calculadora/quote-pdf';
 import { normalizeEquipKey } from '@/lib/calculadora/build-quote';
@@ -171,8 +169,6 @@ function telemetriaSheetDescription(params: {
 }
 
 export default function CalculatorPage() {
-  const { role } = useUserStore();
-  const isAdmin = role === 'Administrator';
   const { data: marcas = [] } = useCalculadoraMarcas();
   const { data: telemetriaData } = useTelemetriaEquipos();
   const telemetria: TelemetriaEquipo[] = useMemo(
@@ -252,7 +248,7 @@ export default function CalculatorPage() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'No se pudo calcular el mantenimiento');
     } finally {
-      setIsCalculating(false);
+    setIsCalculating(false);
     }
   };
 
@@ -313,87 +309,87 @@ export default function CalculatorPage() {
         <div className="flex items-center gap-2 mb-1 pr-24">
           <div className="w-8 h-8 rounded-lg bg-[#cf1b22] flex items-center justify-center">
             <Wrench className="w-4 h-4 text-white" />
-          </div>
-          <div>
+            </div>
+            <div>
             <h2 className="text-sm font-semibold text-foreground">
               Calculadora de Mantenimiento Preventivo
-            </h2>
+              </h2>
             <p className="text-xs text-muted-foreground">
               Seleccione marca, modelo y horómetro para calcular el servicio
             </p>
+            </div>
           </div>
-        </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-3 items-end">
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Marca
-            </Label>
-            <Controller
-              name="brand"
-              control={control}
-              render={({ field }) => (
-                <Select
-                  value={field.value}
-                  onValueChange={(v) => {
-                    field.onChange(v);
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Marca
+              </Label>
+              <Controller
+                name="brand"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    value={field.value}
+                    onValueChange={(v) => {
+                      field.onChange(v);
                     setValue('model', '');
                     setSelectedMachine(null);
-                  }}
-                >
-                  <SelectTrigger className="h-9 text-sm">
+                    }}
+                  >
+                    <SelectTrigger className="h-9 text-sm">
                     <SelectValue placeholder="Marca…" />
-                  </SelectTrigger>
-                  <SelectContent>
+                    </SelectTrigger>
+                    <SelectContent>
                     {marcas.map((b: string) => (
-                      <SelectItem key={b} value={b}>
-                        {b}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                        <SelectItem key={b} value={b}>
+                          {b}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {errors.brand && (
+                <p className="text-xs text-destructive">{errors.brand.message}</p>
               )}
-            />
-            {errors.brand && (
-              <p className="text-xs text-destructive">{errors.brand.message}</p>
-            )}
-          </div>
+            </div>
 
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Modelo
-            </Label>
-            <Controller
-              name="model"
-              control={control}
-              render={({ field }) => (
-                <Select
-                  value={field.value}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Modelo
+              </Label>
+              <Controller
+                name="model"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    value={field.value}
                   onValueChange={(v) => {
                     field.onChange(v);
                     setSelectedMachine(null);
                   }}
-                  disabled={!selectedBrand}
-                >
-                  <SelectTrigger className="h-9 text-sm">
+                    disabled={!selectedBrand}
+                  >
+                    <SelectTrigger className="h-9 text-sm">
                     <SelectValue placeholder={selectedBrand ? 'Modelo…' : 'Marca primero'} />
-                  </SelectTrigger>
-                  <SelectContent>
+                    </SelectTrigger>
+                    <SelectContent>
                     {modelos.map((m: string) => (
-                      <SelectItem key={m} value={m}>
-                        {m}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                        <SelectItem key={m} value={m}>
+                          {m}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {errors.model && (
+                <p className="text-xs text-destructive">{errors.model.message}</p>
               )}
-            />
-            {errors.model && (
-              <p className="text-xs text-destructive">{errors.model.message}</p>
-            )}
-          </div>
+            </div>
 
-          <div className="space-y-1.5">
+            <div className="space-y-1.5">
             <div className="flex items-center gap-1.5 min-h-4 flex-wrap">
               <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 Horómetro (h)
@@ -408,7 +404,7 @@ export default function CalculatorPage() {
                   {FRECUENCIA_LABELS[f].replace('Mantenimiento ', '')}
                 </Badge>
               ))}
-            </div>
+              </div>
             <Controller
               name="hourMeter"
               control={control}
@@ -430,9 +426,9 @@ export default function CalculatorPage() {
                 </Select>
               )}
             />
-          </div>
+            </div>
 
-          <div className="space-y-1.5">
+            <div className="space-y-1.5">
             <div className="flex items-center gap-1.5 min-h-4 flex-wrap">
               <Label
                 htmlFor="km-trayecto"
@@ -444,20 +440,20 @@ export default function CalculatorPage() {
                 Un trayecto (ida)
               </span>
             </div>
-            <div className="relative">
-              <Gauge className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <Input
+              <div className="relative">
+                <Gauge className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <Input
                 id="km-trayecto"
-                type="number"
-                min={0}
-                className="h-9 text-sm pl-8"
+                  type="number"
+                  min={0}
+                  className="h-9 text-sm pl-8"
                 aria-describedby="km-trayecto-hint"
                 {...register('kilometers')}
-              />
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="space-y-1.5">
+            <div className="space-y-1.5">
             <div className="flex items-center gap-1.5 min-h-4 flex-wrap">
               <Label
                 htmlFor="tiempo-viaje"
@@ -469,19 +465,19 @@ export default function CalculatorPage() {
                 Un trayecto (ida)
               </span>
             </div>
-            <div className="relative">
+              <div className="relative">
               <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <Input
+                <Input
                 id="tiempo-viaje"
-                type="number"
-                min={0}
-                step={0.5}
-                className="h-9 text-sm pl-8"
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  className="h-9 text-sm pl-8"
                 aria-describedby="tiempo-viaje-hint"
                 {...register('travelTime')}
-              />
+                />
+              </div>
             </div>
-          </div>
 
           <div className="space-y-1.5">
             <div className="flex items-center gap-1.5 min-h-4 flex-wrap">
@@ -535,40 +531,40 @@ export default function CalculatorPage() {
                 <RotateCcw className="w-4 h-4" />
               </Button>
             </div>
+            </div>
           </div>
-        </div>
       </SectionFrame>
-      </div>
+        </div>
 
       {/* ── MAIN + SUMMARY ── */}
       <div className="flex flex-1 gap-4 min-h-0">
         <main className="flex-1 overflow-y-auto space-y-4 min-w-0">
           {/* Selected equipment card */}
           <SectionFrame variant="equipment" chipLabel="Equipo" className="overflow-hidden">
-            <div className="flex flex-col sm:flex-row">
+                    <div className="flex flex-col sm:flex-row">
                 <div className="w-full sm:w-44 h-32 sm:h-auto bg-[#2563eb]/5 flex flex-col items-center justify-center border-b sm:border-b-0 sm:border-r border-[#2563eb]/20 gap-2">
                   <Truck className="w-10 h-10 text-[#2563eb]/50" />
                   <span className="text-[10px] text-[#1d4ed8]/70 uppercase tracking-wide">
                     {selectedMachine?.marca ?? 'Equipo'}
-                  </span>
-                </div>
+                        </span>
+                      </div>
                 <div className="flex-1 p-5 pr-24">
                   <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
-                    <div>
-                      <h3 className="text-lg font-bold text-foreground">
+                          <div>
+                            <h3 className="text-lg font-bold text-foreground">
                         {selectedMachine
                           ? `${selectedMachine.marca} ${selectedMachine.modelo}`
                           : 'Sin equipo seleccionado'}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
                         {selectedMachine
                           ? 'Equipo seleccionado de telemetría'
                           : 'Seleccione una máquina de telemetría o calcule por marca/modelo'}
-                      </p>
-                    </div>
+                            </p>
+                          </div>
                     <Button
                       type="button"
-                      variant="outline"
+                            variant="outline"
                       size="sm"
                       className="border-[#2563eb]/30 text-[#1d4ed8] hover:bg-[#2563eb]/5"
                       onClick={() => setMachineSheetOpen(true)}
@@ -580,13 +576,13 @@ export default function CalculatorPage() {
                         {filteredTelemetria.length !== activeTelemetria.length
                           ? ` / ${activeTelemetria.length}`
                           : ''}
-                      </Badge>
+                          </Badge>
                     </Button>
-                  </div>
+                        </div>
 
                   {selectedMachine ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      {[
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          {[
                         { icon: Hash, label: 'Serie', value: selectedMachine.serie },
                         {
                           icon: Clock,
@@ -613,27 +609,27 @@ export default function CalculatorPage() {
                           label: 'Próximo mtto',
                           value: selectedMachine.fecha_primer_mtto ?? 'N/A',
                         },
-                      ].map(({ icon: Icon, label, value }) => (
-                        <div key={label} className="space-y-0.5">
-                          <div className="flex items-center gap-1.5">
+                          ].map(({ icon: Icon, label, value }) => (
+                            <div key={label} className="space-y-0.5">
+                              <div className="flex items-center gap-1.5">
                             <Icon className="w-3 h-3 text-[#2563eb]" />
-                            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
-                              {label}
-                            </span>
-                          </div>
+                                <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                                  {label}
+                                </span>
+                              </div>
                           <p className="text-sm font-semibold text-foreground pl-4 truncate">
-                            {value}
-                          </p>
+                                {value}
+                              </p>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
                   ) : (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground bg-[#2563eb]/5 rounded-lg px-3 py-3 border border-[#2563eb]/15">
                       <AlertCircle className="w-4 h-4 flex-shrink-0 text-[#2563eb]" />
                       Use el botón para listar las máquinas de telemetría y seleccionar una.
-                    </div>
+                      </div>
                   )}
-                </div>
+                    </div>
               </div>
           </SectionFrame>
 
@@ -667,7 +663,7 @@ export default function CalculatorPage() {
                           Actividades
                           <Badge variant="secondary" className="ml-1.5 text-xs font-normal">
                             {result.activities.length}
-                          </Badge>
+                      </Badge>
                         </TabsTrigger>
                         <TabsTrigger
                           value="fluids"
@@ -690,7 +686,7 @@ export default function CalculatorPage() {
                       </TabsList>
 
                       <TabsContent value="activities" className="mt-0">
-                        <div className="overflow-x-auto">
+                    <div className="overflow-x-auto">
                           {result.activities.length === 0 ? (
                             <div className="py-6 text-center space-y-1">
                               <p className="text-sm text-muted-foreground">
@@ -710,8 +706,8 @@ export default function CalculatorPage() {
                               )}
                             </div>
                           ) : (
-                            <Table>
-                              <TableHeader>
+                      <Table>
+                        <TableHeader>
                                 <TableRow className="bg-muted/30 hover:bg-muted/30">
                                   <TableHead className="text-right">Frecuencia</TableHead>
                                   <TableHead>Marca</TableHead>
@@ -720,34 +716,34 @@ export default function CalculatorPage() {
                                   <TableHead>Código SAMM</TableHead>
                                   <TableHead className="text-right">Tiempo (h)</TableHead>
                                   <TableHead className="text-right">Mano de obra</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
                                 {result.activities.map((act) => (
                                   <TableRow key={act.id}>
                                     <TableCell className="text-sm text-right tabular-nums">
                                       {act.frecuenciaHoras ?? '—'}
-                                    </TableCell>
+                              </TableCell>
                                     <TableCell className="text-sm whitespace-nowrap">
                                       {act.marca ?? result.brand}
-                                    </TableCell>
+                              </TableCell>
                                     <TableCell className="text-sm whitespace-nowrap">
                                       {act.modelo ?? result.model}
-                                    </TableCell>
+                              </TableCell>
                                     <TableCell className="font-medium text-sm">
                                       {act.activity}
-                                    </TableCell>
+                              </TableCell>
                                     <TableCell>
                                       <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
                                         {act.codigoSamm || '—'}
                                       </code>
-                                    </TableCell>
+                              </TableCell>
                                     <TableCell className="text-sm text-right tabular-nums">
                                       {act.laborHours.toFixed(2)}
                                     </TableCell>
                                     <TableCell className="text-sm text-right font-semibold tabular-nums">
-                                      {formatCOP(act.subtotal)}
-                                    </TableCell>
+                                {formatCOP(act.subtotal)}
+                              </TableCell>
                                   </TableRow>
                                 ))}
                                 <TableRow className="bg-muted/30">
@@ -764,10 +760,10 @@ export default function CalculatorPage() {
                                     {formatCOP(result.costs.labor)}
                                   </TableCell>
                                 </TableRow>
-                              </TableBody>
-                            </Table>
+                        </TableBody>
+                      </Table>
                           )}
-                        </div>
+                    </div>
                       </TabsContent>
 
                       <TabsContent value="fluids" className="mt-0">
@@ -789,13 +785,13 @@ export default function CalculatorPage() {
                               )}
                             </div>
                           ) : (
-                            <Table>
-                              <TableHeader>
-                                <TableRow className="bg-muted/30 hover:bg-muted/30">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-muted/30 hover:bg-muted/30">
                                   <TableHead className="text-right">Freq. (h)</TableHead>
                                   <TableHead>Fluido</TableHead>
-                                  <TableHead className="text-right">Cant.</TableHead>
-                                  <TableHead>Unidad</TableHead>
+                                <TableHead className="text-right">Cant.</TableHead>
+                                <TableHead>Unidad</TableHead>
                                   <TableHead>Aceite homologado</TableHead>
                                   <TableHead>Ref. genuina</TableHead>
                                   <TableHead>REF SAP DISPEL</TableHead>
@@ -803,14 +799,14 @@ export default function CalculatorPage() {
                                   <TableHead>Ref. Stal</TableHead>
                                   <TableHead>Ref. Donaldson</TableHead>
                                   <TableHead>Ref. Fleetguard</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
                                 {result.fluids.map((f, i) => (
                                   <TableRow key={`fluid-${f.item}-${i}`}>
                                     <TableCell className="text-right tabular-nums text-sm">
                                       {f.frecuenciaHoras ?? '—'}
-                                    </TableCell>
+                                </TableCell>
                                     <TableCell className="font-medium text-sm min-w-[12rem]">
                                       <span className="block">{f.item}</span>
                                       <span className="text-[11px] text-muted-foreground">
@@ -846,11 +842,11 @@ export default function CalculatorPage() {
                                     </TableCell>
                                     <TableCell className="text-xs font-mono whitespace-nowrap">
                                       {refCell(f.referenciaFleetguard)}
-                                    </TableCell>
-                                  </TableRow>
+                                </TableCell>
+                              </TableRow>
                                 ))}
-                              </TableBody>
-                            </Table>
+                            </TableBody>
+                          </Table>
                           )}
                           <p className="text-xs text-muted-foreground mt-3">
                             Fluidos (Modelo2 = Fluido / catálogo Aceite) según marca, modelo y
@@ -867,40 +863,40 @@ export default function CalculatorPage() {
                               no están disponibles aún.
                             </p>
                           ) : (
-                            <Table>
-                              <TableHeader>
-                                <TableRow className="bg-muted/30 hover:bg-muted/30">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-muted/30 hover:bg-muted/30">
                                   <TableHead className="text-right">Freq. (h)</TableHead>
                                   <TableHead>Código / Ref.</TableHead>
-                                  <TableHead>Descripción</TableHead>
-                                  <TableHead className="text-right">Cant.</TableHead>
+                                <TableHead>Descripción</TableHead>
+                                <TableHead className="text-right">Cant.</TableHead>
                                   <TableHead>Unidad</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {result.parts.map((p, i) => (
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {result.parts.map((p, i) => (
                                   <TableRow key={`${p.sapCode}-${i}`}>
                                     <TableCell className="text-right tabular-nums text-sm">
                                       {p.frecuenciaHoras ?? '—'}
                                     </TableCell>
-                                    <TableCell>
-                                      <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
-                                        {p.sapCode}
-                                      </code>
-                                    </TableCell>
+                                  <TableCell>
+                                    <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
+                                      {p.sapCode}
+                                    </code>
+                                  </TableCell>
                                     <TableCell className="font-medium text-sm">
                                       {p.description}
-                                    </TableCell>
+                                </TableCell>
                                     <TableCell className="text-right tabular-nums">
                                       {p.quantity}
                                     </TableCell>
                                     <TableCell className="text-muted-foreground">
                                       {p.unit || 'Unidad'}
-                                    </TableCell>
-                                  </TableRow>
+                                </TableCell>
+                              </TableRow>
                                 ))}
-                              </TableBody>
-                            </Table>
+                            </TableBody>
+                          </Table>
                           )}
                           <p className="text-xs text-muted-foreground mt-3">
                             Listado desde temparios (Repuesto). Valores monetarios omitidos: sin
@@ -925,13 +921,7 @@ export default function CalculatorPage() {
               </SectionFrame>
             )}
           </AnimatePresence>
-
-          {isAdmin && (
-            <div className="pt-2">
-              <CalculadoraAdminImport />
-            </div>
-          )}
-        </main>
+      </main>
 
         {/* Right summary */}
         <aside className="w-[300px] flex-shrink-0 hidden lg:block">
@@ -947,12 +937,12 @@ export default function CalculatorPage() {
                 <div className="pb-3">
                   <h3 className="text-sm font-semibold flex items-center gap-2 text-foreground">
                     <FileText className="w-4 h-4 text-[#d97706]" />
-                    Resumen de Costos
+                      Resumen de Costos
                   </h3>
                 </div>
                 <div>
-                  <div className="space-y-2.5 mb-4">
-                    {[
+                    <div className="space-y-2.5 mb-4">
+                      {[
                       {
                         label: 'Mano de Obra',
                         value: result.costs.labor,
@@ -968,50 +958,50 @@ export default function CalculatorPage() {
                         {hint ? (
                           <p className="text-[11px] text-muted-foreground text-right">{hint}</p>
                         ) : null}
-                      </div>
-                    ))}
+                        </div>
+                      ))}
                     <p className="text-[11px] text-muted-foreground pt-1">
                       Fluidos y repuestos: solo listado (sin precio SAP).
                     </p>
-                  </div>
-                  <Separator className="my-3" />
+                    </div>
+                    <Separator className="my-3" />
                   <div className="space-y-2 mb-4">
                     <div className="flex justify-between">
-                      <span className="text-sm font-medium">Subtotal</span>
+                        <span className="text-sm font-medium">Subtotal</span>
                       <span className="text-sm font-semibold tabular-nums">
-                        {formatCOP(result.costs.subtotal)}
-                      </span>
-                    </div>
+                          {formatCOP(result.costs.subtotal)}
+                        </span>
+                      </div>
                     <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">IVA (19%)</span>
+                        <span className="text-sm text-muted-foreground">IVA (19%)</span>
                       <span className="text-sm font-semibold tabular-nums">
-                        {formatCOP(result.costs.vat)}
-                      </span>
+                          {formatCOP(result.costs.vat)}
+                        </span>
+                      </div>
                     </div>
-                  </div>
                   <div className="flex justify-between py-2 px-3 rounded-lg bg-[#d97706]/10 border border-[#d97706]/30 mb-5">
                     <span className="text-sm font-bold text-[#b45309]">TOTAL</span>
                     <span className="text-base font-extrabold text-[#b45309] tabular-nums">
-                      {formatCOP(result.costs.total)}
-                    </span>
+                        {formatCOP(result.costs.total)}
+                      </span>
                   </div>
-                  <div className="space-y-2">
-                    <Button
+                    <div className="space-y-2">
+                      <Button
                       type="button"
                       className="w-full h-9 bg-[#cf1b22] hover:bg-[#a51519] text-white"
                       disabled={isGeneratingPdf}
                       onClick={handleGeneratePdf}
-                    >
-                      <FileText className="w-4 h-4 mr-2" />
+                      >
+                        <FileText className="w-4 h-4 mr-2" />
                       {isGeneratingPdf ? 'Generando PDF…' : 'Generar PDF'}
-                    </Button>
-                    <Button
-                      variant="outline"
+                      </Button>
+                      <Button
+                        variant="outline"
                       className="w-full h-9 border-[#d97706]/40 text-[#b45309] hover:bg-[#d97706]/5"
-                    >
-                      <Save className="w-4 h-4 mr-2" />
-                      Guardar Cotización
-                    </Button>
+                      >
+                        <Save className="w-4 h-4 mr-2" />
+                        Guardar Cotización
+                      </Button>
                   </div>
                 </div>
               </div>
@@ -1025,7 +1015,7 @@ export default function CalculatorPage() {
           </div>
           </SectionFrame>
         </aside>
-      </div>
+                    </div>
 
       {/* Telemetry machines sheet */}
       <Sheet open={machineSheetOpen} onOpenChange={setMachineSheetOpen}>
@@ -1064,7 +1054,7 @@ export default function CalculatorPage() {
                         {m.marca} {m.modelo}
                       </p>
                       <p className="text-xs text-muted-foreground font-mono">{m.serie}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                         {m.titulo ?? 'Sin cliente'} · {m.sede ?? m.ciudad ?? '—'}
                       </p>
                     </div>
@@ -1075,7 +1065,7 @@ export default function CalculatorPage() {
                 </button>
               ))
             )}
-          </div>
+        </div>
         </SheetContent>
       </Sheet>
     </div>
