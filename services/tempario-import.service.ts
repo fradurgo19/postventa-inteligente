@@ -25,7 +25,16 @@ function chunkArray<T>(items: T[], size: number): T[][] {
   return chunks;
 }
 
-function toDbPayload(row: TemparioImportRow, updatedBy: string): Record<string, unknown> {
+function resolveImportEstado(recordsOk: number, recordsError: number): string {
+  if (recordsError <= 0) return 'completado';
+  return recordsOk > 0 ? 'parcial' : 'fallido';
+}
+
+function toDbPayload(
+  row: TemparioImportRow,
+  updatedBy: string,
+  importBatchId: string | null
+): Record<string, unknown> {
   const payload: Record<string, unknown> = {
     legacy_id: row.legacy_id,
     marca: row.marca,
@@ -50,6 +59,7 @@ function toDbPayload(row: TemparioImportRow, updatedBy: string): Record<string, 
     created_by: row.created_by,
     updated_by: updatedBy || row.updated_by,
     activo: true,
+    import_batch_id: importBatchId,
   };
 
   if (row.created_at) payload.created_at = row.created_at;
@@ -82,6 +92,7 @@ async function refreshSessionIfNeeded(): Promise<void> {
 async function upsertTemparioBatch(
   rows: TemparioImportRow[],
   updatedBy: string,
+  importBatchId: string | null,
   onProgress?: (p: TemparioImportProgress) => void
 ): Promise<{ ok: number; updated: number; errors: Array<{ row: number; message: string }> }> {
   const supabase = getSupabaseClient();
@@ -129,7 +140,7 @@ async function upsertTemparioBatch(
       (existingRows ?? []).map((r) => Number(r.legacy_id)).filter((n) => Number.isFinite(n))
     );
 
-    const payloads = batch.map((row) => toDbPayload(row, updatedBy));
+    const payloads = batch.map((row) => toDbPayload(row, updatedBy, importBatchId));
 
     const { error: upsertErr } = await supabase.from('temparios_mantenimiento').upsert(payloads, {
       onConflict: 'legacy_id',
@@ -139,7 +150,7 @@ async function upsertTemparioBatch(
     if (upsertErr) {
       // Fallback fila a fila dentro del lote
       for (const row of batch) {
-        const payload = toDbPayload(row, updatedBy);
+        const payload = toDbPayload(row, updatedBy, importBatchId);
         const { error: rowErr } = await supabase
           .from('temparios_mantenimiento')
           .upsert(payload, { onConflict: 'legacy_id', ignoreDuplicates: false });
@@ -188,7 +199,7 @@ async function upsertTemparioBatch(
   for (const batch of chunkArray(withoutLegacy, BATCH_SIZE)) {
     await refreshSessionIfNeeded();
     const payloads = batch.map((row) => {
-      const p = toDbPayload(row, updatedBy);
+      const p = toDbPayload(row, updatedBy, importBatchId);
       delete p.legacy_id;
       return p;
     });
@@ -260,6 +271,27 @@ export async function importTempariosFromFile(
 
   await refreshSessionIfNeeded();
 
+  const supabase = getSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const { data: importLog } = await supabase
+    .from('importaciones')
+    .insert({
+      modulo: 'calculadora',
+      nombre_archivo: file.name,
+      tipo_archivo: file.name.split('.').pop() ?? 'xlsx',
+      registros_ok: 0,
+      registros_error: parsed.errors.length,
+      user_id: session?.user.id ?? null,
+      estado: 'procesando',
+    })
+    .select('id')
+    .maybeSingle();
+
+  const importBatchId = (importLog?.id as string | undefined) ?? null;
+
   onProgress?.({
     phase: 'upload',
     processed: 0,
@@ -269,7 +301,12 @@ export async function importTempariosFromFile(
     errors: parsed.errors.length,
   });
 
-  const result = await upsertTemparioBatch(parsed.rows, createdBy, onProgress);
+  const result = await upsertTemparioBatch(
+    parsed.rows,
+    createdBy,
+    importBatchId,
+    onProgress
+  );
   const recordsOk = result.ok;
   const recordsError = parsed.errors.length + result.errors.length;
   const allErrors = [...parsed.errors, ...result.errors].slice(0, MAX_ERROR_SAMPLES);
@@ -283,27 +320,23 @@ export async function importTempariosFromFile(
     errors: recordsError,
   });
 
-  const supabase = getSupabaseClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  try {
-    await supabase.from('importaciones').insert({
-      modulo: 'calculadora',
-      nombre_archivo: file.name,
-      tipo_archivo: file.name.split('.').pop() ?? 'xlsx',
-      registros_total: parsedTotal,
-      registros_ok: recordsOk,
-      registros_error: recordsError,
-      duplicados: result.updated,
-      estado: recordsError > 0 ? (recordsOk > 0 ? 'parcial' : 'fallido') : 'completado',
-      errores_json: allErrors,
-      user_id: session?.user.id ?? null,
-      completed_at: new Date().toISOString(),
-    });
-  } catch {
-    // no bloquear
+  if (importBatchId) {
+    try {
+      await supabase
+        .from('importaciones')
+        .update({
+          registros_total: parsedTotal,
+          registros_ok: recordsOk,
+          registros_error: recordsError,
+          duplicados: result.updated,
+          estado: resolveImportEstado(recordsOk, recordsError),
+          errores_json: allErrors,
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', importBatchId);
+    } catch {
+      // no bloquear
+    }
   }
 
   return {

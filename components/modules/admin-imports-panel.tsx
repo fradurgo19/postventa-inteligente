@@ -14,8 +14,12 @@ import { AdminEquipoRelacionesTable } from '@/components/modules/admin-equipo-re
 import {
   useAdminImportaciones,
   useDeleteTelemetriaImportBatch,
+  useDeleteTemparioImportBatch,
 } from '@/hooks/use-administration';
-import { countTelemetriaByImportBatch } from '@/services/administration.service';
+import {
+  countTelemetriaByImportBatch,
+  countTempariosByImportBatch,
+} from '@/services/administration.service';
 import type { AdminImportRow } from '@/services/administration.service';
 import { useQueryClient } from '@tanstack/react-query';
 import { useUserStore } from '@/store';
@@ -37,6 +41,10 @@ function formatImportChanges(resumen: AdminImportRow['resumen']): string | null 
   if (resumen.cambio_asesor) parts.push(`Asesor: ${resumen.cambio_asesor}`);
   if (resumen.cambio_ubicacion) parts.push(`Ubicación: ${resumen.cambio_ubicacion}`);
   return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+function isBatchRevertableModulo(modulo: string): boolean {
+  return modulo === 'proyectados' || modulo === 'calculadora';
 }
 
 function ImportStatusBadge({ status }: Readonly<{ status: string }>) {
@@ -75,11 +83,13 @@ export function AdminImportsPanel() {
   const queryClient = useQueryClient();
   const { data: importaciones = [] as AdminImportRow[], isLoading: loadingImports, refetch } =
     useAdminImportaciones();
-  const deleteBatchMutation = useDeleteTelemetriaImportBatch();
+  const deleteTelemetriaBatch = useDeleteTelemetriaImportBatch();
+  const deleteTemparioBatch = useDeleteTemparioImportBatch();
 
   const invalidateDomain = async () => {
     await queryClient.invalidateQueries({ queryKey: ['admin'] });
     await queryClient.invalidateQueries({ queryKey: ['proyectados'] });
+    await queryClient.invalidateQueries({ queryKey: ['calculadora'] });
     await refetch();
   };
 
@@ -89,26 +99,34 @@ export function AdminImportsPanel() {
       : null;
 
   const handleDeleteBatch = async (imp: AdminImportRow) => {
-    if (!isAdmin || imp.modulo !== 'proyectados' || imp.status === 'reverted') return;
+    if (!isAdmin || !isBatchRevertableModulo(imp.modulo) || imp.status === 'reverted') return;
 
+    const isTemparios = imp.modulo === 'calculadora';
     let linked = 0;
     try {
-      linked = await countTelemetriaByImportBatch(imp.batchId);
+      linked = isTemparios
+        ? await countTempariosByImportBatch(imp.batchId)
+        : await countTelemetriaByImportBatch(imp.batchId);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'No se pudo consultar el lote.');
       return;
     }
 
+    const entityLabel = isTemparios ? 'temparios' : 'telemetría';
     const ok = window.confirm(
       `¿Eliminar la carga masiva "${imp.file}" (${imp.id})?\n\n` +
-        `Se borrarán ${linked.toLocaleString('es-CO')} registro(s) de telemetría de este lote.\n` +
-        `No se eliminarán maestros (clientes, asesores, equipos) ni otras cargas.`
+        `Se borrarán ${linked.toLocaleString('es-CO')} registro(s) de ${entityLabel} de este lote.\n` +
+        (isTemparios
+          ? 'No se eliminarán otras cargas ni cotizaciones.'
+          : 'No se eliminarán maestros (clientes, asesores, equipos) ni otras cargas.')
     );
     if (!ok) return;
 
     setDeletingBatchId(imp.batchId);
     try {
-      const result = await deleteBatchMutation.mutateAsync(imp.batchId);
+      const result = isTemparios
+        ? await deleteTemparioBatch.mutateAsync(imp.batchId)
+        : await deleteTelemetriaBatch.mutateAsync(imp.batchId);
       toast.success(
         `Carga revertida: ${result.deleted.toLocaleString('es-CO')} registro(s) eliminados.`
       );
@@ -207,7 +225,8 @@ export function AdminImportsPanel() {
           <div>
             <h2 className="text-sm font-semibold text-foreground">Historial de Importaciones</h2>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              En cargas de telemetría puede ver el lote o eliminarlo sin borrar el resto de la BD.
+              En cargas de telemetría y temparios puede ver el lote o eliminarlo sin borrar el resto
+              de la BD.
             </p>
           </div>
           <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => void refetch()}>
@@ -249,7 +268,9 @@ export function AdminImportsPanel() {
                   importaciones.map((imp: AdminImportRow) => {
                     const isTelemetria = imp.modulo === 'proyectados';
                     const canRevert =
-                      isAdmin && isTelemetria && imp.status !== 'reverted';
+                      isAdmin &&
+                      isBatchRevertableModulo(imp.modulo) &&
+                      imp.status !== 'reverted';
                     const changesLabel = isTelemetria ? formatImportChanges(imp.resumen) : null;
                     return (
                       <tr

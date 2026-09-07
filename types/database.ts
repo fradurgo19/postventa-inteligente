@@ -44,6 +44,8 @@ export interface TemparioMantenimiento {
   updated_at?: string | null;
   created_by?: string | null;
   updated_by?: string | null;
+  /** UUID de importaciones.id de la carga masiva. */
+  import_batch_id?: string | null;
 }
 
 export type TemparioWritable = Omit<

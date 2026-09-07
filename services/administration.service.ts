@@ -1513,6 +1513,70 @@ export async function deleteTelemetriaImportBatch(
   return { deleted: before };
 }
 
+export async function countTempariosByImportBatch(batchId: string): Promise<number> {
+  if (!isSupabaseConfigured()) return 0;
+  const supabase = getSupabaseClient();
+  const { count, error } = await supabase
+    .from('temparios_mantenimiento')
+    .select('id', { count: 'exact', head: true })
+    .eq('import_batch_id', batchId);
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+/**
+ * Elimina solo las filas de temparios de una carga masiva (import_batch_id).
+ * No borra otras cargas ni cotizaciones.
+ */
+export async function deleteTemparioImportBatch(
+  batchId: string
+): Promise<{ deleted: number }> {
+  if (!isSupabaseConfigured()) throw new Error('Supabase no configurado.');
+  const supabase = getSupabaseClient();
+
+  const { data: log } = await supabase
+    .from('importaciones')
+    .select('id, modulo')
+    .eq('id', batchId)
+    .maybeSingle();
+
+  if (!log) throw new Error('Carga masiva no encontrada.');
+  if (String(log.modulo) !== 'calculadora') {
+    throw new Error('Solo se pueden revertir cargas de Temparios (calculadora).');
+  }
+
+  const before = await countTempariosByImportBatch(batchId);
+
+  const { error: delError } = await supabase
+    .from('temparios_mantenimiento')
+    .delete()
+    .eq('import_batch_id', batchId);
+
+  if (delError) throw new Error(delError.message);
+
+  await supabase
+    .from('importaciones')
+    .update({
+      estado: 'revertido',
+      resumen_json: {
+        reverted: true,
+        deleted_rows: before,
+        reverted_at: new Date().toISOString(),
+      },
+    })
+    .eq('id', batchId);
+
+  await writeAudit({
+    modulo: 'Importaciones',
+    accion: 'Deleted',
+    entidad: 'importaciones',
+    entidadId: batchId,
+    detalle: { scope: 'batch', deleted_rows: before, modulo: 'calculadora' },
+  });
+
+  return { deleted: before };
+}
+
 export async function writeAudit(input: {
   modulo: string;
   accion: string;

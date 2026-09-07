@@ -26,7 +26,7 @@ import {
   updateAdminTelemetriaEquipo,
   deleteAdminTelemetriaEquipo,
   deleteTelemetriaImportBatch,
-  countTelemetriaByImportBatch,
+  deleteTemparioImportBatch,
   fetchAdminEquipoRelacionesPage,
   fetchAdminClienteOptions,
   fetchAdminAsesorOptions,
@@ -151,6 +151,17 @@ export function useDeleteTelemetriaImportBatch() {
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['admin'] });
       await qc.invalidateQueries({ queryKey: ['proyectados'] });
+    },
+  });
+}
+
+export function useDeleteTemparioImportBatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (batchId: string) => deleteTemparioImportBatch(batchId),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['admin'] });
+      await qc.invalidateQueries({ queryKey: ['calculadora'] });
     },
   });
 }
