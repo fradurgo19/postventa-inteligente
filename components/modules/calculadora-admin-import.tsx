@@ -245,7 +245,7 @@ export function CalculadoraAdminImport() {
   };
 
   return (
-    <div className="mt-6 border-t border-border pt-6 space-y-4">
+    <div className="mt-6 border-t border-border pt-6 space-y-4 min-w-0">
       <div className="flex items-start gap-3">
         <div className="h-9 w-9 rounded-lg bg-[#cf1b22]/10 flex items-center justify-center shrink-0">
           <Database className="h-4 w-4 text-[#cf1b22]" />
@@ -319,8 +319,8 @@ export function CalculadoraAdminImport() {
           />
         </TabsContent>
 
-        <TabsContent value="registros" className="mt-4 space-y-3">
-          <Card className="border-border">
+        <TabsContent value="registros" className="mt-4 space-y-3 min-w-0">
+          <Card className="border-border min-w-0 overflow-hidden">
             <CardHeader className="pb-3">
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                 <CardTitle className="text-sm font-semibold">
@@ -429,9 +429,12 @@ export function CalculadoraAdminImport() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="p-0">
-              <DualScrollContainer>
-                <Table noScrollWrapper className="min-w-[960px]">
+            <CardContent className="p-0 min-w-0 overflow-hidden">
+              <DualScrollContainer
+                topScrollClassName="h-3.5 bg-muted/50"
+                contentClassName="pb-1"
+              >
+                <Table noScrollWrapper className="w-max min-w-[1100px]">
                   <TableHeader>
                     <TableRow className="bg-muted/30 hover:bg-muted/30">
                       <TableHead className="text-xs">ID</TableHead>
